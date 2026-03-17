@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: tanken-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tanken
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tanken"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  tanken:
+    build: .
+    container_name: tanken-webapp
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3847:3847"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3847
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/tanken
+
+volumes:
+  postgres_data:

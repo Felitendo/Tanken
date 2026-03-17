@@ -1,0 +1,17 @@
+node_modules/
+.next/
+dist/
+tsconfig.tsbuildinfo
+data/*.json
+.env
+npm-debug.log*
+.DS_Store
+.claude
+.codex
+
+config.json
+
+data/app.db
+
+# keep schema, ignore runtime db artifacts
+!data/schema.sql
