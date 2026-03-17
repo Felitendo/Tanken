@@ -10,7 +10,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/tanken
 
 jobs:
   release:
@@ -19,10 +18,15 @@ jobs:
     permissions:
       contents: write
       packages: write
+      attestations: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Set image name
+        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/tanken" >> "$GITHUB_ENV"
 
       - name: Validate version format
         run: |
