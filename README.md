@@ -133,12 +133,6 @@ Then set `DATABASE_URL` before starting the dev server:
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/tanken npm run dev
 ```
 
-## Data Persistence
-
-All data is stored in PostgreSQL. On first startup, the app automatically migrates any legacy JSON/CSV data from `./data/` into the database.
-
-The `postgres_data` Docker volume ensures your data survives container restarts and updates.
-
 ## License
 
 MIT
