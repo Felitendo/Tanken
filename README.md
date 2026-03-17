@@ -11,7 +11,6 @@ A Progressive Web App for tracking real-time diesel and fuel prices near you. Co
 - **PWA support** - install it on your phone's home screen for a native-like experience
 - **OIDC authentication** - optionally secure access with any OpenID Connect provider
 - **Admin panel** at `/admin` for setup, configuration, and user management
-- **No `.env` files needed** - everything is configured through the admin panel or `config.json`
 
 ## Tech Stack
 
