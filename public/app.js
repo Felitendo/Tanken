@@ -17,7 +17,12 @@ const i18n = {
     // Station sheet
     open: 'Geöffnet',
     closed: 'Geschlossen',
+    closesAt: 'schließt um',
+    opensAt: 'öffnet um',
+    open24h: 'Rund um die Uhr',
+    openingHours: 'Öffnungszeiten',
     kmAway: 'km entfernt',
+    dayAbbr: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
     // History
     timePeriod: 'ZEITRAUM',
     days7: '7 Tage',
@@ -138,7 +143,12 @@ const i18n = {
     pricesStaleConnection: 'Prices may be outdated (connection error)',
     open: 'Open',
     closed: 'Closed',
+    closesAt: 'closes at',
+    opensAt: 'opens at',
+    open24h: 'Open 24 hours',
+    openingHours: 'Opening hours',
     kmAway: 'km away',
+    dayAbbr: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
     timePeriod: 'TIME PERIOD',
     days7: '7 Days',
     days14: '14 Days',
@@ -970,11 +980,12 @@ function showStationSheet(station) {
       <svg class="sheet-info-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
       <span>${fixEnc(station.street)} ${station.houseNumber || ''}, ${station.postCode || ''} ${fixEnc(station.place)}</span>
     </div>
-    <div class="sheet-info-row">
-      <span class="sheet-info-icon"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:${station.isOpen ? '#34c759' : '#ff3b30'}"></span></span>
-      <span>${station.isOpen ? t('open') : t('closed')}</span>
+    <div class="sheet-info-row" id="sheet-status-row">
+      <span class="sheet-info-icon"><span id="sheet-status-dot" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:${station.isOpen ? '#34c759' : '#ff3b30'}"></span></span>
+      <span id="sheet-status-text">${station.isOpen ? t('open') : t('closed')}</span>
       ${station.dist ? `<span style="margin-left:auto;color:var(--color-hint)">${station.dist.toFixed(1)} ${t('kmAway')}</span>` : ''}
     </div>
+    <div class="sheet-hours-section" id="sheet-hours-section"></div>
     <div class="sheet-chart-section">
       <div class="sheet-chart-header-row">
         <div class="sheet-chart-header">${t('priceHistory')}</div>
@@ -1026,6 +1037,7 @@ function showStationSheet(station) {
 
   state.sheetStationName = station.name;
   loadSheetChart(station.name, 1);
+  if (station.id) refreshStationStatus(station);
 
   document.querySelectorAll('.sheet-toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1035,6 +1047,169 @@ function showStationSheet(station) {
       loadSheetChart(state.sheetStationName, parseInt(btn.dataset.range, 10));
     });
   });
+}
+
+/**
+ * Parse Tankerkönig openingTimes and figure out today's schedule + next transition.
+ * openingTimes: [{ text: "Mo-Fr", start: "06:00", end: "22:00" }, ...]
+ * wholeDay: boolean
+ */
+function parseOpeningTimes(openingTimes, wholeDay, isOpen) {
+  if (wholeDay) return { label: t('open24h'), todayTimes: null, allTimes: null };
+  if (!Array.isArray(openingTimes) || !openingTimes.length) return null;
+
+  const dayAbbr = t('dayAbbr') || ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const now = new Date();
+  const todayIdx = now.getDay(); // 0=Sun
+
+  // Tankerkönig uses German day names/ranges like "Mo-Fr", "Sa", "So", "Feiertag"
+  const tkDayMap = { 'mo': 1, 'di': 2, 'mi': 3, 'do': 4, 'fr': 5, 'sa': 6, 'so': 0,
+                     'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6, 'sun': 0 };
+
+  function parseDayRange(text) {
+    const t = text.toLowerCase().trim();
+    // Handle "täglich" / "daily"
+    if (t === 'täglich' || t === 'daily') return [0,1,2,3,4,5,6];
+    const parts = t.split(/[-–]/);
+    if (parts.length === 2) {
+      const from = tkDayMap[parts[0].trim()];
+      const to = tkDayMap[parts[1].trim()];
+      if (from !== undefined && to !== undefined) {
+        const days = [];
+        let d = from;
+        while (true) {
+          days.push(d);
+          if (d === to) break;
+          d = (d + 1) % 7;
+        }
+        return days;
+      }
+    }
+    // Single day
+    const single = tkDayMap[t];
+    if (single !== undefined) return [single];
+    return null;
+  }
+
+  // Build per-day schedule
+  const schedule = {}; // dayIdx -> [{ start, end }]
+  const allRows = [];
+  openingTimes.forEach(ot => {
+    const days = parseDayRange(ot.text);
+    const entry = { start: ot.start, end: ot.end };
+    allRows.push({ text: ot.text, start: ot.start, end: ot.end });
+    if (days) {
+      days.forEach(d => {
+        if (!schedule[d]) schedule[d] = [];
+        schedule[d].push(entry);
+      });
+    }
+  });
+
+  // Find today's times
+  const todaySlots = schedule[todayIdx] || [];
+
+  // Compute next transition label
+  let label = '';
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  if (isOpen && todaySlots.length) {
+    // Find which slot we're in and when it ends
+    for (const slot of todaySlots) {
+      const [eh, em] = slot.end.split(':').map(Number);
+      const endMins = eh * 60 + em;
+      const [sh, sm] = slot.start.split(':').map(Number);
+      const startMins = sh * 60 + sm;
+      if (nowMins >= startMins && nowMins < endMins) {
+        label = `${t('closesAt')} ${slot.end}`;
+        break;
+      }
+    }
+  } else if (!isOpen && todaySlots.length) {
+    // Find next opening today
+    for (const slot of todaySlots) {
+      const [sh, sm] = slot.start.split(':').map(Number);
+      if (nowMins < sh * 60 + sm) {
+        label = `${t('opensAt')} ${slot.start}`;
+        break;
+      }
+    }
+    // If nothing left today, find tomorrow
+    if (!label) {
+      for (let off = 1; off <= 7; off++) {
+        const nextDay = (todayIdx + off) % 7;
+        if (schedule[nextDay]?.length) {
+          label = `${t('opensAt')} ${dayAbbr[nextDay]} ${schedule[nextDay][0].start}`;
+          break;
+        }
+      }
+    }
+  }
+
+  // Format all opening times for display
+  const allTimes = allRows.map(r => ({ text: r.text, hours: `${r.start} – ${r.end}` }));
+
+  return { label, todayTimes: todaySlots, allTimes };
+}
+
+async function refreshStationStatus(station) {
+  try {
+    const detail = await api(`/api/station/${station.id}`);
+    if (!detail) return;
+
+    const isOpen = Boolean(detail.isOpen);
+
+    // Update open/closed status
+    const dot = document.getElementById('sheet-status-dot');
+    const txt = document.getElementById('sheet-status-text');
+    if (dot && txt) {
+      dot.style.background = isOpen ? '#34c759' : '#ff3b30';
+      station.isOpen = isOpen;
+
+      // Parse opening times for "closes at" / "opens at" hint
+      const hours = parseOpeningTimes(detail.openingTimes, detail.wholeDay, isOpen);
+      let statusStr = isOpen ? t('open') : t('closed');
+      if (hours?.label) statusStr += ` · ${hours.label}`;
+      txt.textContent = statusStr;
+
+      // Show opening hours section
+      const hoursContainer = document.getElementById('sheet-hours-section');
+      if (hoursContainer && hours?.allTimes?.length) {
+        hoursContainer.innerHTML = `
+          <div class="sheet-hours-toggle" id="sheet-hours-toggle">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="color:var(--color-hint);flex-shrink:0"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg>
+            <span>${t('openingHours')}</span>
+            <svg class="sheet-hours-chevron" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-left:auto;color:var(--color-hint)"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+          </div>
+          <div class="sheet-hours-list" id="sheet-hours-list">
+            ${hours.allTimes.map(r => `<div class="sheet-hours-row"><span class="sheet-hours-day">${r.text}</span><span class="sheet-hours-time">${r.hours}</span></div>`).join('')}
+          </div>`;
+        document.getElementById('sheet-hours-toggle')?.addEventListener('click', () => {
+          haptic('light');
+          hoursContainer.classList.toggle('expanded');
+        });
+      }
+    }
+
+    // Update price if it changed
+    const fuelKey = state.fuelType === 'e5' ? 'e5' : state.fuelType === 'e10' ? 'e10' : 'diesel';
+    const freshPrice = typeof detail[fuelKey] === 'number' && detail[fuelKey] > 0 ? detail[fuelKey] : null;
+    if (freshPrice && freshPrice !== station.price) {
+      station.price = freshPrice;
+      const priceEl = document.querySelector('.sheet-station-price');
+      if (priceEl) {
+        const priceParts = formatPriceParts(freshPrice);
+        const prices = state.stations.filter(s => s.price).map(s => s.price);
+        const minP = Math.min(...prices);
+        const maxP = Math.max(...prices);
+        const ratio = maxP > minP ? (freshPrice - minP) / (maxP - minP) : 0;
+        priceEl.style.color = priceColor(ratio);
+        priceEl.innerHTML = `${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''} <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>`;
+      }
+    }
+  } catch {
+    // Silently fail — cached data stays as fallback
+  }
 }
 
 async function loadSheetChart(stationName, days = 1) {

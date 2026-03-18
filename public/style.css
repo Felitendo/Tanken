@@ -779,6 +779,70 @@ html, body {
   flex-shrink: 0;
 }
 
+/* Sheet opening hours */
+.sheet-hours-section {
+  overflow: hidden;
+}
+
+.sheet-hours-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  font-size: 14px;
+  color: var(--color-text);
+  border-top: 0.5px solid var(--color-separator);
+  transition: background 0.15s;
+}
+
+.sheet-hours-toggle:active {
+  background: var(--color-bg-secondary);
+}
+
+.sheet-hours-chevron {
+  transition: transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.sheet-hours-section.expanded .sheet-hours-chevron {
+  transform: rotate(180deg);
+}
+
+.sheet-hours-list {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
+              opacity 0.25s ease;
+  opacity: 0;
+  padding: 0 20px;
+}
+
+.sheet-hours-section.expanded .sheet-hours-list {
+  max-height: 300px;
+  opacity: 1;
+  padding: 0 20px 10px;
+}
+
+.sheet-hours-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0 5px 32px;
+  font-size: 13px;
+}
+
+.sheet-hours-day {
+  color: var(--color-hint);
+  font-weight: 500;
+}
+
+.sheet-hours-time {
+  color: var(--color-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Sheet chart */
 .sheet-chart-section {
   padding: 0 20px 8px;
