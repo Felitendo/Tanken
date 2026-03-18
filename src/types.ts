@@ -1,11 +1,5 @@
 export type FuelType = 'diesel' | 'e5' | 'e10';
 
-export interface LocationConfig {
-  name: string;
-  lat: number;
-  lng: number;
-}
-
 export interface RepoThresholds {
   good_below_avg_cents: number;
   okay_below_avg_cents: number;
@@ -38,7 +32,6 @@ export interface RepoConfig {
   api_key: string;
   fuel_type: FuelType;
   radius_km: number;
-  locations: Record<string, LocationConfig>;
   thresholds: RepoThresholds;
   auth: RepoAuthConfig;
   smtp?: RepoSmtpConfig;
@@ -76,7 +69,6 @@ export interface RuntimeConfig {
 export interface UserSettings {
   fuelType: FuelType;
   radiusKm: number;
-  activeLocation: string;
   currentTab: string;
   theme?: 'auto' | 'light' | 'dark';
 }

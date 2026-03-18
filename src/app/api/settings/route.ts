@@ -11,7 +11,6 @@ const settingsSchema = z
   .object({
     fuelType: fuelTypeSchema.optional(),
     radiusKm: z.union([z.number(), z.string()]).optional(),
-    activeLocation: z.string().min(1).optional(),
     currentTab: z.string().min(1).optional(),
     theme: themeSchema.optional()
   })
@@ -48,10 +47,6 @@ export async function POST(request: NextRequest) {
 
   if (updates.radiusKm !== undefined) {
     nextSettings.radiusKm = parseRadius(updates.radiusKm, runtimeConfig.repoConfig.radius_km);
-  }
-
-  if (updates.activeLocation) {
-    nextSettings.activeLocation = updates.activeLocation;
   }
 
   if (updates.currentTab) {

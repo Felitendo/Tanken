@@ -1,12 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Fuel, KeyRound, LogOut, Mail, MapPin, Save, Shield, Settings, UserPlus } from 'lucide-react';
+import { Fuel, KeyRound, LogOut, Mail, Save, Shield, Settings, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,7 +16,6 @@ interface AdminConfig {
   radiusKm: number;
   sessionSecret: string;
   thresholds: { goodBelowAvgCents: number; okayBelowAvgCents: number };
-  locations: Record<string, { name: string; lat: number; lng: number }>;
   oidc: {
     issuerUrl: string;
     clientId: string;
@@ -52,7 +50,6 @@ const defaultConfig: AdminConfig = {
   radiusKm: 10,
   sessionSecret: '',
   thresholds: { goodBelowAvgCents: 3, okayBelowAvgCents: 1 },
-  locations: {},
   oidc: { issuerUrl: '', clientId: '', clientSecret: '', redirectUri: '', scope: 'openid profile email', usernameClaim: 'preferred_username', name: '' },
   smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
 };
@@ -70,15 +67,15 @@ async function api<T = unknown>(url: string, options?: RequestInit): Promise<T> 
 function ConfigFields({
   config,
   onChange,
-  locationsRaw,
-  onLocationsRawChange,
+  onTestApiKey,
+  testingApiKey,
   onTestEmail,
   testingEmail,
 }: {
   config: AdminConfig;
   onChange: (patch: Partial<AdminConfig>) => void;
-  locationsRaw: string;
-  onLocationsRawChange: (raw: string) => void;
+  onTestApiKey?: () => void;
+  testingApiKey?: boolean;
   onTestEmail?: () => void;
   testingEmail?: boolean;
 }) {
@@ -163,6 +160,12 @@ function ConfigFields({
             />
           </div>
         </div>
+        {onTestApiKey && (
+          <Button type="button" variant="outline" size="sm" onClick={onTestApiKey} disabled={testingApiKey || !config.apiKey}>
+            <KeyRound className="h-4 w-4" />
+            {testingApiKey ? 'Teste...' : 'API-Key testen'}
+          </Button>
+        )}
       </div>
 
       <Separator />
@@ -234,26 +237,6 @@ function ConfigFields({
               placeholder="preferred_username"
             />
           </div>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Locations */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-          <MapPin className="h-4 w-4" />
-          Standorte
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="locationsJson">Locations JSON</Label>
-          <Textarea
-            id="locationsJson"
-            className="font-mono text-sm"
-            rows={8}
-            value={locationsRaw}
-            onChange={(e) => onLocationsRawChange(e.target.value)}
-          />
         </div>
       </div>
 
@@ -341,13 +324,13 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
+  const [testingApiKey, setTestingApiKey] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; type: FeedbackType } | null>(null);
 
   // Form state
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [config, setConfig] = useState<AdminConfig>(defaultConfig);
-  const [locationsRaw, setLocationsRaw] = useState('{}');
 
   const showFeedback = useCallback((message: string, type: FeedbackType) => {
     setFeedback({ message, type });
@@ -360,7 +343,6 @@ export default function AdminPage() {
       setStatus(data);
       if (data.config) {
         setConfig(data.config);
-        setLocationsRaw(JSON.stringify(data.config.locations || {}, null, 2));
       }
     } catch (err) {
       showFeedback((err as Error).message || 'Admin Panel konnte nicht geladen werden.', 'error');
@@ -377,25 +359,14 @@ export default function AdminPage() {
     setConfig((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  const getConfigWithLocations = useCallback(() => {
-    let locations: AdminConfig['locations'];
-    try {
-      locations = JSON.parse(locationsRaw);
-    } catch {
-      throw new Error('Locations JSON ist ungueltig.');
-    }
-    return { ...config, locations };
-  }, [config, locationsRaw]);
-
   const handleBootstrap = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setFeedback(null);
     try {
-      const finalConfig = getConfigWithLocations();
       await api('/api/admin/bootstrap', {
         method: 'POST',
-        body: JSON.stringify({ username: username.trim(), password, config: finalConfig }),
+        body: JSON.stringify({ username: username.trim(), password, config }),
       });
       showFeedback('Setup gespeichert. Admin ist jetzt eingeloggt.', 'success');
       setUsername('');
@@ -433,14 +404,12 @@ export default function AdminPage() {
     setSubmitting(true);
     setFeedback(null);
     try {
-      const finalConfig = getConfigWithLocations();
       const result = await api<{ config: AdminConfig }>('/api/admin/config', {
         method: 'PUT',
-        body: JSON.stringify(finalConfig),
+        body: JSON.stringify(config),
       });
       if (result.config) {
         setConfig(result.config);
-        setLocationsRaw(JSON.stringify(result.config.locations || {}, null, 2));
       }
       showFeedback('Konfiguration gespeichert.', 'success');
     } catch (err) {
@@ -460,6 +429,22 @@ export default function AdminPage() {
       showFeedback((err as Error).message || 'Test-E-Mail fehlgeschlagen.', 'error');
     } finally {
       setTestingEmail(false);
+    }
+  };
+
+  const handleTestApiKey = async () => {
+    setTestingApiKey(true);
+    setFeedback(null);
+    try {
+      const result = await api<{ ok: boolean; stations?: number }>('/api/admin/apikey-test', {
+        method: 'POST',
+        body: JSON.stringify({ apiKey: config.apiKey }),
+      });
+      showFeedback(`API-Key gueltig. ${result.stations ?? 0} Stationen gefunden.`, 'success');
+    } catch (err) {
+      showFeedback((err as Error).message || 'API-Key Test fehlgeschlagen.', 'error');
+    } finally {
+      setTestingApiKey(false);
     }
   };
 
@@ -554,7 +539,7 @@ export default function AdminPage() {
 
                 <Separator />
 
-                <ConfigFields config={config} onChange={handleConfigChange} locationsRaw={locationsRaw} onLocationsRawChange={setLocationsRaw} />
+                <ConfigFields config={config} onChange={handleConfigChange} />
               </CardContent>
               <CardFooter className="justify-end">
                 <Button type="submit" disabled={submitting}>
@@ -641,7 +626,7 @@ export default function AdminPage() {
             </CardHeader>
             <form onSubmit={handleSaveConfig}>
               <CardContent>
-                <ConfigFields config={config} onChange={handleConfigChange} locationsRaw={locationsRaw} onLocationsRawChange={setLocationsRaw} onTestEmail={handleTestEmail} testingEmail={testingEmail} />
+                <ConfigFields config={config} onChange={handleConfigChange} onTestApiKey={handleTestApiKey} testingApiKey={testingApiKey} onTestEmail={handleTestEmail} testingEmail={testingEmail} />
               </CardContent>
               <CardFooter className="justify-end">
                 <Button type="submit" disabled={submitting}>

@@ -3,12 +3,6 @@ import { z } from 'zod';
 import { RepoConfig } from '@/types';
 import { loadRepoConfig, normalizeRepoConfig } from '@/config';
 
-const locationSchema = z.object({
-  name: z.string().trim().min(1),
-  lat: z.coerce.number(),
-  lng: z.coerce.number()
-});
-
 export const adminConfigSchema = z.object({
   apiKey: z.string().default(''),
   fuelType: z.enum(['diesel', 'e5', 'e10']).default('diesel'),
@@ -18,7 +12,6 @@ export const adminConfigSchema = z.object({
     goodBelowAvgCents: z.coerce.number().default(3),
     okayBelowAvgCents: z.coerce.number().default(1)
   }),
-  locations: z.record(z.string(), locationSchema).default({}),
   oidc: z.object({
     issuerUrl: z.string().default(''),
     clientId: z.string().default(''),
@@ -54,7 +47,6 @@ export function toAdminConfig(config: RepoConfig): AdminConfigInput {
       goodBelowAvgCents: config.thresholds.good_below_avg_cents,
       okayBelowAvgCents: config.thresholds.okay_below_avg_cents
     },
-    locations: config.locations,
     oidc: {
       issuerUrl: config.auth.oidc.issuer_url,
       clientId: config.auth.oidc.client_id,
@@ -86,7 +78,6 @@ export function fromAdminConfig(input: AdminConfigInput, current: RepoConfig = l
         good_below_avg_cents: input.thresholds.goodBelowAvgCents,
         okay_below_avg_cents: input.thresholds.okayBelowAvgCents
       },
-      locations: input.locations,
       auth: {
         oidc: {
           issuer_url: input.oidc.issuerUrl,

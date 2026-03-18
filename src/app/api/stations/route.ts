@@ -83,22 +83,11 @@ async function fetchStationsWithRetry(url: string): Promise<unknown[]> {
   throw lastError || new Error('All retries failed');
 }
 
-/* ── Helpers ─────────────────────────────────────────────────── */
-function getFallbackLocation() {
-  const firstLocation = Object.values(runtimeConfig.repoConfig.locations)[0];
-  if (firstLocation) {
-    return { lat: firstLocation.lat, lng: firstLocation.lng };
-  }
-
-  // Default to geographic center of Germany
-  return { lat: 51.1657, lng: 10.4515 };
-}
-
 /* ── Route handler ───────────────────────────────────────────── */
 export async function GET(request: NextRequest) {
-  const fallback = getFallbackLocation();
-  const lat = Number.parseFloat(request.nextUrl.searchParams.get('lat') ?? '') || fallback.lat;
-  const lng = Number.parseFloat(request.nextUrl.searchParams.get('lng') ?? '') || fallback.lng;
+  // Default to geographic center of Germany
+  const lat = Number.parseFloat(request.nextUrl.searchParams.get('lat') ?? '') || 51.1657;
+  const lng = Number.parseFloat(request.nextUrl.searchParams.get('lng') ?? '') || 10.4515;
   const rad = Number.parseFloat(request.nextUrl.searchParams.get('rad') ?? '') || runtimeConfig.repoConfig.radius_km;
   const fuelCandidate = request.nextUrl.searchParams.get('fuel');
   const fuel = fuelTypeSchema.safeParse(fuelCandidate).success ? fuelCandidate! : runtimeConfig.repoConfig.fuel_type;

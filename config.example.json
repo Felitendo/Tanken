@@ -3,9 +3,6 @@
   "session_secret": "CHANGE_ME_LONG_RANDOM_SECRET",
   "fuel_type": "diesel",
   "radius_km": 10,
-  "locations": {
-    "my_city": { "name": "My City", "lat": 50.1109, "lng": 8.6821 }
-  },
   "thresholds": { "good_below_avg_cents": 3, "okay_below_avg_cents": 1 },
   "auth": {
     "oidc": {
