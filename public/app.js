@@ -503,12 +503,27 @@ function setupTabs() {
   switchTab(state.currentTab || 'map', { initial: true });
 }
 
+const TAB_INDEX = { map: 0, history: 1, stats: 2, settings: 3 };
+
 async function switchTab(tab, { initial = false } = {}) {
   if (!initial && tab === state.currentTab) return;
   if (!initial) haptic('light');
 
+  const prevIdx = TAB_INDEX[state.currentTab] ?? 0;
+  const nextIdx = TAB_INDEX[tab];
+  const dir = nextIdx > prevIdx ? 'left' : 'right';
+
   document.querySelectorAll('.tab-item').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+
+  document.querySelectorAll('.tab-view').forEach(v => {
+    v.classList.remove('active', 'slide-left', 'slide-right');
+  });
+
+  const outgoing = document.getElementById('view-' + state.currentTab);
+  if (outgoing && !initial) {
+    outgoing.classList.add(dir === 'left' ? 'slide-left' : 'slide-right');
+  }
+
   document.getElementById('view-' + tab)?.classList.add('active');
   state.currentTab = tab;
 
@@ -582,6 +597,20 @@ function getActiveCoords() {
   return { lat: 48.2453, lng: 12.5225 };
 }
 
+function showStationSkeletons(count = 5) {
+  const list = document.getElementById('station-list');
+  if (!list) return;
+  list.innerHTML = Array.from({ length: count }, () => `
+    <div class="skeleton-item">
+      <div class="skeleton-bone skeleton-rank"></div>
+      <div style="flex:1;min-width:0">
+        <div class="skeleton-bone skeleton-text-long"></div>
+        <div class="skeleton-bone skeleton-text-short"></div>
+      </div>
+      <div class="skeleton-bone skeleton-price"></div>
+    </div>`).join('');
+}
+
 async function loadMapTab() {
   state.loaded.map = true;
   const coords = getActiveCoords();
@@ -607,6 +636,7 @@ async function loadMapTab() {
 
   const loader = document.getElementById('map-loading');
   loader.classList.remove('hidden');
+  showStationSkeletons();
 
   try {
     const result = await api(`/api/stations?lat=${coords.lat}&lng=${coords.lng}&rad=${state.radiusKm}&fuel=${state.fuelType}`);
@@ -793,6 +823,11 @@ function renderStationList(stations) {
         </div>
       </div>`;
   }).join('');
+
+  list.querySelectorAll('.station-item').forEach((el, i) => {
+    el.style.animationDelay = `${i * 40}ms`;
+    el.classList.add('anim-in');
+  });
 
   list.querySelectorAll('.station-item').forEach(el => {
     el.addEventListener('click', () => {
@@ -1379,6 +1414,18 @@ async function loadStatsTab() {
   }
 }
 
+function countUp(el, target, duration = 700, formatter) {
+  const start = performance.now();
+  function frame(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 3);
+    const current = target * ease;
+    el.textContent = formatter ? formatter(current) : Math.round(current).toString();
+    if (progress < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
 function renderStats(stats) {
   const el = document.getElementById('stats-content');
   if (!stats) {
@@ -1441,6 +1488,27 @@ function renderStats(stats) {
 
   html += '<div style="height:20px"></div>';
   el.innerHTML = html;
+
+  const bigVal = el.querySelector('.stat-big-value');
+  if (bigVal && stats.overall.avg) {
+    countUp(bigVal, stats.overall.avg, 800, v => formatPrice(v));
+  }
+  el.querySelectorAll('.stat-card-value').forEach(cv => {
+    const num = parseFloat(cv.textContent.replace(',', '.'));
+    if (!isNaN(num) && num > 0) {
+      const isPrice = cv.textContent.includes(',');
+      countUp(cv, num, 600, isPrice ? (v => formatPrice(v)) : (v => Math.round(v).toString()));
+    }
+  });
+
+  el.querySelectorAll('.stat-card').forEach((card, i) => {
+    card.style.animationDelay = `${i * 80}ms`;
+    card.classList.add('anim-in');
+  });
+  el.querySelectorAll('.ranking-item').forEach((item, i) => {
+    item.style.animationDelay = `${i * 30}ms`;
+    item.classList.add('anim-in');
+  });
 
   el.querySelectorAll('.station-ranking-item').forEach(item => {
     item.addEventListener('click', () => {
