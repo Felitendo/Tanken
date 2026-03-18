@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Fuel, KeyRound, LogOut, Mail, Save, Shield, Settings, UserPlus } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fuel, KeyRound, LogOut, Mail, MapPin, Plus, Save, Search, Shield, Settings, Trash2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,15 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+interface AdminLocation {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  fuelType: string;
+}
 
 interface AdminConfig {
   apiKey: string;
@@ -34,6 +43,7 @@ interface AdminConfig {
     pass: string;
     from: string;
   };
+  locations: AdminLocation[];
 }
 
 interface AdminStatus {
@@ -41,6 +51,20 @@ interface AdminStatus {
   authenticated: boolean;
   user?: { username?: string; displayName?: string };
   config?: AdminConfig;
+}
+
+interface SchedulerStatus {
+  running: boolean;
+  scanning: boolean;
+  lastCycleAt: string | null;
+  nextCycleAt: string | null;
+}
+
+interface NominatimResult {
+  place_id: number;
+  display_name: string;
+  lat: string;
+  lon: string;
 }
 
 type FeedbackType = 'success' | 'error' | 'info';
@@ -54,6 +78,7 @@ const defaultConfig: AdminConfig = {
   thresholds: { goodBelowAvgCents: 3, okayBelowAvgCents: 1 },
   oidc: { issuerUrl: '', clientId: '', clientSecret: '', redirectUri: '', scope: 'openid profile email', usernameClaim: 'preferred_username', name: '' },
   smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
+  locations: [],
 };
 
 async function api<T = unknown>(url: string, options?: RequestInit): Promise<T> {
@@ -66,6 +91,230 @@ async function api<T = unknown>(url: string, options?: RequestInit): Promise<T> 
   return payload as T;
 }
 
+function generateLocationId(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+  return `${slug}-${Date.now().toString(36)}`;
+}
+
+function LocationsSection({
+  locations,
+  defaultFuelType,
+  defaultRadius,
+  onChange,
+}: {
+  locations: AdminLocation[];
+  defaultFuelType: string;
+  defaultRadius: number;
+  onChange: (locations: AdminLocation[]) => void;
+}) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<NominatimResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearch = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&accept-language=de`,
+        { headers: { 'User-Agent': 'Tanken-Admin/1.0' } }
+      );
+      const data: NominatimResult[] = await res.json();
+      setSearchResults(data);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  const handleSearchInput = useCallback((value: string) => {
+    setSearchQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => handleSearch(value), 400);
+  }, [handleSearch]);
+
+  const addLocation = useCallback((result: NominatimResult) => {
+    const name = result.display_name.split(',').slice(0, 2).join(',').trim();
+    const newLoc: AdminLocation = {
+      id: generateLocationId(name),
+      name,
+      lat: parseFloat(result.lat),
+      lng: parseFloat(result.lon),
+      radiusKm: defaultRadius,
+      fuelType: defaultFuelType,
+    };
+    onChange([...locations, newLoc]);
+    setSearchQuery('');
+    setSearchResults([]);
+  }, [locations, onChange, defaultFuelType, defaultRadius]);
+
+  const removeLocation = useCallback((id: string) => {
+    onChange(locations.filter(l => l.id !== id));
+  }, [locations, onChange]);
+
+  const updateLocation = useCallback((id: string, patch: Partial<AdminLocation>) => {
+    onChange(locations.map(l => l.id === id ? { ...l, ...patch } : l));
+  }, [locations, onChange]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+        <MapPin className="h-4 w-4" />
+        Scan-Standorte
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Standorte hinzufuegen, die automatisch nach Preisen gescannt werden. Zwischen den Abfragen wird mindestens 1 Minute gewartet.
+      </p>
+
+      {/* Search */}
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <Input
+            placeholder="Ort suchen, z.B. Muenchen..."
+            value={searchQuery}
+            onChange={(e) => handleSearchInput(e.target.value)}
+          />
+          <Button type="button" variant="outline" size="icon" onClick={() => handleSearch(searchQuery)} disabled={searching || searchQuery.length < 2}>
+            <Search className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {searchResults.length > 0 && (
+          <div className="border rounded-lg divide-y bg-card">
+            {searchResults.map((result) => (
+              <div key={result.place_id} className="flex items-center justify-between gap-2 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-sm truncate">{result.display_name}</p>
+                  <p className="text-xs text-muted-foreground">{parseFloat(result.lat).toFixed(4)}, {parseFloat(result.lon).toFixed(4)}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addLocation(result)}
+                  disabled={locations.some(l => Math.abs(l.lat - parseFloat(result.lat)) < 0.001 && Math.abs(l.lng - parseFloat(result.lon)) < 0.001)}
+                >
+                  <Plus className="h-3 w-3" />
+                  Hinzufuegen
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Location list */}
+      {locations.length === 0 ? (
+        <p className="text-sm text-muted-foreground italic">Keine Standorte konfiguriert. Suche oben nach einem Ort.</p>
+      ) : (
+        <div className="space-y-3">
+          {locations.map((loc) => (
+            <div key={loc.id} className="border rounded-lg p-3 bg-card space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-medium text-sm">{loc.name}</p>
+                  <p className="text-xs text-muted-foreground">{loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</p>
+                </div>
+                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeLocation(loc.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Radius (km)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={25}
+                    value={loc.radiusKm}
+                    onChange={(e) => updateLocation(loc.id, { radiusKm: Math.max(1, Math.min(25, Number(e.target.value) || 10)) })}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Kraftstoff</Label>
+                  <Select value={loc.fuelType} onValueChange={(v) => updateLocation(loc.id, { fuelType: v })}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="diesel">Diesel</SelectItem>
+                      <SelectItem value="e5">Super E5</SelectItem>
+                      <SelectItem value="e10">Super E10</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SchedulerStatusBadge() {
+  const [status, setStatus] = useState<SchedulerStatus | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const data = await api<SchedulerStatus>('/api/admin/scheduler');
+        if (!cancelled) setStatus(data);
+      } catch {
+        // ignore
+      }
+    }
+    load();
+    const interval = setInterval(load, 15_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  const handleToggle = async () => {
+    if (!status) return;
+    try {
+      const result = await api<{ status: SchedulerStatus }>('/api/admin/scheduler', {
+        method: 'POST',
+        body: JSON.stringify({ action: status.running ? 'stop' : 'start' }),
+      });
+      setStatus(result.status);
+    } catch {
+      // ignore
+    }
+  };
+
+  if (!status) return null;
+
+  return (
+    <div className="flex items-center gap-3 p-3 border rounded-lg bg-card">
+      <div className={`h-2.5 w-2.5 rounded-full ${status.running ? (status.scanning ? 'bg-yellow-500 animate-pulse' : 'bg-green-500') : 'bg-gray-400'}`} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium">
+          Scheduler: {status.running ? (status.scanning ? 'Scannt...' : 'Aktiv') : 'Gestoppt'}
+        </p>
+        {status.lastCycleAt && (
+          <p className="text-xs text-muted-foreground">
+            Letzter Scan: {new Date(status.lastCycleAt).toLocaleString('de-DE')}
+          </p>
+        )}
+      </div>
+      <Button type="button" variant="outline" size="sm" onClick={handleToggle}>
+        {status.running ? 'Stoppen' : 'Starten'}
+      </Button>
+    </div>
+  );
+}
+
 function ConfigFields({
   config,
   onChange,
@@ -73,6 +322,7 @@ function ConfigFields({
   testingApiKey,
   onTestEmail,
   testingEmail,
+  showScheduler,
 }: {
   config: AdminConfig;
   onChange: (patch: Partial<AdminConfig>) => void;
@@ -80,6 +330,7 @@ function ConfigFields({
   testingApiKey?: boolean;
   onTestEmail?: () => void;
   testingEmail?: boolean;
+  showScheduler?: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -179,6 +430,17 @@ function ConfigFields({
           </Button>
         )}
       </div>
+
+      <Separator />
+
+      {/* Scan Locations */}
+      <LocationsSection
+        locations={config.locations}
+        defaultFuelType={config.fuelType}
+        defaultRadius={config.radiusKm}
+        onChange={(locations) => onChange({ locations })}
+      />
+      {showScheduler && config.locations.length > 0 && <SchedulerStatusBadge />}
 
       <Separator />
 
@@ -354,7 +616,7 @@ export default function AdminPage() {
       const data = await api<AdminStatus>('/api/admin/status');
       setStatus(data);
       if (data.config) {
-        setConfig(data.config);
+        setConfig({ ...defaultConfig, ...data.config, locations: data.config.locations ?? [] });
       }
     } catch (err) {
       showFeedback((err as Error).message || 'Admin Panel konnte nicht geladen werden.', 'error');
@@ -421,7 +683,7 @@ export default function AdminPage() {
         body: JSON.stringify(config),
       });
       if (result.config) {
-        setConfig(result.config);
+        setConfig({ ...defaultConfig, ...result.config, locations: result.config.locations ?? [] });
       }
       showFeedback('Konfiguration gespeichert.', 'success');
     } catch (err) {
@@ -638,7 +900,7 @@ export default function AdminPage() {
             </CardHeader>
             <form onSubmit={handleSaveConfig}>
               <CardContent>
-                <ConfigFields config={config} onChange={handleConfigChange} onTestApiKey={handleTestApiKey} testingApiKey={testingApiKey} onTestEmail={handleTestEmail} testingEmail={testingEmail} />
+                <ConfigFields config={config} onChange={handleConfigChange} onTestApiKey={handleTestApiKey} testingApiKey={testingApiKey} onTestEmail={handleTestEmail} testingEmail={testingEmail} showScheduler />
               </CardContent>
               <CardFooter className="justify-end">
                 <Button type="submit" disabled={submitting}>

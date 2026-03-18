@@ -28,6 +28,15 @@ export interface RepoAuthConfig {
   oidc: RepoOidcConfig;
 }
 
+export interface ScanLocation {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radius_km: number;
+  fuel_type: FuelType;
+}
+
 export interface RepoConfig {
   api_key: string;
   fuel_type: FuelType;
@@ -37,6 +46,7 @@ export interface RepoConfig {
   auth: RepoAuthConfig;
   smtp?: RepoSmtpConfig;
   session_secret?: string;
+  locations?: ScanLocation[];
 }
 
 export interface RuntimeConfig {
@@ -176,6 +186,7 @@ export interface HistoryEntry {
   max_price: number;
   station: string;
   num_stations: number;
+  location_id?: string;
 }
 
 export interface HistoryStats {
@@ -197,4 +208,5 @@ export interface PriceHistoryRow {
   max_price: number;
   station: string;
   num_stations: number;
+  location_id?: string;
 }

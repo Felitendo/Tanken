@@ -36,6 +36,9 @@ export const APP_SHELL = `
 
   <div class="tab-view" id="view-history">
     <div class="section">
+      <select id="history-location-picker" class="location-picker" style="display:none;width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--color-hint);background:var(--color-bg-secondary);color:var(--color-text);font-size:14px;margin-bottom:8px;box-sizing:border-box">
+        <option value="">Alle Standorte</option>
+      </select>
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div class="section-header" data-i18n="timePeriod" style="margin:0">ZEITRAUM</div>
         <button id="btn-measure" class="chip" style="display:none;font-size:11px;padding:4px 10px;gap:4px" data-i18n="measureNow">
@@ -65,6 +68,11 @@ export const APP_SHELL = `
   </div>
 
   <div class="tab-view" id="view-stats">
+    <div class="section" style="padding-bottom:0">
+      <select id="stats-location-picker" class="location-picker" style="display:none;width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--color-hint);background:var(--color-bg-secondary);color:var(--color-text);font-size:14px;box-sizing:border-box">
+        <option value="">Alle Standorte</option>
+      </select>
+    </div>
     <div id="stats-content"></div>
   </div>
 

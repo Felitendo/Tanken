@@ -311,7 +311,9 @@ const state = {
   alertNtfyTopic: '',
   alertEmail: '',
   smtpConfigured: false,
-  alertNotified: false
+  alertNotified: false,
+  selectedLocation: '',
+  availableLocations: []
 };
 
 const localSettingsKey = 'tank_settings';
@@ -939,15 +941,67 @@ async function loadSheetChart(stationName) {
   }
 }
 
+async function loadLocationPickers() {
+  try {
+    const res = await api('/api/history?locations=list');
+    const locations = res && res.locations ? res.locations : [];
+    state.availableLocations = locations;
+
+    // Also get location names from config
+    let configLocations = {};
+    try {
+      const cfg = await api('/api/config');
+      if (cfg && cfg.locations) {
+        cfg.locations.forEach(l => { configLocations[l.id] = l.name; });
+      }
+    } catch { /* ignore */ }
+
+    ['history-location-picker', 'stats-location-picker'].forEach(id => {
+      const picker = document.getElementById(id);
+      if (!picker) return;
+      // Keep the first "Alle Standorte" option
+      while (picker.options.length > 1) picker.remove(1);
+      locations.forEach(locId => {
+        const opt = document.createElement('option');
+        opt.value = locId;
+        opt.textContent = configLocations[locId] || locId;
+        picker.appendChild(opt);
+      });
+      picker.value = state.selectedLocation;
+      picker.style.display = locations.length > 0 ? '' : 'none';
+    });
+  } catch { /* ignore */ }
+}
+
+async function fetchHistoryData() {
+  const url = state.selectedLocation ? `/api/history?location=${encodeURIComponent(state.selectedLocation)}` : '/api/history';
+  try {
+    const res = await api(url);
+    return Array.isArray(res) ? res : [];
+  } catch { return []; }
+}
+
 async function loadHistoryTab() {
   state.loaded.history = true;
-  let data = [];
-  try {
-    const res = await api('/api/history');
-    data = Array.isArray(res) ? res : [];
-  } catch { data = []; }
-  state.history = data;
-  renderChart(data);
+  await loadLocationPickers();
+  state.history = await fetchHistoryData();
+  renderChart(state.history);
+
+  const historyPicker = document.getElementById('history-location-picker');
+  if (historyPicker) {
+    historyPicker.addEventListener('change', async () => {
+      state.selectedLocation = historyPicker.value;
+      // Sync stats picker
+      const statsPicker = document.getElementById('stats-location-picker');
+      if (statsPicker) statsPicker.value = state.selectedLocation;
+      state.history = await fetchHistoryData();
+      renderChart(state.history);
+      // Reload stats if already loaded
+      if (state.loaded.stats) {
+        await reloadStats();
+      }
+    });
+  }
 
   document.querySelectorAll('#view-history .chip[data-days]').forEach(chip => {
     chip.addEventListener('click', () => {
@@ -978,8 +1032,7 @@ async function loadHistoryTab() {
         showToast(t('measureSuccess'));
         haptic('success');
         // Reload history data
-        const res = await api('/api/history');
-        state.history = Array.isArray(res) ? res : [];
+        state.history = await fetchHistoryData();
         renderChart(state.history);
       } catch (err) {
         showToast(t('measureError'));
@@ -1234,11 +1287,33 @@ function renderHourChart(entries, dayKey) {
   section.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-async function loadStatsTab() {
-  state.loaded.stats = true;
-  const stats = await api('/api/stats');
+async function reloadStats() {
+  const url = state.selectedLocation ? `/api/stats?location=${encodeURIComponent(state.selectedLocation)}` : '/api/stats';
+  const stats = await api(url);
   state.stats = stats;
   renderStats(stats);
+}
+
+async function loadStatsTab() {
+  state.loaded.stats = true;
+  await loadLocationPickers();
+  await reloadStats();
+
+  const statsPicker = document.getElementById('stats-location-picker');
+  if (statsPicker) {
+    statsPicker.addEventListener('change', async () => {
+      state.selectedLocation = statsPicker.value;
+      // Sync history picker
+      const historyPicker = document.getElementById('history-location-picker');
+      if (historyPicker) historyPicker.value = state.selectedLocation;
+      await reloadStats();
+      // Reload history if already loaded
+      if (state.loaded.history) {
+        state.history = await fetchHistoryData();
+        renderChart(state.history);
+      }
+    });
+  }
 }
 
 function renderStats(stats) {

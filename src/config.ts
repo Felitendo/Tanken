@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { FuelType, RepoAuthConfig, RepoConfig, RepoOidcConfig, RepoSmtpConfig, RuntimeConfig } from './types';
+import { FuelType, RepoAuthConfig, RepoConfig, RepoOidcConfig, RepoSmtpConfig, RuntimeConfig, ScanLocation } from './types';
 
 const ROOT_DIR = process.cwd();
 const DATA_DIR = path.join(ROOT_DIR, 'data');
@@ -78,6 +78,20 @@ function normalizeAuthConfig(value: Partial<RepoAuthConfig> | undefined, fallbac
   };
 }
 
+function normalizeLocations(value: unknown): ScanLocation[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((loc): loc is Record<string, unknown> => loc !== null && typeof loc === 'object' && typeof loc.id === 'string' && loc.id.length > 0)
+    .map((loc) => ({
+      id: String(loc.id),
+      name: String(loc.name ?? ''),
+      lat: Number(loc.lat) || 0,
+      lng: Number(loc.lng) || 0,
+      radius_km: Math.max(1, Math.min(25, Math.round(Number(loc.radius_km) || 10))),
+      fuel_type: normalizeFuelType(loc.fuel_type),
+    }));
+}
+
 function normalizeSmtpConfig(value: Partial<RepoSmtpConfig> | undefined, fallback: RepoSmtpConfig): RepoSmtpConfig {
   return {
     host: String(value?.host ?? fallback.host ?? ''),
@@ -108,7 +122,8 @@ export function normalizeRepoConfig(value: Partial<RepoConfig>, fallback: RepoCo
     },
     auth: normalizeAuthConfig(value.auth, fallback.auth ?? DEFAULT_REPO_CONFIG.auth),
     smtp: normalizeSmtpConfig(value.smtp, fallback.smtp ?? DEFAULT_REPO_CONFIG.smtp!),
-    session_secret: String(value.session_secret ?? fallback.session_secret ?? '')
+    session_secret: String(value.session_secret ?? fallback.session_secret ?? ''),
+    locations: normalizeLocations(value.locations ?? fallback.locations ?? [])
   };
 }
 

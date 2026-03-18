@@ -36,3 +36,7 @@ CREATE TABLE IF NOT EXISTS price_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_price_history_timestamp ON price_history(timestamp DESC);
+
+-- Location-based scanning support
+ALTER TABLE price_history ADD COLUMN IF NOT EXISTS location_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_price_history_location ON price_history(location_id, timestamp DESC);
