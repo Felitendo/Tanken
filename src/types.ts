@@ -55,6 +55,7 @@ export interface RuntimeConfig {
     rootDir: string;
     publicDir: string;
     dataDir: string;
+    configDir: string;
     usersFile: string;
     alertsFile: string;
     sessionsFile: string;

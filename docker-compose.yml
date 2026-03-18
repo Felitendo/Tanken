@@ -26,6 +26,8 @@ services:
     ports:
       - "3847:3847"
     restart: unless-stopped
+    volumes:
+      - tanken_config:/app/config
     environment:
       - NODE_ENV=production
       - PORT=3847
@@ -33,3 +35,4 @@ services:
 
 volumes:
   postgres_data:
+  tanken_config:

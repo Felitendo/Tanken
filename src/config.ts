@@ -5,7 +5,8 @@ import { FuelType, RepoAuthConfig, RepoConfig, RepoOidcConfig, RepoSmtpConfig, R
 const ROOT_DIR = process.cwd();
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
-const CONFIG_FILE = path.join(ROOT_DIR, 'config.json');
+const CONFIG_DIR = path.join(ROOT_DIR, 'config');
+const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const EXAMPLE_CONFIG_FILE = path.join(ROOT_DIR, 'config.example.json');
 
 const DEFAULT_REPO_CONFIG: RepoConfig = {
@@ -120,6 +121,7 @@ export function loadRepoConfig(): RepoConfig {
 export function saveRepoConfig(value: Partial<RepoConfig>): RepoConfig {
   const current = loadRepoConfig();
   const next = normalizeRepoConfig(value, current);
+  fs.mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });
   fs.writeFileSync(CONFIG_FILE, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
   return next;
 }
@@ -150,6 +152,7 @@ export function loadRuntimeConfig(): RuntimeConfig {
       rootDir: ROOT_DIR,
       publicDir: PUBLIC_DIR,
       dataDir: DATA_DIR,
+      configDir: CONFIG_DIR,
       usersFile: path.join(DATA_DIR, 'users.json'),
       alertsFile: path.join(DATA_DIR, 'alerts.json'),
       sessionsFile: path.join(DATA_DIR, 'sessions.json'),
