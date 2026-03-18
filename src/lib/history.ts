@@ -44,7 +44,13 @@ export function readPriceHistory(filePath: string): HistoryEntry[] {
   }
 }
 
-export function buildHistoryStats(entries: HistoryEntry[]): HistoryStats {
+export interface StationPriceInput {
+  timestamp: string;
+  station_name: string;
+  price: number;
+}
+
+export function buildHistoryStats(entries: HistoryEntry[], stationData?: StationPriceInput[]): HistoryStats {
   const datedEntries = entries
     .map((entry) => ({
       ...entry,
@@ -57,19 +63,44 @@ export function buildHistoryStats(entries: HistoryEntry[]): HistoryStats {
   const hourPrices: Record<number, number[]> = {};
   const stationPrices: Record<string, number[]> = {};
 
-  for (const entry of datedEntries) {
-    const day = entry.timestampDate.getDay();
-    const hour = entry.timestampDate.getHours();
+  // Use individual station data for day/hour/station stats if available
+  const priceSource = stationData && stationData.length > 0 ? stationData : null;
 
-    dayPrices[day] = dayPrices[day] ?? [];
-    dayPrices[day].push(entry.min_price);
+  if (priceSource) {
+    for (const sp of priceSource) {
+      const d = new Date(sp.timestamp);
+      if (Number.isNaN(d.getTime())) continue;
 
-    hourPrices[hour] = hourPrices[hour] ?? [];
-    hourPrices[hour].push(entry.min_price);
+      const day = d.getDay();
+      const hour = d.getHours();
 
-    if (entry.station) {
-      stationPrices[entry.station] = stationPrices[entry.station] ?? [];
-      stationPrices[entry.station].push(entry.min_price);
+      dayPrices[day] = dayPrices[day] ?? [];
+      dayPrices[day].push(sp.price);
+
+      hourPrices[hour] = hourPrices[hour] ?? [];
+      hourPrices[hour].push(sp.price);
+
+      if (sp.station_name) {
+        stationPrices[sp.station_name] = stationPrices[sp.station_name] ?? [];
+        stationPrices[sp.station_name].push(sp.price);
+      }
+    }
+  } else {
+    // Fallback: use aggregated price_history entries (legacy / no station_prices data)
+    for (const entry of datedEntries) {
+      const day = entry.timestampDate.getDay();
+      const hour = entry.timestampDate.getHours();
+
+      dayPrices[day] = dayPrices[day] ?? [];
+      dayPrices[day].push(entry.min_price);
+
+      hourPrices[hour] = hourPrices[hour] ?? [];
+      hourPrices[hour].push(entry.min_price);
+
+      if (entry.station) {
+        stationPrices[entry.station] = stationPrices[entry.station] ?? [];
+        stationPrices[entry.station].push(entry.min_price);
+      }
     }
   }
 

@@ -52,6 +52,38 @@ export async function readPriceHistoryFromDatabase(locationId?: string): Promise
   return mapRows(result.rows);
 }
 
+export interface StationPriceRow {
+  timestamp: string;
+  station_name: string;
+  station_brand: string;
+  price: number;
+  location_id?: string;
+}
+
+export async function readStationPrices(locationId?: string): Promise<StationPriceRow[]> {
+  const where = locationId ? 'WHERE location_id = $1' : '';
+  const params = locationId ? [locationId] : [];
+  const result = await database.query<{
+    timestamp: Date;
+    station_name: string;
+    station_brand: string;
+    price: number;
+    location_id: string | null;
+  }>(
+    `SELECT timestamp, station_name, station_brand, price, location_id
+     FROM station_prices ${where}
+     ORDER BY timestamp ASC`,
+    params
+  );
+  return result.rows.map(r => ({
+    timestamp: r.timestamp.toISOString(),
+    station_name: r.station_name,
+    station_brand: r.station_brand,
+    price: Number(r.price),
+    location_id: r.location_id || undefined,
+  }));
+}
+
 export async function getAvailableLocations(): Promise<string[]> {
   const result = await database.query<{ location_id: string }>(
     `SELECT DISTINCT location_id FROM price_history WHERE location_id IS NOT NULL ORDER BY location_id`

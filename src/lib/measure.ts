@@ -67,6 +67,21 @@ export async function measureLocation(params: {
     [timestamp, minPrice, avgPrice, maxPrice, cheapest.name || '', open.length, locationId || null]
   );
 
+  // Store individual station prices for rankings and detailed stats
+  if (open.length > 0) {
+    const values: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+    for (const s of open) {
+      values.push(`($${idx++}::timestamptz, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
+      params.push(timestamp, locationId || null, s.name, s.brand, s.price);
+    }
+    await database.query(
+      `INSERT INTO station_prices (timestamp, location_id, station_name, station_brand, price) VALUES ${values.join(', ')}`,
+      params
+    );
+  }
+
   return {
     timestamp,
     min_price: minPrice,
