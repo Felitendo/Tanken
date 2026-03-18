@@ -8,6 +8,7 @@ WORKDIR /app
 COPY next.config.ts ./
 COPY tsconfig.json ./
 COPY next-env.d.ts ./
+COPY postcss.config.mjs ./
 COPY public ./public
 COPY src ./src
 COPY data ./data
