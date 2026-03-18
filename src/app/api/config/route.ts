@@ -10,7 +10,7 @@ export async function GET() {
     radius_km: runtimeConfig.repoConfig.radius_km,
     refresh_interval_minutes: runtimeConfig.repoConfig.refresh_interval_minutes,
     thresholds: runtimeConfig.repoConfig.thresholds,
-    locations: (runtimeConfig.repoConfig.locations ?? []).map(l => ({ id: l.id, name: l.name })),
+    locations: (runtimeConfig.repoConfig.locations ?? []).map(l => ({ id: l.id, name: l.name, lat: l.lat, lng: l.lng })),
     auth: {
       provider: 'oidc',
       oidcConfigured: Boolean(runtimeConfig.oidcIssuerUrl && runtimeConfig.oidcClientId && runtimeConfig.oidcClientSecret && runtimeConfig.oidcRedirectUri),

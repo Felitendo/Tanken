@@ -15,6 +15,46 @@ export interface MeasureResult {
   rawStations: CachedStation[];
 }
 
+/**
+ * Fetch stations from Tankerkönig API without writing to DB.
+ * Used for live/ad-hoc searches when no cached data is nearby.
+ * Returns empty array on error (never throws).
+ */
+export async function fetchStationsLive(params: {
+  apiKey: string;
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  fuelType: string;
+}): Promise<CachedStation[]> {
+  const { apiKey, lat, lng, radiusKm, fuelType } = params;
+  try {
+    const url = `https://creativecommons.tankerkoenig.de/json/list.php?lat=${lat}&lng=${lng}&rad=${radiusKm}&sort=price&type=${fuelType}&apikey=${apiKey}`;
+    const { data } = await fetchJson<{ ok?: boolean; message?: string; stations?: Record<string, unknown>[] }>(url);
+    if (!data.ok || !data.stations?.length) return [];
+    return mapStations(data.stations);
+  } catch {
+    return [];
+  }
+}
+
+function mapStations(stations: Record<string, unknown>[]): CachedStation[] {
+  return stations.map(s => ({
+    id: String(s.id ?? ''),
+    name: String(s.name ?? ''),
+    brand: String(s.brand ?? ''),
+    street: String(s.street ?? ''),
+    houseNumber: String(s.houseNumber ?? s.house_number ?? ''),
+    postCode: String(s.postCode ?? s.post_code ?? ''),
+    place: String(s.place ?? ''),
+    lat: Number(s.lat) || 0,
+    lng: Number(s.lng) || 0,
+    dist: Number(s.dist) || 0,
+    price: typeof s.price === 'number' && s.price > 0 ? s.price : null,
+    isOpen: Boolean(s.isOpen),
+  }));
+}
+
 export async function measureLocation(params: {
   apiKey: string;
   lat: number;
@@ -32,21 +72,7 @@ export async function measureLocation(params: {
     throw new Error(data.message || 'Keine Stationen gefunden.');
   }
 
-  // Map raw API response to CachedStation format
-  const allStations: CachedStation[] = data.stations.map(s => ({
-    id: String(s.id ?? ''),
-    name: String(s.name ?? ''),
-    brand: String(s.brand ?? ''),
-    street: String(s.street ?? ''),
-    houseNumber: String(s.houseNumber ?? s.house_number ?? ''),
-    postCode: String(s.postCode ?? s.post_code ?? ''),
-    place: String(s.place ?? ''),
-    lat: Number(s.lat) || 0,
-    lng: Number(s.lng) || 0,
-    dist: Number(s.dist) || 0,
-    price: typeof s.price === 'number' && s.price > 0 ? s.price : null,
-    isOpen: Boolean(s.isOpen),
-  }));
+  const allStations = mapStations(data.stations);
 
   const open = allStations.filter(s => s.isOpen && s.price !== null && s.price > 0);
   if (!open.length) {

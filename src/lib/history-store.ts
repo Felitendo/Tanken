@@ -84,6 +84,38 @@ export async function readStationPrices(locationId?: string): Promise<StationPri
   }));
 }
 
+export interface PriceExtreme {
+  station_name: string;
+  price: number;
+  timestamp: string;
+}
+
+export async function getPriceExtremes(locationId?: string): Promise<{ cheapest: PriceExtreme | null; mostExpensive: PriceExtreme | null }> {
+  const where = locationId ? 'WHERE location_id = $1' : '';
+  const params = locationId ? [locationId] : [];
+
+  const cheapestResult = await database.query<{ station_name: string; price: number; timestamp: Date }>(
+    `SELECT station_name, price, timestamp FROM station_prices ${where} ORDER BY price ASC LIMIT 1`,
+    params
+  );
+
+  const expensiveResult = await database.query<{ station_name: string; price: number; timestamp: Date }>(
+    `SELECT station_name, price, timestamp FROM station_prices ${where} ORDER BY price DESC LIMIT 1`,
+    params
+  );
+
+  const mapRow = (r: { station_name: string; price: number; timestamp: Date }): PriceExtreme => ({
+    station_name: r.station_name,
+    price: Number(r.price),
+    timestamp: r.timestamp.toISOString(),
+  });
+
+  return {
+    cheapest: cheapestResult.rows[0] ? mapRow(cheapestResult.rows[0]) : null,
+    mostExpensive: expensiveResult.rows[0] ? mapRow(expensiveResult.rows[0]) : null,
+  };
+}
+
 export async function getAvailableLocations(): Promise<string[]> {
   const result = await database.query<{ location_id: string }>(
     `SELECT DISTINCT location_id FROM price_history WHERE location_id IS NOT NULL ORDER BY location_id`

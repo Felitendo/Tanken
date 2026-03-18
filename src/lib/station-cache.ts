@@ -66,12 +66,55 @@ export function getCachedStationsByLocation(locationId: string): LocationCache |
 export function findCachedStations(lat: number, lng: number, fuelType: string): LocationCache | null {
   let best: LocationCache | null = null;
   let bestDist = Infinity;
+  let fallback: LocationCache | null = null;
+  let fallbackDist = Infinity;
+
+  for (const entry of getCache().values()) {
+    const dist = haversineKm(lat, lng, entry.lat, entry.lng);
+
+    // Prefer matching fuel type within radius
+    if (entry.fuelType === fuelType && dist <= entry.radiusKm * 1.5 && dist < bestDist) {
+      best = entry;
+      bestDist = dist;
+    }
+
+    // Track closest entry of matching fuel type as fallback (no radius restriction)
+    if (entry.fuelType === fuelType && dist < fallbackDist) {
+      fallback = entry;
+      fallbackDist = dist;
+    }
+  }
+
+  // If no nearby match, return the closest matching fuel type cache
+  // If no fuel type match at all, return the closest cache of any type
+  if (best) return best;
+  if (fallback) return fallback;
+
+  // Last resort: return any cached data (different fuel type)
+  let anyBest: LocationCache | null = null;
+  let anyDist = Infinity;
+  for (const entry of getCache().values()) {
+    const dist = haversineKm(lat, lng, entry.lat, entry.lng);
+    if (dist < anyDist) {
+      anyBest = entry;
+      anyDist = dist;
+    }
+  }
+  return anyBest;
+}
+
+/**
+ * Strict nearby lookup: only returns a cache entry if the requested point
+ * falls within radiusKm * 1.5 of a scanned location with matching fuel type.
+ * Returns null if no scanned location is nearby (triggers live API fallback).
+ */
+export function findNearbyCachedStations(lat: number, lng: number, fuelType: string): LocationCache | null {
+  let best: LocationCache | null = null;
+  let bestDist = Infinity;
 
   for (const entry of getCache().values()) {
     if (entry.fuelType !== fuelType) continue;
-
     const dist = haversineKm(lat, lng, entry.lat, entry.lng);
-    // Only match if requested coords are within the scan radius (with some margin)
     if (dist <= entry.radiusKm * 1.5 && dist < bestDist) {
       best = entry;
       bestDist = dist;

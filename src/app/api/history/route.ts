@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readPriceHistoryFromDatabase, readPriceHistoryByStation, getAvailableLocations } from '@/lib/history-store';
+import { readPriceHistoryFromDatabase, readPriceHistoryByStation, getAvailableLocations, getPriceExtremes } from '@/lib/history-store';
 
 export const runtime = 'nodejs';
 
@@ -22,6 +22,9 @@ export async function GET(request: NextRequest) {
     // Fall back to all entries if station has insufficient data
   }
 
-  const entries = await readPriceHistoryFromDatabase(locationId);
-  return NextResponse.json(entries);
+  const [entries, extremes] = await Promise.all([
+    readPriceHistoryFromDatabase(locationId),
+    getPriceExtremes(locationId),
+  ]);
+  return NextResponse.json({ entries, extremes });
 }

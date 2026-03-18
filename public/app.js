@@ -9,9 +9,11 @@ const i18n = {
     loadingStations: 'Tankstellen laden…',
     noOpenStations: 'Keine offenen Tankstellen gefunden',
     showAll: 'Alle anzeigen',
+    noStationsYet: 'Noch keine Stationsdaten — bitte zuerst einen Scan im Admin-Panel starten',
     errorLoading: '❌ Fehler beim Laden',
     pricesStale: 'Preise evtl. veraltet (API nicht erreichbar)',
     pricesStaleConnection: 'Preise evtl. veraltet (Verbindungsfehler)',
+    pricesFallback: 'Keine gescannten Tankstellen in der Nähe – Ergebnisse von einer entfernten Messstelle',
     // Station sheet
     open: 'Geöffnet',
     closed: 'Geschlossen',
@@ -128,6 +130,7 @@ const i18n = {
     loadingStations: 'Loading stations…',
     noOpenStations: 'No open gas stations found',
     showAll: 'Show all',
+    noStationsYet: 'No station data yet — please start a scan in the admin panel first',
     errorLoading: '❌ Error loading',
     pricesStale: 'Prices may be outdated (API unreachable)',
     pricesStaleConnection: 'Prices may be outdated (connection error)',
@@ -313,7 +316,8 @@ const state = {
   smtpConfigured: false,
   alertNotified: false,
   selectedLocation: '',
-  availableLocations: []
+  availableLocations: [],
+  priceExtremes: null
 };
 
 const localSettingsKey = 'tank_settings';
@@ -564,10 +568,13 @@ function getActiveCoords() {
   if (state.activeLocation === 'gps' && state.userLat && state.userLng) {
     return { lat: state.userLat, lng: state.userLng };
   }
-  const loc = state.config?.locations?.[state.activeLocation];
-  if (loc) return { lat: loc.lat, lng: loc.lng };
-  const first = Object.values(state.config?.locations || {})[0];
-  if (first) return { lat: first.lat, lng: first.lng };
+  const locs = state.config?.locations || [];
+  // Find by ID if activeLocation is a location ID
+  const loc = locs.find(l => l.id === state.activeLocation);
+  if (loc && loc.lat && loc.lng) return { lat: loc.lat, lng: loc.lng };
+  // Fall back to first configured location
+  const first = locs[0];
+  if (first && first.lat && first.lng) return { lat: first.lat, lng: first.lng };
   return { lat: 48.2453, lng: 12.5225 };
 }
 
@@ -604,9 +611,15 @@ async function loadMapTab() {
     state.stations = stations;
     renderStationsOnMap(stations);
     renderStationList(stations);
-    loader.classList.add('hidden');
+    if (!stations.length) {
+      loader.innerHTML = `<span style="font-size:13px;opacity:0.6">${t('noStationsYet')}</span>`;
+    } else {
+      loader.classList.add('hidden');
+    }
     if (cacheStatus === 'stale') {
       showToast(t('pricesStale'));
+    } else if (cacheStatus === 'fallback') {
+      showToast(t('pricesFallback'));
     }
     checkPriceAlert(stations);
   } catch (error) {
@@ -983,8 +996,14 @@ async function fetchHistoryData() {
   const url = state.selectedLocation ? `/api/history?location=${encodeURIComponent(state.selectedLocation)}` : '/api/history';
   try {
     const res = await api(url);
-    return Array.isArray(res) ? res : [];
-  } catch { return []; }
+    // Support both old format (plain array) and new format ({ entries, extremes })
+    if (Array.isArray(res)) {
+      state.priceExtremes = null;
+      return res;
+    }
+    state.priceExtremes = res.extremes || null;
+    return Array.isArray(res.entries) ? res.entries : [];
+  } catch { state.priceExtremes = null; return []; }
 }
 
 async function loadHistoryTab() {
@@ -1188,20 +1207,31 @@ function renderChart(data) {
   });
 
   const summary = document.getElementById('history-summary');
+  // Use actual per-station extremes from station_prices if available
+  const extremes = state.priceExtremes;
+  const cheapestName = extremes?.cheapest?.station_name || '';
+  const cheapestPrice = extremes?.cheapest?.price;
+  const expensiveName = extremes?.mostExpensive?.station_name || '';
+  const expensivePrice = extremes?.mostExpensive?.price;
+  // Fallback to aggregated data if no extremes
   const minEntry = filtered.reduce((a, b) => a.min_price < b.min_price ? a : b);
   const maxEntry = filtered.reduce((a, b) => a.max_price > b.max_price ? a : b);
+  const lowestStation = cheapestName || fixEnc(minEntry.station) || t('unknown');
+  const lowestPrice = cheapestPrice != null ? cheapestPrice : minEntry.min_price;
+  const highestStation = expensiveName || fixEnc(maxEntry.station) || t('unknown');
+  const highestPrice = expensivePrice != null ? expensivePrice : maxEntry.max_price;
   summary.innerHTML = `
     <div class="section-header">${t('summary')}</div>
     <div class="card">
       <div class="card-row" style="padding:4px 0">
-        <div class="card-row-left"><div><div class="card-title">${t('lowestPrice')}</div><div class="card-subtitle">${fixEnc(minEntry.station) || t('unknown')}</div></div></div>
-        <div class="card-value good">${formatPrice(minEntry.min_price)}</div>
+        <div class="card-row-left"><div><div class="card-title">${t('lowestPrice')}</div><div class="card-subtitle">${fixEnc(lowestStation)}</div></div></div>
+        <div class="card-value good">${formatPrice(lowestPrice)}</div>
       </div>
     </div>
     <div class="card">
       <div class="card-row" style="padding:4px 0">
-        <div class="card-row-left"><div><div class="card-title">${t('highestPrice')}</div><div class="card-subtitle">${fixEnc(maxEntry.station) || t('unknown')}</div></div></div>
-        <div class="card-value bad">${formatPrice(maxEntry.max_price)}</div>
+        <div class="card-row-left"><div><div class="card-title">${t('highestPrice')}</div><div class="card-subtitle">${fixEnc(highestStation)}</div></div></div>
+        <div class="card-value bad">${formatPrice(highestPrice)}</div>
       </div>
     </div>`;
 }
