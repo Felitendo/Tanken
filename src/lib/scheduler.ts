@@ -1,5 +1,11 @@
 import { loadRepoConfig } from '@/config';
 import { measureLocation } from '@/lib/measure';
+import { setCachedStations } from '@/lib/station-cache';
+
+export interface LocationScanInfo {
+  timestamp: string;
+  stationCount: number;
+}
 
 export interface SchedulerStatus {
   running: boolean;
@@ -9,7 +15,7 @@ export interface SchedulerStatus {
   lastCycleAt: string | null;
   nextCycleAt: string | null;
   cycleCount: number;
-  locationScans: Record<string, string>;
+  locationScans: Record<string, LocationScanInfo>;
   errors: string[];
 }
 
@@ -26,7 +32,7 @@ class ScanScheduler {
   private _scanProgress: string | null = null;
   private lastCycleAt: Date | null = null;
   private _cycleCount = 0;
-  private locationScans: Record<string, string> = {};
+  private locationScans: Record<string, LocationScanInfo> = {};
   private recentErrors: string[] = [];
 
   start(): void {
@@ -122,7 +128,7 @@ class ScanScheduler {
         this._scanProgress = `${i + 1}/${locations.length}`;
         try {
           console.log(`[Scheduler] Scanning "${loc.name}" (${i + 1}/${locations.length})`);
-          await measureLocation({
+          const result = await measureLocation({
             apiKey,
             lat: loc.lat,
             lng: loc.lng,
@@ -130,7 +136,18 @@ class ScanScheduler {
             fuelType: loc.fuel_type,
             locationId: loc.id,
           });
-          this.locationScans[loc.id] = new Date().toISOString();
+          // Cache raw station data so /api/stations can serve it
+          setCachedStations(loc.id, {
+            stations: result.rawStations,
+            lat: loc.lat,
+            lng: loc.lng,
+            radiusKm: loc.radius_km,
+            fuelType: loc.fuel_type,
+          });
+          this.locationScans[loc.id] = {
+            timestamp: new Date().toISOString(),
+            stationCount: result.rawStations.length,
+          };
         } catch (err) {
           const msg = `"${loc.name}": ${err instanceof Error ? err.message : String(err)}`;
           console.error(`[Scheduler] ${msg}`);

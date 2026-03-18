@@ -1,12 +1,7 @@
 import { database } from '@/lib/server-runtime';
 import { fetchJson } from '@/lib/http';
 import { FuelType } from '@/types';
-
-interface TankerkoenigStation {
-  name?: string;
-  price?: number;
-  isOpen?: boolean;
-}
+import { CachedStation } from '@/lib/station-cache';
 
 export interface MeasureResult {
   timestamp: string;
@@ -16,6 +11,8 @@ export interface MeasureResult {
   station: string;
   num_stations: number;
   location_id?: string;
+  /** Raw station list from Tankerkönig (for caching). */
+  rawStations: CachedStation[];
 }
 
 export async function measureLocation(params: {
@@ -30,12 +27,28 @@ export async function measureLocation(params: {
 
   const url = `https://creativecommons.tankerkoenig.de/json/list.php?lat=${lat}&lng=${lng}&rad=${radius}&sort=price&type=${fuelType}&apikey=${apiKey}`;
 
-  const { data } = await fetchJson<{ ok?: boolean; message?: string; stations?: TankerkoenigStation[] }>(url);
+  const { data } = await fetchJson<{ ok?: boolean; message?: string; stations?: Record<string, unknown>[] }>(url);
   if (!data.ok || !data.stations?.length) {
     throw new Error(data.message || 'Keine Stationen gefunden.');
   }
 
-  const open = data.stations.filter(s => s.isOpen && typeof s.price === 'number' && s.price > 0);
+  // Map raw API response to CachedStation format
+  const allStations: CachedStation[] = data.stations.map(s => ({
+    id: String(s.id ?? ''),
+    name: String(s.name ?? ''),
+    brand: String(s.brand ?? ''),
+    street: String(s.street ?? ''),
+    houseNumber: String(s.houseNumber ?? s.house_number ?? ''),
+    postCode: String(s.postCode ?? s.post_code ?? ''),
+    place: String(s.place ?? ''),
+    lat: Number(s.lat) || 0,
+    lng: Number(s.lng) || 0,
+    dist: Number(s.dist) || 0,
+    price: typeof s.price === 'number' && s.price > 0 ? s.price : null,
+    isOpen: Boolean(s.isOpen),
+  }));
+
+  const open = allStations.filter(s => s.isOpen && s.price !== null && s.price > 0);
   if (!open.length) {
     throw new Error('Keine offenen Tankstellen mit Preisen gefunden.');
   }
@@ -62,5 +75,6 @@ export async function measureLocation(params: {
     station: cheapest.name || '',
     num_stations: open.length,
     location_id: locationId,
+    rawStations: allStations,
   };
 }

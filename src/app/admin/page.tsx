@@ -61,7 +61,7 @@ interface SchedulerStatus {
   lastCycleAt: string | null;
   nextCycleAt: string | null;
   cycleCount: number;
-  locationScans: Record<string, string>;
+  locationScans: Record<string, { timestamp: string; stationCount: number }>;
   errors: string[];
 }
 
@@ -377,10 +377,10 @@ function SchedulerStatusBadge({ locations }: { locations: AdminLocation[] }) {
         <div className="border-t px-3 py-2">
           <p className="text-xs font-medium text-muted-foreground mb-1">Letzte Scans pro Standort</p>
           <div className="space-y-0.5">
-            {Object.entries(status.locationScans).map(([id, time]) => (
-              <div key={id} className="flex justify-between text-xs">
+            {Object.entries(status.locationScans).map(([id, info]) => (
+              <div key={id} className="flex justify-between text-xs gap-2">
                 <span className="truncate text-foreground">{locName(id)}</span>
-                <span className="text-muted-foreground flex-shrink-0 ml-2">{fmtRelative(time)}</span>
+                <span className="text-muted-foreground flex-shrink-0">{info.stationCount} Tankstellen · {fmtRelative(info.timestamp)}</span>
               </div>
             ))}
           </div>

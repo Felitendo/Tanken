@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     if (data.ok) {
       return NextResponse.json({ ok: true, stations: (data.stations || []).length });
     }
-    return NextResponse.json({ error: data.message || 'API hat einen Fehler zurueckgegeben.' }, { status: 400 });
+    return NextResponse.json({ error: data.message || 'API hat einen Fehler zurückgegeben.' }, { status: 400 });
   } catch (err) {
     const msg = err instanceof Error ? `${err.message}${err.cause ? ` (${err.cause})` : ''}` : 'Unbekannter Fehler';
     return NextResponse.json({ error: `API-Fehler: ${msg}` }, { status: 502 });
