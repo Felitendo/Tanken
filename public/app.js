@@ -681,6 +681,10 @@ function renderStationsOnMap(stations) {
       .addTo(state.map)
       .on('click', () => {
         haptic('light');
+        if (state.map && s.lat && s.lng) {
+          state.map.invalidateSize();
+          state.map.flyTo([s.lat, s.lng], 15, { duration: 0.6 });
+        }
         showStationSheet(s);
       });
 
@@ -1407,13 +1411,22 @@ function renderStats(stats) {
     stations.forEach((s, i) => {
       const ratio = stLen > 1 ? i / (stLen - 1) : 0;
       const color = rankColor(ratio);
-      html += `<div class="ranking-item"><div class="ranking-pos">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price" style="color:${color}">${formatPrice(s.avg)}</div></div>`;
+      html += `<div class="ranking-item station-ranking-item" data-station-name="${fixEnc(s.station)}" style="cursor:pointer"><div class="ranking-pos">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price" style="color:${color}">${formatPrice(s.avg)}</div></div>`;
     });
     html += '</div></div>';
   }
 
   html += '<div style="height:20px"></div>';
   el.innerHTML = html;
+
+  el.querySelectorAll('.station-ranking-item').forEach(item => {
+    item.addEventListener('click', () => {
+      haptic('light');
+      const name = item.dataset.stationName;
+      const station = (state.stations || []).find(s => (s.name || s.brand) === name);
+      if (station) showStationSheet(station);
+    });
+  });
 }
 
 function setupSettings() {
