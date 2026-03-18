@@ -512,9 +512,14 @@ function setupTabs() {
   switchTab(state.currentTab || 'map', { initial: true });
 }
 
+let _tabLoadId = 0;
+
 function switchTab(tab, { initial = false } = {}) {
   if (!initial && tab === state.currentTab) return;
   if (!initial) haptic('light');
+
+  // Cancel any in-flight tab data load
+  _tabLoadId++;
 
   // Immediate visual switch — no async blocking
   document.querySelectorAll('.tab-item').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
@@ -525,23 +530,26 @@ function switchTab(tab, { initial = false } = {}) {
   persistStateSettings({ currentTab: tab });
 
   // Fire data loading in background — never blocks UI
-  loadTabData(tab);
+  loadTabData(tab, _tabLoadId);
 }
 
-async function loadTabData(tab) {
+async function loadTabData(tab, loadId) {
   try {
     if (tab === 'map') {
       if (!state.loaded.map) await loadMapTab();
       if (state.map) setTimeout(() => state.map.invalidateSize(), 250);
     }
+    if (_tabLoadId !== loadId) return; // tab changed, abort
     if (tab === 'history') {
       if (!state.loaded.history) await loadHistoryTab();
-      else { state.history = await fetchHistoryData(); renderChart(state.history); }
+      else { state.history = await fetchHistoryData(); if (_tabLoadId === loadId) renderChart(state.history); }
     }
+    if (_tabLoadId !== loadId) return;
     if (tab === 'stats') {
       if (!state.loaded.stats) await loadStatsTab();
       else await reloadStats();
     }
+    if (_tabLoadId !== loadId) return;
     if (tab === 'settings') await refreshAlertUi();
   } catch (e) { console.error('Tab data load error:', e); }
 }
@@ -679,7 +687,11 @@ function renderStationsOnMap(stations) {
 
   if (!stations.length) return;
 
-  const prices = stations.filter(s => s.price).map(s => s.price);
+  // Filter by user-set radius
+  const radiusKm = state.radiusKm || 25;
+  const filtered = stations.filter(s => !s.dist || s.dist <= radiusKm);
+
+  const prices = filtered.filter(s => s.price).map(s => s.price);
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
 
@@ -694,7 +706,7 @@ function renderStationsOnMap(stations) {
     state.markers.push(state.userMarker);
   }
 
-  stations.forEach((s) => {
+  filtered.forEach((s) => {
     if (!s.price || !s.isOpen) return;
     const ratio = maxPrice > minPrice ? (s.price - minPrice) / (maxPrice - minPrice) : 0;
     const color = priceColor(ratio);
@@ -787,7 +799,8 @@ function rankColor(ratio) {
 function renderStationList(stations) {
   const list = document.getElementById('station-list');
   const countLabel = document.getElementById('station-count');
-  const open = stations.filter(s => s.isOpen && s.price);
+  const radiusKm = state.radiusKm || 25;
+  const open = stations.filter(s => s.isOpen && s.price && (!s.dist || s.dist <= radiusKm));
 
   if (countLabel) countLabel.textContent = `${open.length} ${t('stationsFound')}`;
 
@@ -824,9 +837,11 @@ function renderStationList(stations) {
       </div>`;
   }).join('');
 
-  list.querySelectorAll('.station-item').forEach((el, i) => {
-    el.style.animationDelay = `${i * 40}ms`;
-    el.classList.add('anim-in');
+  requestAnimationFrame(() => {
+    list.querySelectorAll('.station-item').forEach((el, i) => {
+      el.style.animationDelay = `${Math.min(i * 35, 350)}ms`;
+      el.classList.add('anim-in');
+    });
   });
 
   list.querySelectorAll('.station-item').forEach(el => {
@@ -1759,25 +1774,27 @@ function renderStats(stats) {
   html += '<div style="height:20px"></div>';
   el.innerHTML = html;
 
-  const bigVal = el.querySelector('.stat-big-value');
-  if (bigVal && stats.overall.avg) {
-    countUp(bigVal, stats.overall.avg, 800, v => formatPrice(v));
-  }
-  el.querySelectorAll('.stat-card-value').forEach(cv => {
-    const num = parseFloat(cv.textContent.replace(',', '.'));
-    if (!isNaN(num) && num > 0) {
-      const isPrice = cv.textContent.includes(',');
-      countUp(cv, num, 600, isPrice ? (v => formatPrice(v)) : (v => Math.round(v).toString()));
+  // Defer animations to next frame so DOM write doesn't block tab bar
+  requestAnimationFrame(() => {
+    const bigVal = el.querySelector('.stat-big-value');
+    if (bigVal && stats.overall.avg) {
+      countUp(bigVal, stats.overall.avg, 800, v => formatPrice(v));
     }
-  });
-
-  el.querySelectorAll('.stat-card').forEach((card, i) => {
-    card.style.animationDelay = `${i * 80}ms`;
-    card.classList.add('anim-in');
-  });
-  el.querySelectorAll('.ranking-item').forEach((item, i) => {
-    item.style.animationDelay = `${i * 30}ms`;
-    item.classList.add('anim-in');
+    el.querySelectorAll('.stat-card-value').forEach(cv => {
+      const num = parseFloat(cv.textContent.replace(',', '.'));
+      if (!isNaN(num) && num > 0) {
+        const isPrice = cv.textContent.includes(',');
+        countUp(cv, num, 600, isPrice ? (v => formatPrice(v)) : (v => Math.round(v).toString()));
+      }
+    });
+    el.querySelectorAll('.stat-card').forEach((card, i) => {
+      card.style.animationDelay = `${Math.min(i * 60, 200)}ms`;
+      card.classList.add('anim-in');
+    });
+    el.querySelectorAll('.ranking-item').forEach((item, i) => {
+      item.style.animationDelay = `${Math.min(i * 20, 300)}ms`;
+      item.classList.add('anim-in');
+    });
   });
 
   el.querySelectorAll('.station-ranking-item').forEach(item => {
