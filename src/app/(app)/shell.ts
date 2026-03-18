@@ -201,7 +201,9 @@ export const APP_SHELL = `
 <div id="bottom-sheet" class="bottom-sheet hidden">
   <div class="bottom-sheet-backdrop"></div>
   <div class="bottom-sheet-content">
-    <div class="bottom-sheet-handle"></div>
+    <div class="bottom-sheet-handle-area" id="sheet-handle-area">
+      <div class="bottom-sheet-handle"></div>
+    </div>
     <div id="bottom-sheet-body"></div>
   </div>
 </div>

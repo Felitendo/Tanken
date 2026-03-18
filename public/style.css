@@ -80,19 +80,30 @@ html, body {
   overscroll-behavior: contain;
   opacity: 0;
   pointer-events: none;
-  transform: translateX(0);
-  transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.2, 0, 0, 1);
   will-change: opacity, transform;
 }
 
 .tab-view.active {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(0);
 }
 
-.tab-view.slide-left  { transform: translateX(-40px); }
-.tab-view.slide-right { transform: translateX(40px); }
+.tab-view.tab-enter {
+  animation: tab-enter 0.32s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.tab-view.tab-exit {
+  animation: tab-exit 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+  pointer-events: none;
+}
+
+@keyframes tab-enter {
+  from { opacity: 0; transform: translateX(var(--tab-dir, 50px)); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes tab-exit {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(calc(var(--tab-dir, 50px) * -1)); }
+}
 
 /* === Sections (iOS Settings Style) === */
 .section {
@@ -700,7 +711,7 @@ html, body {
   overscroll-behavior: contain;
   touch-action: pan-y;
   transform: translateY(100%);
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
   padding-bottom: var(--safe-bottom);
 }
 
@@ -708,12 +719,31 @@ html, body {
   transform: translateY(0);
 }
 
+.bottom-sheet-content.dragging {
+  transition: none !important;
+  overflow-y: hidden;
+}
+
+.bottom-sheet-content.snapping {
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1) !important;
+}
+
+.bottom-sheet-handle-area {
+  padding: 10px 0 6px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.bottom-sheet-handle-area:active {
+  cursor: grabbing;
+}
+
 .bottom-sheet-handle {
   width: 36px;
   height: 4px;
   border-radius: 2px;
   background: var(--color-hint);
-  margin: 8px auto 4px;
+  margin: 0 auto;
   opacity: 0.5;
 }
 

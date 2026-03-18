@@ -511,20 +511,41 @@ async function switchTab(tab, { initial = false } = {}) {
 
   const prevIdx = TAB_INDEX[state.currentTab] ?? 0;
   const nextIdx = TAB_INDEX[tab];
-  const dir = nextIdx > prevIdx ? 'left' : 'right';
+  const goingRight = nextIdx > prevIdx;
+  const dirPx = goingRight ? '50px' : '-50px';
 
   document.querySelectorAll('.tab-item').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
 
+  // Clean up any lingering animation classes
   document.querySelectorAll('.tab-view').forEach(v => {
-    v.classList.remove('active', 'slide-left', 'slide-right');
+    v.classList.remove('tab-enter', 'tab-exit');
   });
 
   const outgoing = document.getElementById('view-' + state.currentTab);
-  if (outgoing && !initial) {
-    outgoing.classList.add(dir === 'left' ? 'slide-left' : 'slide-right');
+  const incoming = document.getElementById('view-' + tab);
+
+  if (!initial && outgoing && outgoing !== incoming) {
+    outgoing.style.setProperty('--tab-dir', dirPx);
+    outgoing.classList.remove('active');
+    outgoing.classList.add('tab-exit');
+    outgoing.addEventListener('animationend', () => {
+      outgoing.classList.remove('tab-exit');
+    }, { once: true });
+  } else if (initial) {
+    document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
   }
 
-  document.getElementById('view-' + tab)?.classList.add('active');
+  if (incoming) {
+    incoming.style.setProperty('--tab-dir', dirPx);
+    incoming.classList.add('active');
+    if (!initial) {
+      incoming.classList.add('tab-enter');
+      incoming.addEventListener('animationend', () => {
+        incoming.classList.remove('tab-enter');
+      }, { once: true });
+    }
+  }
+
   state.currentTab = tab;
 
   persistStateSettings({ currentTab: tab });
@@ -846,6 +867,105 @@ function renderStationList(stations) {
   });
 }
 
+function setupSheetDrag(content, handleArea, backdrop, closeSheet) {
+  let startY = 0, currentY = 0, isDragging = false;
+  let velocityY = 0, lastY = 0, lastTime = 0;
+  let dragSource = null; // 'handle' or 'content'
+
+  function canDragFromContent() {
+    return content.scrollTop <= 0;
+  }
+
+  function onTouchStart(e) {
+    const isHandle = handleArea && handleArea.contains(e.target);
+    if (!isHandle && !canDragFromContent()) return;
+    dragSource = isHandle ? 'handle' : 'content';
+    startY = e.touches[0].clientY;
+    currentY = 0;
+    velocityY = 0;
+    lastY = startY;
+    lastTime = Date.now();
+  }
+
+  function onTouchMove(e) {
+    if (dragSource === null) return;
+    const touchY = e.touches[0].clientY;
+    currentY = touchY - startY;
+
+    // Only start dragging downward
+    if (!isDragging) {
+      if (currentY < 4) return; // not enough movement or moving up
+      if (dragSource === 'content' && content.scrollTop > 0) {
+        dragSource = null;
+        return;
+      }
+      isDragging = true;
+      content.classList.add('dragging');
+    }
+
+    // Rubber-band for upward drag (pulling above origin)
+    let translateY = currentY;
+    if (translateY < 0) {
+      translateY = translateY * 0.15; // heavy resistance going up
+    }
+
+    content.style.transform = `translateY(${translateY}px)`;
+
+    // Fade backdrop proportionally
+    const sheetH = content.offsetHeight || 400;
+    const progress = Math.max(0, Math.min(1, translateY / sheetH));
+    backdrop.style.opacity = String(1 - progress * 0.8);
+
+    // Track velocity
+    const now = Date.now();
+    const dt = now - lastTime;
+    if (dt > 0) {
+      velocityY = (touchY - lastY) / dt; // px/ms
+    }
+    lastY = touchY;
+    lastTime = now;
+
+    e.preventDefault();
+  }
+
+  function onTouchEnd() {
+    if (!isDragging) { dragSource = null; return; }
+    isDragging = false;
+    dragSource = null;
+    content.classList.remove('dragging');
+    content.classList.add('snapping');
+
+    const sheetH = content.offsetHeight || 400;
+    const dismiss = currentY > sheetH * 0.3 || velocityY > 0.5;
+
+    if (dismiss) {
+      content.style.transform = `translateY(${sheetH + 20}px)`;
+      backdrop.style.opacity = '0';
+      haptic('light');
+      setTimeout(() => {
+        content.classList.remove('snapping');
+        closeSheet();
+      }, 350);
+    } else {
+      content.style.transform = 'translateY(0)';
+      backdrop.style.opacity = '';
+      content.addEventListener('transitionend', () => {
+        content.classList.remove('snapping');
+      }, { once: true });
+    }
+  }
+
+  content.addEventListener('touchstart', onTouchStart, { passive: true });
+  content.addEventListener('touchmove', onTouchMove, { passive: false });
+  content.addEventListener('touchend', onTouchEnd, { passive: true });
+
+  state._sheetDragCleanup = () => {
+    content.removeEventListener('touchstart', onTouchStart);
+    content.removeEventListener('touchmove', onTouchMove);
+    content.removeEventListener('touchend', onTouchEnd);
+  };
+}
+
 function showStationSheet(station) {
   const sheet = document.getElementById('bottom-sheet');
   const body = document.getElementById('bottom-sheet-body');
@@ -910,24 +1030,30 @@ function showStationSheet(station) {
       </a>`}
     </div>`;
 
+  // Clean up previous drag listeners if any
+  if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
+
   sheet.classList.remove('hidden');
   const backdrop = sheet.querySelector('.bottom-sheet-backdrop');
   const content = sheet.querySelector('.bottom-sheet-content');
+  content.style.transform = '';
+  content.classList.remove('dragging', 'snapping');
+  const handleArea = document.getElementById('sheet-handle-area');
 
   const closeSheet = () => {
     if (state.sheetChart) { state.sheetChart.destroy(); state.sheetChart = null; }
+    content.style.transform = '';
+    content.classList.remove('dragging', 'snapping');
+    backdrop.style.opacity = '';
     sheet.classList.add('hidden');
     backdrop.removeEventListener('click', closeSheet);
+    if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
     if (state.defaultBounds) showResetViewBtn();
   };
   backdrop.addEventListener('click', closeSheet);
 
-  let startY = 0;
-  content.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; }, { passive: true, once: true });
-  content.addEventListener('touchend', (e) => {
-    const diff = e.changedTouches[0].clientY - startY;
-    if (diff > 80) closeSheet();
-  }, { passive: true, once: true });
+  // --- Real drag-to-dismiss ---
+  setupSheetDrag(content, handleArea, backdrop, closeSheet);
 
   state.sheetStationName = station.name;
   loadSheetChart(station.name, 1);
