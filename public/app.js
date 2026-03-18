@@ -950,7 +950,11 @@ async function loadHistoryTab() {
 }
 
 function renderChart(data) {
-  if (!data.length) return;
+  if (!data.length) {
+    const summary = document.getElementById('history-summary');
+    summary.innerHTML = `<div style="text-align:center;padding:2rem;opacity:0.5">${t('noHistory')}</div>`;
+    return;
+  }
   let filtered = data;
   if (state.historyDays > 0) {
     const cutoff = new Date();

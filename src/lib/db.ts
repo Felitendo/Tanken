@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import { Pool, PoolClient, QueryResultRow } from 'pg';
 import { RuntimeConfig } from '@/types';
 import { loadJson } from '@/lib/files';
-import { readPriceHistory } from '@/lib/history';
 import { LegacyAlertsMap, OAuthStateDb, SessionsDb, UsersDb } from '@/types';
 
 type DatabaseHandle = ReturnType<typeof createDatabaseInternal>;
@@ -123,18 +122,7 @@ function createDatabaseInternal(config: RuntimeConfig) {
       }
     }
 
-    if (historyCount === 0) {
-      const history = readPriceHistory(config.paths.historyFile);
-      for (const entry of history) {
-        await client.query(
-          `
-            INSERT INTO price_history (timestamp, min_price, avg_price, max_price, station, num_stations)
-            VALUES ($1::timestamptz, $2, $3, $4, $5, $6)
-          `,
-          [entry.timestamp, entry.min_price, entry.avg_price, entry.max_price, entry.station, entry.num_stations]
-        );
-      }
-    }
+    // History is populated by the scheduled price fetcher — no seed data
   }
 
   return {
