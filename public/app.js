@@ -507,8 +507,14 @@ async function switchTab(tab, { initial = false } = {}) {
   persistStateSettings({ currentTab: tab });
 
   if (tab === 'map' && !state.loaded.map) await loadMapTab();
-  if (tab === 'history' && !state.loaded.history) await loadHistoryTab();
-  if (tab === 'stats' && !state.loaded.stats) await loadStatsTab();
+  if (tab === 'history') {
+    if (!state.loaded.history) await loadHistoryTab();
+    else { state.history = await fetchHistoryData(); renderChart(state.history); }
+  }
+  if (tab === 'stats') {
+    if (!state.loaded.stats) await loadStatsTab();
+    else await reloadStats();
+  }
   if (tab === 'settings') await refreshAlertUi();
 
   if (tab === 'map' && state.map) {
