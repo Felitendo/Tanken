@@ -700,13 +700,44 @@ html, body {
   padding: 0 20px 8px;
 }
 
+.sheet-chart-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0 8px;
+}
+
 .sheet-chart-header {
   font-size: 13px;
   font-weight: 500;
   color: var(--color-hint);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 12px 0 8px;
+}
+
+.sheet-chart-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.sheet-toggle-btn {
+  border: none;
+  background: transparent;
+  color: var(--color-hint);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sheet-toggle-btn.active {
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .sheet-chart-container {

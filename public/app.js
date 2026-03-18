@@ -113,6 +113,8 @@ const i18n = {
     priceHistory: 'PREISVERLAUF',
     areaHistory: 'Gebietspreisverlauf',
     noHistory: 'Kein Verlauf verfügbar',
+    sheet24h: '24h',
+    sheet7d: '7 Tage',
     measureNow: 'Jetzt messen',
     measuring: 'Messe...',
     measureSuccess: 'Messung gespeichert',
@@ -224,6 +226,8 @@ const i18n = {
     priceHistory: 'PRICE HISTORY',
     areaHistory: 'Area price trend',
     noHistory: 'No history available',
+    sheet24h: '24h',
+    sheet7d: '7 Days',
     measureNow: 'Measure now',
     measuring: 'Measuring...',
     measureSuccess: 'Measurement saved',
@@ -848,7 +852,13 @@ function showStationSheet(station) {
       ${station.dist ? `<span style="margin-left:auto;color:var(--color-hint)">${station.dist.toFixed(1)} ${t('kmAway')}</span>` : ''}
     </div>
     <div class="sheet-chart-section">
-      <div class="sheet-chart-header">${t('priceHistory')}</div>
+      <div class="sheet-chart-header-row">
+        <div class="sheet-chart-header">${t('priceHistory')}</div>
+        <div class="sheet-chart-toggle">
+          <button class="sheet-toggle-btn active" data-range="1" id="sheet-range-24h">${t('sheet24h')}</button>
+          <button class="sheet-toggle-btn" data-range="7" id="sheet-range-7d">${t('sheet7d')}</button>
+        </div>
+      </div>
       <div class="sheet-chart-container">
         <div id="sheet-chart-loading" class="sheet-chart-empty"><div class="spinner"></div></div>
         <canvas id="sheet-price-chart" style="display:none"></canvas>
@@ -884,14 +894,27 @@ function showStationSheet(station) {
     if (diff > 80) closeSheet();
   }, { passive: true, once: true });
 
-  loadSheetChart(station.name);
+  state.sheetStationName = station.name;
+  loadSheetChart(station.name, 1);
+
+  document.querySelectorAll('.sheet-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      haptic('light');
+      document.querySelectorAll('.sheet-toggle-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadSheetChart(state.sheetStationName, parseInt(btn.dataset.range, 10));
+    });
+  });
 }
 
-async function loadSheetChart(stationName) {
+async function loadSheetChart(stationName, days = 1) {
   if (state.sheetChart) { state.sheetChart.destroy(); state.sheetChart = null; }
   const loading = document.getElementById('sheet-chart-loading');
   const canvas = document.getElementById('sheet-price-chart');
   if (!loading || !canvas) return;
+  loading.style.display = '';
+  loading.innerHTML = '<div class="spinner"></div>';
+  canvas.style.display = 'none';
 
   try {
     const data = await api(`/api/history?station=${encodeURIComponent(stationName)}`);
@@ -900,14 +923,14 @@ async function loadSheetChart(stationName) {
       return;
     }
 
-    // Use last 30 days by default
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
+    cutoff.setDate(cutoff.getDate() - days);
     let filtered = data.filter(d => new Date(d.timestamp) >= cutoff);
     if (filtered.length < 2) filtered = data.slice(-10);
 
     const labels = filtered.map(d => {
       const dt = new Date(d.timestamp);
+      if (days <= 1) return `${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}`;
       return `${dt.getDate()}.${dt.getMonth() + 1}`;
     });
 
