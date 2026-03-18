@@ -4,8 +4,11 @@ import { measureLocation } from '@/lib/measure';
 export interface SchedulerStatus {
   running: boolean;
   scanning: boolean;
+  currentLocation: string | null;
+  scanProgress: string | null;
   lastCycleAt: string | null;
   nextCycleAt: string | null;
+  cycleCount: number;
   locationScans: Record<string, string>;
   errors: string[];
 }
@@ -19,16 +22,17 @@ function sleep(ms: number): Promise<void> {
 class ScanScheduler {
   private timer: ReturnType<typeof setInterval> | null = null;
   private _scanning = false;
+  private _currentLocation: string | null = null;
+  private _scanProgress: string | null = null;
   private lastCycleAt: Date | null = null;
+  private _cycleCount = 0;
   private locationScans: Record<string, string> = {};
   private recentErrors: string[] = [];
 
   start(): void {
     if (this.timer) return;
     console.log('[Scheduler] Starting scan scheduler (tick every 60s)');
-    // Tick every 60 seconds to check if a cycle is due
     this.timer = setInterval(() => this.tick(), 60_000);
-    // Run first tick immediately
     this.tick();
   }
 
@@ -49,6 +53,21 @@ class ScanScheduler {
     return this.timer !== null;
   }
 
+  /** Trigger an immediate scan cycle, regardless of interval timer. */
+  scanNow(): void {
+    if (this._scanning) return;
+
+    const config = loadRepoConfig();
+    const locations = config.locations ?? [];
+    const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
+
+    if (!apiKey || locations.length === 0) return;
+
+    this.runCycle(apiKey, locations).catch(err => {
+      this.addError(`Cycle error: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
+
   getStatus(): SchedulerStatus {
     const config = loadRepoConfig();
     const intervalMs = (config.refresh_interval_minutes ?? 60) * 60_000;
@@ -63,8 +82,11 @@ class ScanScheduler {
     return {
       running: this.timer !== null,
       scanning: this._scanning,
+      currentLocation: this._currentLocation,
+      scanProgress: this._scanProgress,
       lastCycleAt: this.lastCycleAt?.toISOString() ?? null,
       nextCycleAt,
+      cycleCount: this._cycleCount,
       locationScans: { ...this.locationScans },
       errors: [...this.recentErrors],
     };
@@ -80,12 +102,10 @@ class ScanScheduler {
 
     if (!apiKey || locations.length === 0) return;
 
-    // Check if enough time has passed since last cycle
     if (this.lastCycleAt && (Date.now() - this.lastCycleAt.getTime()) < intervalMs) {
       return;
     }
 
-    // Start a scan cycle (fire-and-forget, guarded by _scanning flag)
     this.runCycle(apiKey, locations).catch(err => {
       this.addError(`Cycle error: ${err instanceof Error ? err.message : String(err)}`);
     });
@@ -98,6 +118,8 @@ class ScanScheduler {
     try {
       for (let i = 0; i < locations.length; i++) {
         const loc = locations[i];
+        this._currentLocation = loc.name;
+        this._scanProgress = `${i + 1}/${locations.length}`;
         try {
           console.log(`[Scheduler] Scanning "${loc.name}" (${i + 1}/${locations.length})`);
           await measureLocation({
@@ -110,7 +132,7 @@ class ScanScheduler {
           });
           this.locationScans[loc.id] = new Date().toISOString();
         } catch (err) {
-          const msg = `Error scanning "${loc.name}": ${err instanceof Error ? err.message : String(err)}`;
+          const msg = `"${loc.name}": ${err instanceof Error ? err.message : String(err)}`;
           console.error(`[Scheduler] ${msg}`);
           this.addError(msg);
         }
@@ -122,9 +144,12 @@ class ScanScheduler {
       }
 
       this.lastCycleAt = new Date();
+      this._cycleCount++;
       console.log('[Scheduler] Scan cycle complete');
     } finally {
       this._scanning = false;
+      this._currentLocation = null;
+      this._scanProgress = null;
     }
   }
 

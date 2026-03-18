@@ -56,8 +56,13 @@ interface AdminStatus {
 interface SchedulerStatus {
   running: boolean;
   scanning: boolean;
+  currentLocation: string | null;
+  scanProgress: string | null;
   lastCycleAt: string | null;
   nextCycleAt: string | null;
+  cycleCount: number;
+  locationScans: Record<string, string>;
+  errors: string[];
 }
 
 interface NominatimResult {
@@ -172,14 +177,14 @@ function LocationsSection({
         Scan-Standorte
       </div>
       <p className="text-sm text-muted-foreground">
-        Standorte hinzufuegen, die automatisch nach Preisen gescannt werden. Zwischen den Abfragen wird mindestens 1 Minute gewartet.
+        Standorte hinzufügen, die automatisch nach Preisen gescannt werden. Zwischen den Abfragen wird mindestens 1 Minute gewartet.
       </p>
 
       {/* Search */}
       <div className="space-y-2">
         <div className="flex gap-2">
           <Input
-            placeholder="Ort suchen, z.B. Muenchen..."
+            placeholder="Ort suchen, z.B. München..."
             value={searchQuery}
             onChange={(e) => handleSearchInput(e.target.value)}
           />
@@ -204,7 +209,7 @@ function LocationsSection({
                   disabled={locations.some(l => Math.abs(l.lat - parseFloat(result.lat)) < 0.001 && Math.abs(l.lng - parseFloat(result.lon)) < 0.001)}
                 >
                   <Plus className="h-3 w-3" />
-                  Hinzufuegen
+                  Hinzufügen
                 </Button>
               </div>
             ))}
@@ -262,21 +267,25 @@ function LocationsSection({
   );
 }
 
-function SchedulerStatusBadge() {
+function SchedulerStatusBadge({ locations }: { locations: AdminLocation[] }) {
   const [status, setStatus] = useState<SchedulerStatus | null>(null);
+  const [scanningNow, setScanningNow] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
         const data = await api<SchedulerStatus>('/api/admin/scheduler');
-        if (!cancelled) setStatus(data);
+        if (!cancelled) {
+          setStatus(data);
+          if (!data.scanning) setScanningNow(false);
+        }
       } catch {
         // ignore
       }
     }
     load();
-    const interval = setInterval(load, 15_000);
+    const interval = setInterval(load, 5_000);
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
@@ -293,24 +302,102 @@ function SchedulerStatusBadge() {
     }
   };
 
+  const handleScanNow = async () => {
+    setScanningNow(true);
+    try {
+      const result = await api<{ status: SchedulerStatus }>('/api/admin/scheduler', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'scan-now' }),
+      });
+      setStatus(result.status);
+    } catch {
+      setScanningNow(false);
+    }
+  };
+
+  const locName = (id: string) => locations.find(l => l.id === id)?.name ?? id;
+
+  const fmtTime = (iso: string) => {
+    try { return new Date(iso).toLocaleString('de-DE'); } catch { return iso; }
+  };
+
+  const fmtRelative = (iso: string) => {
+    try {
+      const diff = Date.now() - new Date(iso).getTime();
+      if (diff < 60_000) return 'gerade eben';
+      if (diff < 3_600_000) return `vor ${Math.floor(diff / 60_000)} Min.`;
+      if (diff < 86_400_000) return `vor ${Math.floor(diff / 3_600_000)} Std.`;
+      return fmtTime(iso);
+    } catch { return iso; }
+  };
+
   if (!status) return null;
 
+  const isScanning = status.scanning || scanningNow;
+
   return (
-    <div className="flex items-center gap-3 p-3 border rounded-lg bg-card">
-      <div className={`h-2.5 w-2.5 rounded-full ${status.running ? (status.scanning ? 'bg-yellow-500 animate-pulse' : 'bg-green-500') : 'bg-gray-400'}`} />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium">
-          Scheduler: {status.running ? (status.scanning ? 'Scannt...' : 'Aktiv') : 'Gestoppt'}
-        </p>
-        {status.lastCycleAt && (
-          <p className="text-xs text-muted-foreground">
-            Letzter Scan: {new Date(status.lastCycleAt).toLocaleString('de-DE')}
+    <div className="border rounded-lg bg-card overflow-hidden">
+      {/* Header row */}
+      <div className="flex items-center gap-3 p-3">
+        <div className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${status.running ? (isScanning ? 'bg-yellow-500 animate-pulse' : 'bg-green-500') : 'bg-gray-400'}`} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">
+            Scheduler: {status.running ? (isScanning ? 'Scannt...' : 'Aktiv') : 'Gestoppt'}
           </p>
+          {isScanning && status.currentLocation && (
+            <p className="text-xs text-muted-foreground">
+              {status.scanProgress} — {status.currentLocation}
+            </p>
+          )}
+        </div>
+        <div className="flex gap-1.5 flex-shrink-0">
+          <Button type="button" variant="outline" size="sm" onClick={handleScanNow} disabled={isScanning || locations.length === 0}>
+            {isScanning ? 'Scannt...' : 'Jetzt scannen'}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleToggle}>
+            {status.running ? 'Stoppen' : 'Starten'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="border-t px-3 py-2 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <div>Zyklen: <span className="text-foreground font-medium">{status.cycleCount}</span></div>
+        <div>Standorte: <span className="text-foreground font-medium">{locations.length}</span></div>
+        {status.lastCycleAt && (
+          <div>Letzter Zyklus: <span className="text-foreground font-medium">{fmtRelative(status.lastCycleAt)}</span></div>
+        )}
+        {status.nextCycleAt && !isScanning && (
+          <div>Nächster: <span className="text-foreground font-medium">{fmtTime(status.nextCycleAt)}</span></div>
         )}
       </div>
-      <Button type="button" variant="outline" size="sm" onClick={handleToggle}>
-        {status.running ? 'Stoppen' : 'Starten'}
-      </Button>
+
+      {/* Per-location last scan */}
+      {Object.keys(status.locationScans).length > 0 && (
+        <div className="border-t px-3 py-2">
+          <p className="text-xs font-medium text-muted-foreground mb-1">Letzte Scans pro Standort</p>
+          <div className="space-y-0.5">
+            {Object.entries(status.locationScans).map(([id, time]) => (
+              <div key={id} className="flex justify-between text-xs">
+                <span className="truncate text-foreground">{locName(id)}</span>
+                <span className="text-muted-foreground flex-shrink-0 ml-2">{fmtRelative(time)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent errors */}
+      {status.errors.length > 0 && (
+        <div className="border-t px-3 py-2">
+          <p className="text-xs font-medium text-destructive mb-1">Letzte Fehler ({status.errors.length})</p>
+          <div className="space-y-0.5 max-h-32 overflow-y-auto">
+            {status.errors.slice().reverse().map((err, i) => (
+              <p key={i} className="text-xs text-muted-foreground font-mono break-all">{err}</p>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -440,7 +527,7 @@ function ConfigFields({
         defaultRadius={config.radiusKm}
         onChange={(locations) => onChange({ locations })}
       />
-      {showScheduler && config.locations.length > 0 && <SchedulerStatusBadge />}
+      {showScheduler && config.locations.length > 0 && <SchedulerStatusBadge locations={config.locations} />}
 
       <Separator />
 
@@ -714,7 +801,7 @@ export default function AdminPage() {
         method: 'POST',
         body: JSON.stringify({ apiKey: config.apiKey }),
       });
-      showFeedback(`API-Key gueltig. ${result.stations ?? 0} Stationen gefunden.`, 'success');
+      showFeedback(`API-Key gültig. ${result.stations ?? 0} Stationen gefunden.`, 'success');
     } catch (err) {
       showFeedback((err as Error).message || 'API-Key Test fehlgeschlagen.', 'error');
     } finally {

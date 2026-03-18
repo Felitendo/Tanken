@@ -29,7 +29,7 @@ export async function PUT(request: NextRequest) {
 
   const parsed = adminConfigSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Ungueltige Konfiguration.' }, { status: 400 });
+    return NextResponse.json({ error: 'Ungültige Konfiguration.' }, { status: 400 });
   }
 
   const nextConfig = fromAdminConfig(parsed.data);
