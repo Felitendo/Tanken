@@ -7,6 +7,7 @@ export const adminConfigSchema = z.object({
   apiKey: z.string().default(''),
   fuelType: z.enum(['diesel', 'e5', 'e10']).default('diesel'),
   radiusKm: z.coerce.number().min(1).max(25).default(10),
+  refreshIntervalMinutes: z.coerce.number().min(1).default(60),
   sessionSecret: z.string().optional().default(''),
   thresholds: z.object({
     goodBelowAvgCents: z.coerce.number().default(3),
@@ -42,6 +43,7 @@ export function toAdminConfig(config: RepoConfig): AdminConfigInput {
     apiKey: config.api_key,
     fuelType: config.fuel_type,
     radiusKm: config.radius_km,
+    refreshIntervalMinutes: config.refresh_interval_minutes,
     sessionSecret: config.session_secret || '',
     thresholds: {
       goodBelowAvgCents: config.thresholds.good_below_avg_cents,
@@ -73,6 +75,7 @@ export function fromAdminConfig(input: AdminConfigInput, current: RepoConfig = l
       api_key: input.apiKey,
       fuel_type: input.fuelType,
       radius_km: input.radiusKm,
+      refresh_interval_minutes: input.refreshIntervalMinutes,
       session_secret: input.sessionSecret || current.session_secret || createSessionSecret(),
       thresholds: {
         good_below_avg_cents: input.thresholds.goodBelowAvgCents,

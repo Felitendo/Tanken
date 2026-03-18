@@ -13,6 +13,7 @@ const DEFAULT_REPO_CONFIG: RepoConfig = {
   api_key: '',
   fuel_type: 'diesel',
   radius_km: 10,
+  refresh_interval_minutes: 60,
   thresholds: {
     good_below_avg_cents: 3,
     okay_below_avg_cents: 1
@@ -96,6 +97,7 @@ export function normalizeRepoConfig(value: Partial<RepoConfig>, fallback: RepoCo
     api_key: String(value.api_key ?? fallback.api_key ?? DEFAULT_REPO_CONFIG.api_key),
     fuel_type: normalizeFuelType(value.fuel_type ?? fallback.fuel_type ?? DEFAULT_REPO_CONFIG.fuel_type),
     radius_km: Math.max(1, Math.min(25, Math.round(normalizeNumber(value.radius_km, fallback.radius_km ?? DEFAULT_REPO_CONFIG.radius_km)))),
+    refresh_interval_minutes: Math.max(1, Math.round(normalizeNumber(value.refresh_interval_minutes, fallback.refresh_interval_minutes ?? DEFAULT_REPO_CONFIG.refresh_interval_minutes))),
     thresholds: {
       good_below_avg_cents: Math.round(
         normalizeNumber(value.thresholds?.good_below_avg_cents, fallback.thresholds?.good_below_avg_cents ?? DEFAULT_REPO_CONFIG.thresholds.good_below_avg_cents)

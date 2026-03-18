@@ -14,6 +14,7 @@ interface AdminConfig {
   apiKey: string;
   fuelType: string;
   radiusKm: number;
+  refreshIntervalMinutes: number;
   sessionSecret: string;
   thresholds: { goodBelowAvgCents: number; okayBelowAvgCents: number };
   oidc: {
@@ -48,6 +49,7 @@ const defaultConfig: AdminConfig = {
   apiKey: '',
   fuelType: 'diesel',
   radiusKm: 10,
+  refreshIntervalMinutes: 60,
   sessionSecret: '',
   thresholds: { goodBelowAvgCents: 3, okayBelowAvgCents: 1 },
   oidc: { issuerUrl: '', clientId: '', clientSecret: '', redirectUri: '', scope: 'openid profile email', usernameClaim: 'preferred_username', name: '' },
@@ -131,6 +133,16 @@ function ConfigFields({
               max={25}
               value={config.radiusKm}
               onChange={(e) => onChange({ radiusKm: Number(e.target.value) || 10 })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="refreshInterval">Aktualisierungsintervall (Min.)</Label>
+            <Input
+              id="refreshInterval"
+              type="number"
+              min={1}
+              value={config.refreshIntervalMinutes}
+              onChange={(e) => onChange({ refreshIntervalMinutes: Number(e.target.value) || 60 })}
             />
           </div>
           <div className="space-y-2">

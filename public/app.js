@@ -111,6 +111,10 @@ const i18n = {
     priceHistory: 'PREISVERLAUF',
     areaHistory: 'Gebietspreisverlauf',
     noHistory: 'Kein Verlauf verfügbar',
+    measureNow: 'Jetzt messen',
+    measuring: 'Messe...',
+    measureSuccess: 'Messung gespeichert',
+    measureError: 'Messung fehlgeschlagen',
     // Station sort
     sortPrice: 'Preis',
     sortDistance: 'Entfernung',
@@ -217,6 +221,10 @@ const i18n = {
     priceHistory: 'PRICE HISTORY',
     areaHistory: 'Area price trend',
     noHistory: 'No history available',
+    measureNow: 'Measure now',
+    measuring: 'Measuring...',
+    measureSuccess: 'Measurement saved',
+    measureError: 'Measurement failed',
     sortPrice: 'Price',
     sortDistance: 'Distance',
     stationsFound: 'Stations',
@@ -933,7 +941,11 @@ async function loadSheetChart(stationName) {
 
 async function loadHistoryTab() {
   state.loaded.history = true;
-  const data = await api('/api/history');
+  let data = [];
+  try {
+    const res = await api('/api/history');
+    data = Array.isArray(res) ? res : [];
+  } catch { data = []; }
   state.history = data;
   renderChart(data);
 
@@ -947,12 +959,60 @@ async function loadHistoryTab() {
     });
   });
 
+  // Show measure button for admin users
+  const measureBtn = document.getElementById('btn-measure');
+  if (measureBtn && state.user?.roles?.includes('admin')) {
+    measureBtn.style.display = '';
+    measureBtn.addEventListener('click', async () => {
+      if (measureBtn.disabled) return;
+      measureBtn.disabled = true;
+      measureBtn.textContent = t('measuring');
+      haptic('light');
+      try {
+        const body = {};
+        if (state.userLat && state.userLng) {
+          body.lat = state.userLat;
+          body.lng = state.userLng;
+        }
+        await api('/api/admin/measure', { method: 'POST', body: JSON.stringify(body) });
+        showToast(t('measureSuccess'));
+        haptic('success');
+        // Reload history data
+        const res = await api('/api/history');
+        state.history = Array.isArray(res) ? res : [];
+        renderChart(state.history);
+      } catch (err) {
+        showToast(t('measureError'));
+        haptic('error');
+      } finally {
+        measureBtn.disabled = false;
+        measureBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg> ${t('measureNow')}`;
+      }
+    });
+  }
 }
 
 function renderChart(data) {
   if (!data.length) {
+    if (state.chart) { state.chart.destroy(); state.chart = null; }
+    if (state.hourChart) { state.hourChart.destroy(); state.hourChart = null; }
+    document.getElementById('hour-chart-section').style.display = 'none';
     const summary = document.getElementById('history-summary');
-    summary.innerHTML = `<div style="text-align:center;padding:2rem;opacity:0.5">${t('noHistory')}</div>`;
+    summary.innerHTML = `
+      <div style="text-align:center;padding:1.5rem 0 0.5rem;opacity:0.45;font-size:13px">${t('noHistory')}</div>
+      <div class="section-header">${t('summary')}</div>
+      <div class="card">
+        <div class="card-row" style="padding:4px 0">
+          <div class="card-row-left"><div><div class="card-title">${t('lowestPrice')}</div><div class="card-subtitle">–</div></div></div>
+          <div class="card-value" style="opacity:0.3">–</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-row" style="padding:4px 0">
+          <div class="card-row-left"><div><div class="card-title">${t('highestPrice')}</div><div class="card-subtitle">–</div></div></div>
+          <div class="card-value" style="opacity:0.3">–</div>
+        </div>
+      </div>`;
     return;
   }
   let filtered = data;

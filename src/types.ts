@@ -32,6 +32,7 @@ export interface RepoConfig {
   api_key: string;
   fuel_type: FuelType;
   radius_km: number;
+  refresh_interval_minutes: number;
   thresholds: RepoThresholds;
   auth: RepoAuthConfig;
   smtp?: RepoSmtpConfig;

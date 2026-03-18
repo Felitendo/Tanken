@@ -8,6 +8,7 @@ export async function GET() {
     smtpConfigured: Boolean(runtimeConfig.repoConfig.smtp?.host && runtimeConfig.repoConfig.smtp?.from),
     fuel_type: runtimeConfig.repoConfig.fuel_type,
     radius_km: runtimeConfig.repoConfig.radius_km,
+    refresh_interval_minutes: runtimeConfig.repoConfig.refresh_interval_minutes,
     thresholds: runtimeConfig.repoConfig.thresholds,
     auth: {
       provider: 'oidc',

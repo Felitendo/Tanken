@@ -15,9 +15,5 @@ export async function GET(request: NextRequest) {
   }
 
   const entries = await readPriceHistoryFromDatabase();
-  if (!entries.length) {
-    return NextResponse.json({ error: 'Could not read price history' }, { status: 500 });
-  }
-
   return NextResponse.json(entries);
 }
