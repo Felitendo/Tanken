@@ -494,77 +494,46 @@ async function api(url, options = {}) {
 
 function setupTabs() {
   document.querySelectorAll('.tab-item').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const tab = btn.dataset.tab;
-      await switchTab(tab);
+    btn.addEventListener('click', () => {
+      switchTab(btn.dataset.tab);
     });
   });
 
   switchTab(state.currentTab || 'map', { initial: true });
 }
 
-const TAB_INDEX = { map: 0, history: 1, stats: 2, settings: 3 };
-
-async function switchTab(tab, { initial = false } = {}) {
+function switchTab(tab, { initial = false } = {}) {
   if (!initial && tab === state.currentTab) return;
   if (!initial) haptic('light');
 
-  const prevIdx = TAB_INDEX[state.currentTab] ?? 0;
-  const nextIdx = TAB_INDEX[tab];
-  const goingRight = nextIdx > prevIdx;
-  const dirPx = goingRight ? '50px' : '-50px';
-
+  // Immediate visual switch — no async blocking
   document.querySelectorAll('.tab-item').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-
-  // Clean up any lingering animation classes
-  document.querySelectorAll('.tab-view').forEach(v => {
-    v.classList.remove('tab-enter', 'tab-exit');
-  });
-
-  const outgoing = document.getElementById('view-' + state.currentTab);
-  const incoming = document.getElementById('view-' + tab);
-
-  if (!initial && outgoing && outgoing !== incoming) {
-    outgoing.style.setProperty('--tab-dir', dirPx);
-    outgoing.classList.remove('active');
-    outgoing.classList.add('tab-exit');
-    outgoing.addEventListener('animationend', () => {
-      outgoing.classList.remove('tab-exit');
-    }, { once: true });
-  } else if (initial) {
-    document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
-  }
-
-  if (incoming) {
-    incoming.style.setProperty('--tab-dir', dirPx);
-    incoming.classList.add('active');
-    if (!initial) {
-      incoming.classList.add('tab-enter');
-      incoming.addEventListener('animationend', () => {
-        incoming.classList.remove('tab-enter');
-      }, { once: true });
-    }
-  }
+  document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + tab)?.classList.add('active');
 
   state.currentTab = tab;
-
   persistStateSettings({ currentTab: tab });
 
-  if (tab === 'map' && !state.loaded.map) await loadMapTab();
-  if (tab === 'history') {
-    if (!state.loaded.history) await loadHistoryTab();
-    else { state.history = await fetchHistoryData(); renderChart(state.history); }
-  }
-  if (tab === 'stats') {
-    if (!state.loaded.stats) await loadStatsTab();
-    else await reloadStats();
-  }
-  if (tab === 'settings') await refreshAlertUi();
+  // Fire data loading in background — never blocks UI
+  loadTabData(tab);
+}
 
-  if (tab === 'map' && state.map) {
-    setTimeout(() => state.map.invalidateSize(), 250);
-  }
-
+async function loadTabData(tab) {
+  try {
+    if (tab === 'map') {
+      if (!state.loaded.map) await loadMapTab();
+      if (state.map) setTimeout(() => state.map.invalidateSize(), 250);
+    }
+    if (tab === 'history') {
+      if (!state.loaded.history) await loadHistoryTab();
+      else { state.history = await fetchHistoryData(); renderChart(state.history); }
+    }
+    if (tab === 'stats') {
+      if (!state.loaded.stats) await loadStatsTab();
+      else await reloadStats();
+    }
+    if (tab === 'settings') await refreshAlertUi();
+  } catch (e) { console.error('Tab data load error:', e); }
 }
 
 function initLocation() {
