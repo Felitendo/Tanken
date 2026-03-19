@@ -150,6 +150,35 @@ html, body {
   min-width: 0;
 }
 
+.account-avatar {
+  display: none;
+  flex-shrink: 0;
+}
+
+.account-avatar.visible {
+  display: block;
+}
+
+.account-avatar-img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.account-avatar-fallback {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-tint, #007aff);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+}
+
 .card-icon {
   font-size: 20px;
   flex-shrink: 0;

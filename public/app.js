@@ -457,17 +457,31 @@ function renderAccountUi() {
   const name = document.getElementById('account-name');
   const sub = document.getElementById('account-subline');
   const btn = document.getElementById('account-login-btn');
+  const avatar = document.getElementById('account-avatar');
   if (!name || !sub || !btn) return;
   if (state.user) {
     name.textContent = state.user.preferred_username || state.user.displayName || t('loggedIn');
     const connectedVia = state.config?.auth?.oidcName || 'OIDC';
     sub.textContent = state.user.email || `${t('connectedWith')} ${connectedVia}`;
     btn.textContent = 'Logout';
+    if (avatar) {
+      if (state.user.photoUrl) {
+        avatar.innerHTML = `<img src="${state.user.photoUrl}" alt="" class="account-avatar-img">`;
+      } else {
+        const initials = (state.user.preferred_username || state.user.displayName || '?').substring(0, 1).toUpperCase();
+        avatar.innerHTML = `<div class="account-avatar-fallback">${initials}</div>`;
+      }
+      avatar.classList.add('visible');
+    }
   } else {
     name.textContent = t('notLoggedIn');
     const oidcName = state.config?.auth?.oidcName;
     sub.textContent = state.config?.auth?.notes?.oidc || (oidcName ? `${t('loginWith')} ${oidcName}` : t('configureOidc'));
     btn.textContent = oidcName ? `${t('loginWith')} ${oidcName}` : 'Login';
+    if (avatar) {
+      avatar.innerHTML = '';
+      avatar.classList.remove('visible');
+    }
   }
 }
 

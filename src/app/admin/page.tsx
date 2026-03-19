@@ -32,6 +32,7 @@ interface AdminConfig {
     clientSecret: string;
     scope: string;
     usernameClaim: string;
+    pictureClaim: string;
     name: string;
   };
   smtp: {
@@ -80,7 +81,7 @@ const defaultConfig: AdminConfig = {
   refreshIntervalMinutes: 60,
   sessionSecret: '',
   thresholds: { goodBelowAvgCents: 3, okayBelowAvgCents: 1 },
-  oidc: { issuerUrl: '', clientId: '', clientSecret: '', scope: 'openid profile email', usernameClaim: 'preferred_username', name: '' },
+  oidc: { issuerUrl: '', clientId: '', clientSecret: '', scope: 'openid profile email', usernameClaim: 'preferred_username', pictureClaim: 'picture', name: '' },
   smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
   locations: [],
 };
@@ -610,6 +611,15 @@ function ConfigFields({
               value={config.oidc.usernameClaim}
               onChange={(e) => onChange({ oidc: { ...config.oidc, usernameClaim: e.target.value } })}
               placeholder="preferred_username"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="oidcPictureClaim">Picture Claim</Label>
+            <Input
+              id="oidcPictureClaim"
+              value={config.oidc.pictureClaim}
+              onChange={(e) => onChange({ oidc: { ...config.oidc, pictureClaim: e.target.value } })}
+              placeholder="picture"
             />
           </div>
         </div>

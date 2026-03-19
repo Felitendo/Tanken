@@ -25,6 +25,7 @@ const DEFAULT_REPO_CONFIG: RepoConfig = {
       client_secret: '',
       scope: 'openid profile email',
       username_claim: 'preferred_username',
+      picture_claim: 'picture',
       name: ''
     }
   },
@@ -66,6 +67,7 @@ function normalizeOidcConfig(value: Partial<RepoOidcConfig> | undefined, fallbac
     client_secret: String(value?.client_secret ?? fallback.client_secret ?? ''),
     scope: String(value?.scope ?? fallback.scope ?? DEFAULT_REPO_CONFIG.auth.oidc.scope),
     username_claim: String(value?.username_claim ?? fallback.username_claim ?? DEFAULT_REPO_CONFIG.auth.oidc.username_claim),
+    picture_claim: String(value?.picture_claim ?? fallback.picture_claim ?? DEFAULT_REPO_CONFIG.auth.oidc.picture_claim),
     name: String(value?.name ?? fallback.name ?? DEFAULT_REPO_CONFIG.auth.oidc.name)
   };
 }

@@ -19,6 +19,7 @@ export const adminConfigSchema = z.object({
     clientSecret: z.string().default(''),
     scope: z.string().default('openid profile email'),
     usernameClaim: z.string().default('preferred_username'),
+    pictureClaim: z.string().default('picture'),
     name: z.string().default('')
   }),
   smtp: z.object({
@@ -62,6 +63,7 @@ export function toAdminConfig(config: RepoConfig): AdminConfigInput {
       clientSecret: config.auth.oidc.client_secret,
       scope: config.auth.oidc.scope,
       usernameClaim: config.auth.oidc.username_claim || 'preferred_username',
+      pictureClaim: config.auth.oidc.picture_claim || 'picture',
       name: config.auth.oidc.name || ''
     },
     smtp: {
@@ -102,6 +104,7 @@ export function fromAdminConfig(input: AdminConfigInput, current: RepoConfig = l
           client_secret: input.oidc.clientSecret,
           scope: input.oidc.scope,
           username_claim: input.oidc.usernameClaim || 'preferred_username',
+          picture_claim: input.oidc.pictureClaim || 'picture',
           name: input.oidc.name || ''
         }
       },

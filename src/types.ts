@@ -11,6 +11,7 @@ export interface RepoOidcConfig {
   client_secret: string;
   scope: string;
   username_claim: string;
+  picture_claim: string;
   name: string;
 }
 

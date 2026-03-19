@@ -82,6 +82,7 @@ export const APP_SHELL = `
       <div class="card" id="account-card">
         <div class="card-row">
           <div class="card-row-left">
+            <div class="account-avatar" id="account-avatar"></div>
             <div>
               <div class="card-title" id="account-name">Nicht eingeloggt</div>
               <div class="card-subtitle" id="account-subline">Login optional, zum Sync deiner Einstellungen.</div>

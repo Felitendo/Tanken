@@ -67,6 +67,8 @@ export async function GET(request: NextRequest) {
 
     const usernameClaim = runtimeConfig.repoConfig.auth.oidc.username_claim || 'preferred_username';
     const usernameValue = String(merged[usernameClaim] ?? merged.preferred_username ?? '');
+    const pictureClaim = runtimeConfig.repoConfig.auth.oidc.picture_claim || 'picture';
+    const pictureValue = String(merged[pictureClaim] ?? merged.picture ?? '');
 
     const user = await stores.userStore.upsertUser(`oidc:${subject}`, {
       authProvider: 'oidc',
@@ -77,7 +79,7 @@ export async function GET(request: NextRequest) {
       username: usernameValue,
       email: String(merged.email ?? ''),
       emailVerified: Boolean(merged.email_verified),
-      photoUrl: String(merged.picture ?? ''),
+      photoUrl: pictureValue,
       oidc: merged
     });
 
