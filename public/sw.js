@@ -30,19 +30,16 @@ self.addEventListener('fetch', (e) => {
         .catch(() => caches.match(e.request))
     );
   } else {
-    // Stale-while-revalidate for static assets
-    // Serve cached version immediately, update cache in background
+    // Network-first for static assets
+    // Always fetch fresh content; fall back to cache when offline
     e.respondWith(
-      caches.open(CACHE).then((cache) =>
-        cache.match(e.request).then((cached) => {
-          const fetchPromise = fetch(e.request).then((res) => {
-            cache.put(e.request, res.clone());
-            return res;
-          }).catch(() => cached);
-
-          return cached || fetchPromise;
+      fetch(e.request)
+        .then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, clone));
+          return res;
         })
-      )
+        .catch(() => caches.match(e.request))
     );
   }
 });
