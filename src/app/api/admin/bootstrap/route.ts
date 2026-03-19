@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   const parsed = bootstrapSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Ungueltige Setup-Daten.' }, { status: 400 });
+    return NextResponse.json({ error: 'Ungültige Setup-Daten.' }, { status: 400 });
   }
 
   const username = parsed.data.username.trim();

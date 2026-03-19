@@ -922,7 +922,7 @@ export default function AdminPage() {
               <CardFooter className="justify-end">
                 <Button type="submit" disabled={submitting}>
                   <Save className="h-4 w-4" />
-                  {submitting ? 'Speichert...' : 'Setup abschliessen'}
+                  {submitting ? 'Speichert...' : 'Setup abschließen'}
                 </Button>
               </CardFooter>
             </form>

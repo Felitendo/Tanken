@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Gueltige E-Mail-Adresse erforderlich.' }, { status: 400 });
+    return NextResponse.json({ error: 'Gültige E-Mail-Adresse erforderlich.' }, { status: 400 });
   }
 
   const config = loadRepoConfig();
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       from: smtp.from,
       to: parsed.data.to,
       subject: 'Tanken – SMTP Test',
-      text: 'Diese E-Mail bestaetigt, dass die SMTP-Konfiguration korrekt ist.'
+      text: 'Diese E-Mail bestätigt, dass die SMTP-Konfiguration korrekt ist.'
     });
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {

@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
   const parsed = loginSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Ungueltige Login-Daten.' }, { status: 400 });
+    return NextResponse.json({ error: 'Ungültige Login-Daten.' }, { status: 400 });
   }
 
   const usernameLower = normalizeUsername(parsed.data.username);
