@@ -82,7 +82,8 @@ export async function GET(request: NextRequest) {
     });
 
     const session = await stores.sessionStore.createSession(user.id, 'oidc');
-    const response = NextResponse.redirect(new URL(saved.redirectAfter || '/', request.url));
+    const origin = `${proto}://${host}`;
+    const response = NextResponse.redirect(new URL(saved.redirectAfter || '/', origin));
     response.headers.set('Set-Cookie', stores.sessionStore.setSessionCookie(session.id));
     return response;
   } catch {
