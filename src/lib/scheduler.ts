@@ -5,6 +5,24 @@ import { setCachedStations } from '@/lib/station-cache';
 export interface LocationScanInfo {
   timestamp: string;
   stationCount: number;
+  openCount: number;
+  minPrice: number | null;
+  avgPrice: number | null;
+  maxPrice: number | null;
+  cheapestStation: string | null;
+}
+
+export interface ScanLogEntry {
+  timestamp: string;
+  locationId: string;
+  locationName: string;
+  stationCount: number;
+  openCount: number;
+  minPrice: number | null;
+  avgPrice: number | null;
+  maxPrice: number | null;
+  cheapestStation: string | null;
+  error?: string;
 }
 
 export interface SchedulerStatus {
@@ -16,10 +34,12 @@ export interface SchedulerStatus {
   nextCycleAt: string | null;
   cycleCount: number;
   locationScans: Record<string, LocationScanInfo>;
+  scanLog: ScanLogEntry[];
   errors: string[];
 }
 
 const MAX_ERRORS = 20;
+const MAX_SCAN_LOG = 50;
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -33,6 +53,7 @@ class ScanScheduler {
   private lastCycleAt: Date | null = null;
   private _cycleCount = 0;
   private locationScans: Record<string, LocationScanInfo> = {};
+  private _scanLog: ScanLogEntry[] = [];
   private recentErrors: string[] = [];
 
   start(): void {
@@ -94,6 +115,7 @@ class ScanScheduler {
       nextCycleAt,
       cycleCount: this._cycleCount,
       locationScans: { ...this.locationScans },
+      scanLog: [...this._scanLog],
       errors: [...this.recentErrors],
     };
   }
@@ -144,14 +166,39 @@ class ScanScheduler {
             radiusKm: loc.radius_km,
             fuelType: loc.fuel_type,
           });
-          this.locationScans[loc.id] = {
+          const openCount = result.rawStations.filter(s => s.isOpen && s.price !== null && s.price > 0).length;
+          const scanInfo: LocationScanInfo = {
             timestamp: new Date().toISOString(),
             stationCount: result.rawStations.length,
+            openCount,
+            minPrice: result.min_price,
+            avgPrice: result.avg_price,
+            maxPrice: result.max_price,
+            cheapestStation: result.station || null,
           };
+          this.locationScans[loc.id] = scanInfo;
+          this.addScanLog({
+            ...scanInfo,
+            locationId: loc.id,
+            locationName: loc.name,
+          });
+          console.log(`[Scheduler] "${loc.name}": ${openCount}/${result.rawStations.length} offen, Min ${result.min_price.toFixed(3)}€, Avg ${result.avg_price.toFixed(3)}€, Max ${result.max_price.toFixed(3)}€, Günstigste: ${result.station}`);
         } catch (err) {
           const msg = `"${loc.name}": ${err instanceof Error ? err.message : String(err)}`;
           console.error(`[Scheduler] ${msg}`);
           this.addError(msg);
+          this.addScanLog({
+            timestamp: new Date().toISOString(),
+            locationId: loc.id,
+            locationName: loc.name,
+            stationCount: 0,
+            openCount: 0,
+            minPrice: null,
+            avgPrice: null,
+            maxPrice: null,
+            cheapestStation: null,
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
 
         // Wait at least 60 seconds between API calls (rate limit protection)
@@ -174,6 +221,13 @@ class ScanScheduler {
     this.recentErrors.push(`${new Date().toISOString()} ${msg}`);
     if (this.recentErrors.length > MAX_ERRORS) {
       this.recentErrors = this.recentErrors.slice(-MAX_ERRORS);
+    }
+  }
+
+  private addScanLog(entry: ScanLogEntry): void {
+    this._scanLog.push(entry);
+    if (this._scanLog.length > MAX_SCAN_LOG) {
+      this._scanLog = this._scanLog.slice(-MAX_SCAN_LOG);
     }
   }
 }

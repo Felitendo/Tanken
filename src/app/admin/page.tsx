@@ -61,7 +61,27 @@ interface SchedulerStatus {
   lastCycleAt: string | null;
   nextCycleAt: string | null;
   cycleCount: number;
-  locationScans: Record<string, { timestamp: string; stationCount: number }>;
+  locationScans: Record<string, {
+    timestamp: string;
+    stationCount: number;
+    openCount: number;
+    minPrice: number | null;
+    avgPrice: number | null;
+    maxPrice: number | null;
+    cheapestStation: string | null;
+  }>;
+  scanLog: Array<{
+    timestamp: string;
+    locationId: string;
+    locationName: string;
+    stationCount: number;
+    openCount: number;
+    minPrice: number | null;
+    avgPrice: number | null;
+    maxPrice: number | null;
+    cheapestStation: string | null;
+    error?: string;
+  }>;
   errors: string[];
 }
 
@@ -376,11 +396,46 @@ function SchedulerStatusBadge({ locations }: { locations: AdminLocation[] }) {
       {Object.keys(status.locationScans).length > 0 && (
         <div className="border-t px-3 py-2">
           <p className="text-xs font-medium text-muted-foreground mb-1">Letzte Scans pro Standort</p>
-          <div className="space-y-0.5">
+          <div className="space-y-1.5">
             {Object.entries(status.locationScans).map(([id, info]) => (
-              <div key={id} className="flex justify-between text-xs gap-2">
-                <span className="truncate text-foreground">{locName(id)}</span>
-                <span className="text-muted-foreground flex-shrink-0">{info.stationCount} Tankstellen · {fmtRelative(info.timestamp)}</span>
+              <div key={id} className="text-xs border rounded p-2 bg-muted/30">
+                <div className="flex justify-between gap-2 mb-0.5">
+                  <span className="font-medium text-foreground truncate">{locName(id)}</span>
+                  <span className="text-muted-foreground flex-shrink-0">{fmtRelative(info.timestamp)}</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-0.5 text-muted-foreground">
+                  <div>Offen: <span className="text-foreground font-medium">{info.openCount}/{info.stationCount}</span></div>
+                  {info.minPrice != null && (
+                    <div>Min: <span className="text-green-600 font-medium">{info.minPrice.toFixed(3)}€</span></div>
+                  )}
+                  {info.avgPrice != null && (
+                    <div>Avg: <span className="text-foreground font-medium">{info.avgPrice.toFixed(3)}€</span></div>
+                  )}
+                  {info.maxPrice != null && (
+                    <div>Max: <span className="text-red-500 font-medium">{info.maxPrice.toFixed(3)}€</span></div>
+                  )}
+                </div>
+                {info.cheapestStation && (
+                  <div className="text-muted-foreground mt-0.5">Günstigste: <span className="text-foreground">{info.cheapestStation}</span></div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Scan log */}
+      {status.scanLog && status.scanLog.length > 0 && (
+        <div className="border-t px-3 py-2">
+          <p className="text-xs font-medium text-muted-foreground mb-1">Scan-Verlauf (letzte {status.scanLog.length})</p>
+          <div className="space-y-0.5 max-h-48 overflow-y-auto">
+            {status.scanLog.slice().reverse().map((entry, i) => (
+              <div key={i} className={`text-xs font-mono break-all ${entry.error ? 'text-destructive' : 'text-muted-foreground'}`}>
+                {fmtTime(entry.timestamp)} — {entry.locationName}
+                {entry.error
+                  ? ` — Fehler: ${entry.error}`
+                  : ` — ${entry.openCount}/${entry.stationCount} offen, ${entry.minPrice?.toFixed(3)}€–${entry.maxPrice?.toFixed(3)}€, Günstigste: ${entry.cheapestStation}`
+                }
               </div>
             ))}
           </div>

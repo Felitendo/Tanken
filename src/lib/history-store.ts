@@ -16,16 +16,31 @@ function mapRows(rows: HistoryRow[]): HistoryEntry[] {
 }
 
 export async function readPriceHistoryByStation(stationName: string): Promise<HistoryEntry[]> {
-  const result = await database.query<HistoryRow>(
+  // Query individual station prices from station_prices table (has ALL stations),
+  // not price_history which only stores the cheapest station's name.
+  const result = await database.query<{
+    timestamp: Date;
+    price: number;
+    station_name: string;
+    location_id: string | null;
+  }>(
     `
-      SELECT timestamp, min_price, avg_price, max_price, station, num_stations, location_id
-      FROM price_history
-      WHERE station ILIKE $1
+      SELECT timestamp, price, station_name, location_id
+      FROM station_prices
+      WHERE station_name ILIKE $1
       ORDER BY timestamp ASC
     `,
     [`%${stationName}%`]
   );
-  return mapRows(result.rows);
+  return result.rows.map(row => ({
+    timestamp: row.timestamp.toISOString(),
+    min_price: Number(row.price),
+    avg_price: Number(row.price),
+    max_price: Number(row.price),
+    station: row.station_name,
+    num_stations: 0,
+    location_id: row.location_id || undefined,
+  }));
 }
 
 export async function readPriceHistoryFromDatabase(locationId?: string): Promise<HistoryEntry[]> {
