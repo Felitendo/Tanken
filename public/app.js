@@ -926,7 +926,7 @@ function renderStationList(stations) {
     const isFav = s.id && state.favourites.includes(s.id);
 
     return `
-      <div class="station-item ripple" data-idx="${i}">
+      <div class="station-item" data-idx="${i}">
         <div class="station-rank" style="background:${color}">${i + 1}</div>
         <div class="station-info">
           <div class="station-name">${fixEnc(s.brand || s.name)}</div>
