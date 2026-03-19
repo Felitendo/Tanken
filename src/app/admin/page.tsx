@@ -409,6 +409,8 @@ function ConfigFields({
   testingApiKey,
   onTestEmail,
   testingEmail,
+  testEmailRecipient,
+  onTestEmailRecipientChange,
   showScheduler,
 }: {
   config: AdminConfig;
@@ -417,6 +419,8 @@ function ConfigFields({
   testingApiKey?: boolean;
   onTestEmail?: () => void;
   testingEmail?: boolean;
+  testEmailRecipient?: string;
+  onTestEmailRecipientChange?: (value: string) => void;
   showScheduler?: boolean;
 }) {
   return (
@@ -670,10 +674,22 @@ function ConfigFields({
           </div>
         </div>
         {onTestEmail && (
-          <Button type="button" variant="outline" size="sm" onClick={onTestEmail} disabled={testingEmail || !config.smtp.host || !config.smtp.from}>
-            <Mail className="h-4 w-4" />
-            {testingEmail ? 'Sende...' : 'Test-E-Mail senden'}
-          </Button>
+          <div className="flex items-end gap-2">
+            <div className="flex-1 space-y-1">
+              <Label htmlFor="testEmailRecipient">Empfänger für Test-E-Mail</Label>
+              <Input
+                id="testEmailRecipient"
+                type="email"
+                value={testEmailRecipient ?? ''}
+                onChange={(e) => onTestEmailRecipientChange?.(e.target.value)}
+                placeholder="deine@email.com"
+              />
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={onTestEmail} disabled={testingEmail || !config.smtp.host || !config.smtp.from || !testEmailRecipient}>
+              <Mail className="h-4 w-4" />
+              {testingEmail ? 'Sende...' : 'Test-E-Mail senden'}
+            </Button>
+          </div>
         )}
       </div>
     </div>
@@ -685,6 +701,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
+  const [testEmailRecipient, setTestEmailRecipient] = useState('');
   const [testingApiKey, setTestingApiKey] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; type: FeedbackType } | null>(null);
 
@@ -784,8 +801,8 @@ export default function AdminPage() {
     setTestingEmail(true);
     setFeedback(null);
     try {
-      await api('/api/admin/smtp-test', { method: 'POST', body: JSON.stringify({ to: config.smtp.from }) });
-      showFeedback('Test-E-Mail gesendet.', 'success');
+      await api('/api/admin/smtp-test', { method: 'POST', body: JSON.stringify({ to: testEmailRecipient }) });
+      showFeedback(`Test-E-Mail an ${testEmailRecipient} gesendet.`, 'success');
     } catch (err) {
       showFeedback((err as Error).message || 'Test-E-Mail fehlgeschlagen.', 'error');
     } finally {
@@ -987,7 +1004,7 @@ export default function AdminPage() {
             </CardHeader>
             <form onSubmit={handleSaveConfig}>
               <CardContent>
-                <ConfigFields config={config} onChange={handleConfigChange} onTestApiKey={handleTestApiKey} testingApiKey={testingApiKey} onTestEmail={handleTestEmail} testingEmail={testingEmail} showScheduler />
+                <ConfigFields config={config} onChange={handleConfigChange} onTestApiKey={handleTestApiKey} testingApiKey={testingApiKey} onTestEmail={handleTestEmail} testingEmail={testingEmail} testEmailRecipient={testEmailRecipient} onTestEmailRecipientChange={setTestEmailRecipient} showScheduler />
               </CardContent>
               <CardFooter className="justify-end">
                 <Button type="submit" disabled={submitting}>
