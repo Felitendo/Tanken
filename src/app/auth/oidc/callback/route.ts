@@ -20,7 +20,9 @@ export async function GET(request: NextRequest) {
     }
 
     const discovery = await getOidcDiscovery(runtimeConfig);
-    const redirectUri = `${request.nextUrl.origin}/auth/oidc/callback`;
+    const proto = request.headers.get('x-forwarded-proto') || 'http';
+    const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.host;
+    const redirectUri = `${proto}://${host}/auth/oidc/callback`;
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
