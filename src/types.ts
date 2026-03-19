@@ -9,7 +9,6 @@ export interface RepoOidcConfig {
   issuer_url: string;
   client_id: string;
   client_secret: string;
-  redirect_uri: string;
   scope: string;
   username_claim: string;
   name: string;
@@ -60,7 +59,6 @@ export interface RuntimeConfig {
   oidcIssuerUrl: string;
   oidcClientId: string;
   oidcClientSecret: string;
-  oidcRedirectUri: string;
   oidcScope: string;
   isProduction: boolean;
   paths: {

@@ -65,7 +65,6 @@
     form.querySelector('[data-config-field="oidc.issuerUrl"]').value = config.oidc?.issuerUrl || '';
     form.querySelector('[data-config-field="oidc.clientId"]').value = config.oidc?.clientId || '';
     form.querySelector('[data-config-field="oidc.clientSecret"]').value = config.oidc?.clientSecret || '';
-    form.querySelector('[data-config-field="oidc.redirectUri"]').value = config.oidc?.redirectUri || '';
     form.querySelector('[data-config-field="oidc.scope"]').value = config.oidc?.scope || 'openid profile email';
     form.querySelector('[data-config-field="locationsJson"]').value = formatLocations(config.locations);
   }
@@ -94,7 +93,6 @@
         issuerUrl: form.querySelector('[data-config-field="oidc.issuerUrl"]').value.trim(),
         clientId: form.querySelector('[data-config-field="oidc.clientId"]').value.trim(),
         clientSecret: form.querySelector('[data-config-field="oidc.clientSecret"]').value.trim(),
-        redirectUri: form.querySelector('[data-config-field="oidc.redirectUri"]').value.trim(),
         scope: form.querySelector('[data-config-field="oidc.scope"]').value.trim() || 'openid profile email'
       }
     };

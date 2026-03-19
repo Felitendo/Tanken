@@ -5,7 +5,7 @@ import { runtimeConfig, stores } from '@/lib/server-runtime';
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
-  if (!runtimeConfig.oidcIssuerUrl || !runtimeConfig.oidcClientId || !runtimeConfig.oidcClientSecret || !runtimeConfig.oidcRedirectUri) {
+  if (!runtimeConfig.oidcIssuerUrl || !runtimeConfig.oidcClientId || !runtimeConfig.oidcClientSecret) {
     return new NextResponse('OIDC nicht konfiguriert.', { status: 503 });
   }
 
@@ -20,9 +20,10 @@ export async function GET(request: NextRequest) {
     createdAt: Date.now()
   });
 
+  const redirectUri = `${request.nextUrl.origin}/auth/oidc/callback`;
   const params = new URLSearchParams({
     client_id: runtimeConfig.oidcClientId,
-    redirect_uri: runtimeConfig.oidcRedirectUri,
+    redirect_uri: redirectUri,
     response_type: 'code',
     scope: runtimeConfig.oidcScope,
     state,

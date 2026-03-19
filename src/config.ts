@@ -23,7 +23,6 @@ const DEFAULT_REPO_CONFIG: RepoConfig = {
       issuer_url: '',
       client_id: '',
       client_secret: '',
-      redirect_uri: '',
       scope: 'openid profile email',
       username_claim: 'preferred_username',
       name: ''
@@ -65,7 +64,6 @@ function normalizeOidcConfig(value: Partial<RepoOidcConfig> | undefined, fallbac
     issuer_url: String(value?.issuer_url ?? fallback.issuer_url ?? ''),
     client_id: String(value?.client_id ?? fallback.client_id ?? ''),
     client_secret: String(value?.client_secret ?? fallback.client_secret ?? ''),
-    redirect_uri: String(value?.redirect_uri ?? fallback.redirect_uri ?? ''),
     scope: String(value?.scope ?? fallback.scope ?? DEFAULT_REPO_CONFIG.auth.oidc.scope),
     username_claim: String(value?.username_claim ?? fallback.username_claim ?? DEFAULT_REPO_CONFIG.auth.oidc.username_claim),
     name: String(value?.name ?? fallback.name ?? DEFAULT_REPO_CONFIG.auth.oidc.name)
@@ -165,7 +163,6 @@ export function loadRuntimeConfig(): RuntimeConfig {
     oidcIssuerUrl: oidcConfig.issuer_url || process.env.OIDC_ISSUER_URL || '',
     oidcClientId: oidcConfig.client_id || process.env.OIDC_CLIENT_ID || '',
     oidcClientSecret: oidcConfig.client_secret || process.env.OIDC_CLIENT_SECRET || '',
-    oidcRedirectUri: oidcConfig.redirect_uri || process.env.OIDC_REDIRECT_URI || '',
     oidcScope: oidcConfig.scope || process.env.OIDC_SCOPE || 'openid profile email',
     isProduction: process.env.NODE_ENV === 'production',
     paths: {

@@ -30,7 +30,6 @@ interface AdminConfig {
     issuerUrl: string;
     clientId: string;
     clientSecret: string;
-    redirectUri: string;
     scope: string;
     usernameClaim: string;
     name: string;
@@ -81,7 +80,7 @@ const defaultConfig: AdminConfig = {
   refreshIntervalMinutes: 60,
   sessionSecret: '',
   thresholds: { goodBelowAvgCents: 3, okayBelowAvgCents: 1 },
-  oidc: { issuerUrl: '', clientId: '', clientSecret: '', redirectUri: '', scope: 'openid profile email', usernameClaim: 'preferred_username', name: '' },
+  oidc: { issuerUrl: '', clientId: '', clientSecret: '', scope: 'openid profile email', usernameClaim: 'preferred_username', name: '' },
   smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
   locations: [],
 };
@@ -576,14 +575,25 @@ function ConfigFields({
               onChange={(e) => onChange({ oidc: { ...config.oidc, clientSecret: e.target.value } })}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="oidcRedirect">Redirect URI</Label>
-            <Input
-              id="oidcRedirect"
-              type="url"
-              value={config.oidc.redirectUri}
-              onChange={(e) => onChange({ oidc: { ...config.oidc, redirectUri: e.target.value } })}
-            />
+          <div className="space-y-2 sm:col-span-2">
+            <Label>Callback URL</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                readOnly
+                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/auth/oidc/callback`}
+                className="font-mono text-xs bg-muted"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/auth/oidc/callback`)}
+              >
+                Kopieren
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">Diese URL als Redirect/Callback URI beim OIDC-Anbieter eintragen.</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="oidcScope">Scope</Label>

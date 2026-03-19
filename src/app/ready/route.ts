@@ -10,7 +10,7 @@ export async function GET() {
     status: 'ready',
     apiKeyConfigured: Boolean(runtimeConfig.apiKey),
     adminConfigured: adminUsers > 0,
-    oidcConfigured: Boolean(runtimeConfig.oidcIssuerUrl && runtimeConfig.oidcClientId && runtimeConfig.oidcClientSecret && runtimeConfig.oidcRedirectUri),
+    oidcConfigured: Boolean(runtimeConfig.oidcIssuerUrl && runtimeConfig.oidcClientId && runtimeConfig.oidcClientSecret),
     timestamp: new Date().toISOString()
   });
 }

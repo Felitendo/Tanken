@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     user: sanitizedUser,
     auth: {
       provider: 'oidc',
-      configured: Boolean(runtimeConfig.oidcIssuerUrl && runtimeConfig.oidcClientId && runtimeConfig.oidcClientSecret && runtimeConfig.oidcRedirectUri),
+      configured: Boolean(runtimeConfig.oidcIssuerUrl && runtimeConfig.oidcClientId && runtimeConfig.oidcClientSecret),
       adminPanelPath: '/admin'
     }
   });

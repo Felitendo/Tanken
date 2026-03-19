@@ -17,7 +17,6 @@ export const adminConfigSchema = z.object({
     issuerUrl: z.string().default(''),
     clientId: z.string().default(''),
     clientSecret: z.string().default(''),
-    redirectUri: z.string().default(''),
     scope: z.string().default('openid profile email'),
     usernameClaim: z.string().default('preferred_username'),
     name: z.string().default('')
@@ -61,7 +60,6 @@ export function toAdminConfig(config: RepoConfig): AdminConfigInput {
       issuerUrl: config.auth.oidc.issuer_url,
       clientId: config.auth.oidc.client_id,
       clientSecret: config.auth.oidc.client_secret,
-      redirectUri: config.auth.oidc.redirect_uri,
       scope: config.auth.oidc.scope,
       usernameClaim: config.auth.oidc.username_claim || 'preferred_username',
       name: config.auth.oidc.name || ''
@@ -102,7 +100,6 @@ export function fromAdminConfig(input: AdminConfigInput, current: RepoConfig = l
           issuer_url: input.oidc.issuerUrl,
           client_id: input.oidc.clientId,
           client_secret: input.oidc.clientSecret,
-          redirect_uri: input.oidc.redirectUri,
           scope: input.oidc.scope,
           username_claim: input.oidc.usernameClaim || 'preferred_username',
           name: input.oidc.name || ''

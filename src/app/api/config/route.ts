@@ -13,17 +13,16 @@ export async function GET() {
     locations: (runtimeConfig.repoConfig.locations ?? []).map(l => ({ id: l.id, name: l.name, lat: l.lat, lng: l.lng })),
     auth: {
       provider: 'oidc',
-      oidcConfigured: Boolean(runtimeConfig.oidcIssuerUrl && runtimeConfig.oidcClientId && runtimeConfig.oidcClientSecret && runtimeConfig.oidcRedirectUri),
+      oidcConfigured: Boolean(runtimeConfig.oidcIssuerUrl && runtimeConfig.oidcClientId && runtimeConfig.oidcClientSecret),
       issuerUrl: runtimeConfig.oidcIssuerUrl,
       clientId: runtimeConfig.oidcClientId,
-      redirectUri: runtimeConfig.oidcRedirectUri,
       oidcName: runtimeConfig.repoConfig.auth.oidc.name || '',
       browserLoginProvider: 'felo-id',
       adminPanelPath: '/admin',
       sessionCookie: runtimeConfig.cookieName,
       notes: {
         oidc:
-          runtimeConfig.oidcIssuerUrl && runtimeConfig.oidcClientId && runtimeConfig.oidcClientSecret && runtimeConfig.oidcRedirectUri
+          runtimeConfig.oidcIssuerUrl && runtimeConfig.oidcClientId && runtimeConfig.oidcClientSecret
             ? null
             : 'OIDC im Admin Panel unter /admin konfigurieren.'
       }

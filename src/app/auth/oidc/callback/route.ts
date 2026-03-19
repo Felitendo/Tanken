@@ -20,10 +20,11 @@ export async function GET(request: NextRequest) {
     }
 
     const discovery = await getOidcDiscovery(runtimeConfig);
+    const redirectUri = `${request.nextUrl.origin}/auth/oidc/callback`;
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: runtimeConfig.oidcRedirectUri,
+      redirect_uri: redirectUri,
       client_id: runtimeConfig.oidcClientId,
       client_secret: runtimeConfig.oidcClientSecret,
       code_verifier: saved.codeVerifier
