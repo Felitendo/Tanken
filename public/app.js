@@ -1098,7 +1098,7 @@ function setupPullToRefresh() {
 
   function isSheetOpen() {
     const sheet = document.getElementById('bottom-sheet');
-    return sheet && sheet.classList.contains('open');
+    return sheet && !sheet.classList.contains('hidden');
   }
 
   function applyPullTransform() {
@@ -1271,7 +1271,7 @@ function showStationSheet(station) {
         <div class="sheet-station-name">${fixEnc(station.name || station.brand)}</div>
         <div class="sheet-station-brand">${fixEnc(station.brand)}</div>
       </div>
-      ${sheetIsFav && state.user ? `<button class="fav-btn sheet-fav-btn active" data-station-id="${station.id}" aria-label="${t('removeFavourite')}"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
+      ${station.id ? `<button class="fav-btn sheet-fav-btn${sheetIsFav ? ' active' : ''}" data-station-id="${station.id}" aria-label="${sheetIsFav ? t('removeFavourite') : t('addFavourite')}"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
     </div>
     <div class="sheet-station-price" style="color:${color}">
       ${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}
