@@ -105,6 +105,7 @@ export function createStores(config: RuntimeConfig): {
           ...(existing.alerts ?? {}),
           ...(profile.alerts ?? {})
         },
+        favourites: profile.favourites ?? existing.favourites ?? [],
         updatedAt: new Date().toISOString()
       };
 
@@ -166,7 +167,8 @@ export function createStores(config: RuntimeConfig): {
             }
           : null,
         settings: user.settings || defaultSettings(),
-        alerts: user.alerts || {}
+        alerts: user.alerts || {},
+        favourites: user.favourites || []
       };
     },
     async readLegacyAlert(userId) {

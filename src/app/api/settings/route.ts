@@ -12,7 +12,9 @@ const settingsSchema = z
     fuelType: fuelTypeSchema.optional(),
     radiusKm: z.union([z.number(), z.string()]).optional(),
     currentTab: z.string().min(1).optional(),
-    theme: themeSchema.optional()
+    theme: themeSchema.optional(),
+    activeLocation: z.string().min(1).optional(),
+    lang: z.string().min(1).max(10).optional()
   })
   .partial();
 
@@ -55,6 +57,14 @@ export async function POST(request: NextRequest) {
 
   if (updates.theme) {
     nextSettings.theme = updates.theme;
+  }
+
+  if (updates.activeLocation) {
+    nextSettings.activeLocation = updates.activeLocation;
+  }
+
+  if (updates.lang) {
+    nextSettings.lang = updates.lang;
   }
 
   await stores.userStore.updateUser(user.id, (currentUser) => {

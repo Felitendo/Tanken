@@ -128,6 +128,10 @@ const i18n = {
     sortPrice: 'Preis',
     sortDistance: 'Entfernung',
     stationsFound: 'Tankstellen',
+    addFavourite: 'Zu Favoriten hinzufügen',
+    removeFavourite: 'Aus Favoriten entfernen',
+    maxFavourites: 'Maximale Anzahl an Favoriten erreicht',
+    loginRequiredFavourite: 'Bitte einloggen, um Favoriten zu speichern',
   },
   en: {
     tabMap: 'Map',
@@ -245,6 +249,10 @@ const i18n = {
     sortPrice: 'Price',
     sortDistance: 'Distance',
     stationsFound: 'Stations',
+    addFavourite: 'Add to favourites',
+    removeFavourite: 'Remove from favourites',
+    maxFavourites: 'Maximum number of favourites reached',
+    loginRequiredFavourite: 'Please log in to save favourites',
   }
 };
 
@@ -331,7 +339,8 @@ const state = {
   alertNotified: false,
   selectedLocation: '',
   availableLocations: [],
-  priceExtremes: null
+  priceExtremes: null,
+  favourites: []
 };
 
 const localSettingsKey = 'tank_settings';
@@ -383,10 +392,48 @@ async function refreshMe() {
     const me = await api('/api/me');
     state.me = me;
     state.user = me.user || null;
+    state.favourites = state.user?.favourites || [];
   } catch {
     state.me = null;
     state.user = null;
+    state.favourites = [];
   }
+}
+
+async function toggleFavourite(stationId) {
+  if (!state.user) {
+    showToast(t('loginRequiredFavourite'));
+    return;
+  }
+  const isFav = state.favourites.includes(stationId);
+  if (isFav) {
+    state.favourites = state.favourites.filter(id => id !== stationId);
+  } else {
+    if (state.favourites.length >= 50) {
+      showToast(t('maxFavourites'));
+      return;
+    }
+    state.favourites.push(stationId);
+  }
+  haptic('light');
+  updateFavouriteButton(stationId, !isFav);
+  try {
+    await api('/api/favourites', {
+      method: isFav ? 'DELETE' : 'POST',
+      body: JSON.stringify({ stationId })
+    });
+  } catch {}
+}
+
+function updateFavouriteButton(stationId, isFav) {
+  document.querySelectorAll(`.fav-btn[data-station-id="${stationId}"]`).forEach(btn => {
+    btn.classList.toggle('active', isFav);
+    btn.setAttribute('aria-label', isFav ? t('removeFavourite') : t('addFavourite'));
+    btn.classList.remove('anim-pop', 'anim-unpop');
+    void btn.offsetWidth; // force reflow to restart animation
+    btn.classList.add(isFav ? 'anim-pop' : 'anim-unpop');
+    btn.addEventListener('animationend', () => btn.classList.remove('anim-pop', 'anim-unpop'), { once: true });
+  });
 }
 
 function setupAccountUi() {
@@ -815,6 +862,13 @@ function renderStationList(stations) {
     open.sort((a, b) => a.price - b.price);
   }
 
+  // Sort favourites to top while preserving relative order
+  open.sort((a, b) => {
+    const aFav = state.favourites.includes(a.id) ? 0 : 1;
+    const bFav = state.favourites.includes(b.id) ? 0 : 1;
+    return aFav - bFav;
+  });
+
   const minPrice = Math.min(...open.map(s => s.price));
   const maxPrice = Math.max(...open.map(s => s.price));
   list.innerHTML = open.slice(0, 15).map((s, i) => {
@@ -822,6 +876,7 @@ function renderStationList(stations) {
     const color = priceColor(ratio);
     const dist = s.dist ? `${s.dist.toFixed(1)} km` : '';
     const priceParts = formatPriceParts(s.price);
+    const isFav = s.id && state.favourites.includes(s.id);
 
     return `
       <div class="station-item ripple" data-idx="${i}">
@@ -830,9 +885,12 @@ function renderStationList(stations) {
           <div class="station-name">${fixEnc(s.brand || s.name)}</div>
           <div class="station-addr">${fixEnc(s.street)} ${s.houseNumber || ''}, ${fixEnc(s.place)}</div>
         </div>
-        <div style="text-align:right">
-          <div class="station-price" style="color:${color}">${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}</div>
-          <div class="station-dist">${dist}</div>
+        <div style="text-align:right;display:flex;align-items:center;gap:4px">
+          ${s.id ? `<button class="fav-btn${isFav ? ' active' : ''}" data-station-id="${s.id}" aria-label="${isFav ? t('removeFavourite') : t('addFavourite')}"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
+          <div>
+            <div class="station-price" style="color:${color}">${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}</div>
+            <div class="station-dist">${dist}</div>
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -841,6 +899,13 @@ function renderStationList(stations) {
     list.querySelectorAll('.station-item').forEach((el, i) => {
       el.style.animationDelay = `${Math.min(i * 35, 350)}ms`;
       el.classList.add('anim-in');
+    });
+  });
+
+  list.querySelectorAll('.fav-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFavourite(btn.dataset.stationId);
     });
   });
 
@@ -982,10 +1047,14 @@ function showStationSheet(station) {
     ? `maps://?daddr=${station.lat},${station.lng}`
     : `https://maps.apple.com/?daddr=${station.lat},${station.lng}`;
 
+  const sheetIsFav = station.id && state.favourites.includes(station.id);
   body.innerHTML = `
     <div class="sheet-station-header">
-      <div class="sheet-station-name">${fixEnc(station.name || station.brand)}</div>
-      <div class="sheet-station-brand">${fixEnc(station.brand)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="sheet-station-name">${fixEnc(station.name || station.brand)}</div>
+        <div class="sheet-station-brand">${fixEnc(station.brand)}</div>
+      </div>
+      ${station.id ? `<button class="fav-btn sheet-fav-btn${sheetIsFav ? ' active' : ''}" data-station-id="${station.id}" aria-label="${sheetIsFav ? t('removeFavourite') : t('addFavourite')}"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
     </div>
     <div class="sheet-station-price" style="color:${color}">
       ${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}
@@ -1024,6 +1093,11 @@ function showStationSheet(station) {
         <span>Apple Maps</span>
       </a>`}
     </div>`;
+
+  const sheetFavBtn = body.querySelector('.sheet-fav-btn');
+  if (sheetFavBtn) {
+    sheetFavBtn.addEventListener('click', () => toggleFavourite(sheetFavBtn.dataset.stationId));
+  }
 
   // Clean up previous drag listeners if any
   if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }

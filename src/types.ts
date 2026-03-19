@@ -46,6 +46,7 @@ export interface RepoConfig {
   auth: RepoAuthConfig;
   smtp?: RepoSmtpConfig;
   session_secret?: string;
+  session_ttl_days?: number;
   locations?: ScanLocation[];
 }
 
@@ -83,6 +84,8 @@ export interface UserSettings {
   radiusKm: number;
   currentTab: string;
   theme?: 'auto' | 'light' | 'dark';
+  activeLocation?: string;
+  lang?: string;
 }
 
 export interface PriceAlert {
@@ -114,6 +117,7 @@ export interface UserProfile {
   alerts: {
     price?: PriceAlert;
   };
+  favourites?: string[];
   localAuth?: {
     usernameLower: string;
     passwordHash: string;
@@ -140,6 +144,7 @@ export interface SanitizedUser {
   };
   settings: UserSettings;
   alerts: UserProfile['alerts'];
+  favourites: string[];
 }
 
 export interface UsersDb {

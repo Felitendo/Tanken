@@ -123,6 +123,9 @@ export function normalizeRepoConfig(value: Partial<RepoConfig>, fallback: RepoCo
     auth: normalizeAuthConfig(value.auth, fallback.auth ?? DEFAULT_REPO_CONFIG.auth),
     smtp: normalizeSmtpConfig(value.smtp, fallback.smtp ?? DEFAULT_REPO_CONFIG.smtp!),
     session_secret: String(value.session_secret ?? fallback.session_secret ?? ''),
+    session_ttl_days: Math.max(1, Math.min(365, Math.round(
+      normalizeNumber(value.session_ttl_days, fallback.session_ttl_days ?? 90)
+    ))),
     locations: normalizeLocations(value.locations ?? fallback.locations ?? [])
   };
 }
@@ -158,7 +161,7 @@ export function loadRuntimeConfig(): RuntimeConfig {
     databaseUrl: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/tanken',
     cookieName: 'tank_session',
     sessionSecret: repoConfig.session_secret || process.env.TANKEN_SESSION_SECRET || process.env.SESSION_SECRET || 'CHANGE_ME_TANKEN_SESSION_SECRET',
-    sessionTtlMs: 1000 * 60 * 60 * 24 * 30,
+    sessionTtlMs: 1000 * 60 * 60 * 24 * (repoConfig.session_ttl_days ?? 90),
     oidcIssuerUrl: oidcConfig.issuer_url || process.env.OIDC_ISSUER_URL || '',
     oidcClientId: oidcConfig.client_id || process.env.OIDC_CLIENT_ID || '',
     oidcClientSecret: oidcConfig.client_secret || process.env.OIDC_CLIENT_SECRET || '',
