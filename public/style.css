@@ -2064,60 +2064,28 @@ html[data-theme="dark"] .pwa-popup-icon img,
 
 /* === Pull-to-Refresh === */
 #ptr-container {
-  position: absolute;
-  top: 0;
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
   left: 0;
   right: 0;
   display: flex;
   justify-content: center;
   pointer-events: none;
   z-index: 90;
-  transform: translateY(-60px);
-  transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2);
-  will-change: transform;
-}
-
-#ptr-container.dragging {
-  transition: none;
-}
-
-#ptr-container.snapping {
-  transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2);
-}
-
-#ptr-container.refreshing {
-  transition: transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
-
-#ptr-spinner {
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  will-change: transform;
-}
-
-#ptr-container.snapping #ptr-spinner {
-  transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  padding-top: 12px;
 }
 
 .native-spinner {
   width: 20px;
   height: 20px;
+  opacity: 0;
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cg fill='%23000'%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.12'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.25' transform='rotate(45 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.37' transform='rotate(90 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.50' transform='rotate(135 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.62' transform='rotate(180 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.75' transform='rotate(225 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.87' transform='rotate(270 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='1' transform='rotate(315 10 10)'/%3E%3C/g%3E%3C/svg%3E");
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cg fill='%23000'%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.12'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.25' transform='rotate(45 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.37' transform='rotate(90 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.50' transform='rotate(135 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.62' transform='rotate(180 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.75' transform='rotate(225 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.87' transform='rotate(270 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='1' transform='rotate(315 10 10)'/%3E%3C/g%3E%3C/svg%3E");
   -webkit-mask-size: contain;
   mask-size: contain;
   background: var(--color-text);
-}
-
-#ptr-container:not(.refreshing) .native-spinner {
-  opacity: 0.5;
-}
-
-#ptr-container.refreshing .native-spinner {
   animation: native-spin 0.8s steps(8) infinite;
+  transition: opacity 0.3s ease;
 }
 
 @keyframes native-spin {

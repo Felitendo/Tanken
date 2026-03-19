@@ -1074,7 +1074,7 @@ function setupSheetDrag(content, handleArea, backdrop, closeSheet) {
 
 function setupPullToRefresh() {
   const ptrContainer = document.getElementById('ptr-container');
-  const ptrSpinner = document.getElementById('ptr-spinner');
+  const ptrSpinner = document.querySelector('#ptr-spinner .native-spinner');
   const app = document.getElementById('app');
   if (!ptrContainer || !app) return;
 
@@ -1104,7 +1104,6 @@ function setupPullToRefresh() {
   function applyPullTransform() {
     rafId = 0;
     const progress = Math.min(1, pullY / THRESHOLD);
-    ptrContainer.style.transform = `translateY(${pullY - 20}px)`;
     app.style.transform = `translateY(${pullY}px)`;
     ptrSpinner.style.opacity = progress;
   }
@@ -1140,7 +1139,6 @@ function setupPullToRefresh() {
       if (rawDelta < 4) return;
       if (activeView.scrollTop > 0) { startY = 0; return; }
       isDragging = true;
-      ptrContainer.classList.add('dragging');
       app.classList.add('ptr-pulling');
     }
 
@@ -1182,47 +1180,39 @@ function setupPullToRefresh() {
     if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
     applyPullTransform();
 
-    ptrContainer.classList.remove('dragging');
     app.classList.remove('ptr-pulling');
 
     if (pullY >= THRESHOLD) {
       // Trigger refresh
       isRefreshing = true;
-      ptrContainer.classList.add('snapping', 'refreshing');
       app.classList.add('ptr-snapping', 'ptr-refreshing');
-      ptrContainer.style.transform = 'translateY(16px)';
       app.style.transform = 'translateY(44px)';
-      ptrSpinner.style.opacity = '';
+      ptrSpinner.style.opacity = '1';
       haptic('medium');
 
       doRefresh().finally(() => {
         haptic('success');
         isRefreshing = false;
-        ptrContainer.classList.remove('refreshing');
-        ptrContainer.classList.add('snapping');
         app.classList.add('ptr-snapping');
-        ptrContainer.style.transform = '';
         app.style.transform = '';
-        ptrSpinner.style.opacity = '';
+        ptrSpinner.style.opacity = '0';
 
         const cleanup = () => {
-          ptrContainer.classList.remove('snapping');
           app.classList.remove('ptr-snapping', 'ptr-refreshing');
+          ptrSpinner.style.opacity = '';
         };
         app.addEventListener('transitionend', cleanup, { once: true });
         setTimeout(cleanup, 500); // fallback
       });
     } else {
       // Snap back
-      ptrContainer.classList.add('snapping');
       app.classList.add('ptr-snapping');
-      ptrContainer.style.transform = '';
       app.style.transform = '';
-      ptrSpinner.style.opacity = '';
+      ptrSpinner.style.opacity = '0';
 
       const cleanup = () => {
-        ptrContainer.classList.remove('snapping');
         app.classList.remove('ptr-snapping');
+        ptrSpinner.style.opacity = '';
       };
       app.addEventListener('transitionend', cleanup, { once: true });
       setTimeout(cleanup, 500);
