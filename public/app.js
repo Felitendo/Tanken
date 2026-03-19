@@ -380,6 +380,7 @@ async function init() {
   setupMyLocationBtn();
   setupAccountUi();
   setupStationSort();
+  setupPullToRefresh();
   initLocation();
   refreshAlertUi();
 }
@@ -601,7 +602,8 @@ function setupTabs() {
     });
   });
 
-  switchTab(state.currentTab || 'map', { initial: true });
+  var sessionTab = sessionStorage.getItem('currentTab') || 'map';
+  switchTab(sessionTab, { initial: true });
 }
 
 let _tabLoadId = 0;
@@ -619,7 +621,7 @@ function switchTab(tab, { initial = false } = {}) {
   document.getElementById('view-' + tab)?.classList.add('active');
 
   state.currentTab = tab;
-  persistStateSettings({ currentTab: tab });
+  sessionStorage.setItem('currentTab', tab);
 
   // Fire data loading in background — never blocks UI
   loadTabData(tab, _tabLoadId);
@@ -1068,6 +1070,168 @@ function setupSheetDrag(content, handleArea, backdrop, closeSheet) {
     content.removeEventListener('touchmove', onTouchMove);
     content.removeEventListener('touchend', onTouchEnd);
   };
+}
+
+function setupPullToRefresh() {
+  const ptrContainer = document.getElementById('ptr-container');
+  const ptrSpinner = document.getElementById('ptr-spinner');
+  const app = document.getElementById('app');
+  if (!ptrContainer || !app) return;
+
+  const THRESHOLD = 70;
+  const MAX_PULL = 130;
+  const RESISTANCE = 0.4;
+  const HAPTIC_TICK_INTERVAL = 18;
+
+  let startY = 0;
+  let pullY = 0;
+  let isDragging = false;
+  let isRefreshing = false;
+  let lastHapticY = 0;
+  let crossedThreshold = false;
+
+  function getActiveView() {
+    return document.querySelector('.tab-view.active');
+  }
+
+  function isSheetOpen() {
+    const sheet = document.getElementById('bottom-sheet');
+    return sheet && sheet.classList.contains('open');
+  }
+
+  function onTouchStart(e) {
+    if (isRefreshing) return;
+    if (isSheetOpen()) return;
+
+    const view = getActiveView();
+    if (!view) return;
+
+    // Don't hijack Leaflet map touches
+    if (e.target.closest('#map') || e.target.closest('.leaflet-container')) return;
+
+    if (view.scrollTop > 0) return;
+
+    startY = e.touches[0].clientY;
+    pullY = 0;
+    lastHapticY = 0;
+    crossedThreshold = false;
+  }
+
+  function onTouchMove(e) {
+    if (isRefreshing || startY === 0) return;
+
+    const view = getActiveView();
+    if (!view) return;
+
+    const touchY = e.touches[0].clientY;
+    const rawDelta = touchY - startY;
+
+    // Only pull down
+    if (!isDragging) {
+      if (rawDelta < 4) return;
+      if (view.scrollTop > 0) { startY = 0; return; }
+      isDragging = true;
+      ptrContainer.classList.add('dragging');
+      app.classList.add('ptr-pulling');
+    }
+
+    e.preventDefault();
+
+    // Rubber-band resistance
+    pullY = rawDelta * RESISTANCE;
+    if (pullY > MAX_PULL) {
+      pullY = MAX_PULL + (pullY - MAX_PULL) * 0.15;
+    }
+
+    // Move indicator and content
+    ptrContainer.style.transform = `translateY(${pullY - 20}px)`;
+    app.style.transform = `translateY(${pullY}px)`;
+
+    // Rotate spinner proportionally
+    const progress = Math.min(1, pullY / THRESHOLD);
+    const rotation = progress * 270;
+    ptrSpinner.style.transform = `rotate(${rotation}deg) scale(${0.6 + progress * 0.4})`;
+
+    // Haptic ticks during drag
+    const hapticDelta = Math.abs(pullY - lastHapticY);
+    if (hapticDelta >= HAPTIC_TICK_INTERVAL) {
+      haptic('selection');
+      lastHapticY = pullY;
+    }
+
+    // Threshold crossing haptic
+    if (!crossedThreshold && pullY >= THRESHOLD) {
+      crossedThreshold = true;
+      haptic('medium');
+    } else if (crossedThreshold && pullY < THRESHOLD) {
+      crossedThreshold = false;
+      haptic('selection');
+    }
+  }
+
+  function onTouchEnd() {
+    if (!isDragging) { startY = 0; return; }
+    isDragging = false;
+    startY = 0;
+
+    ptrContainer.classList.remove('dragging');
+    app.classList.remove('ptr-pulling');
+
+    if (pullY >= THRESHOLD) {
+      // Trigger refresh
+      isRefreshing = true;
+      ptrContainer.classList.add('snapping', 'refreshing');
+      app.classList.add('ptr-snapping', 'ptr-refreshing');
+      ptrContainer.style.transform = 'translateY(16px)';
+      app.style.transform = 'translateY(44px)';
+      ptrSpinner.style.transform = 'rotate(0deg) scale(1)';
+      haptic('medium');
+
+      doRefresh().finally(() => {
+        haptic('success');
+        isRefreshing = false;
+        ptrContainer.classList.remove('refreshing');
+        ptrContainer.classList.add('snapping');
+        app.classList.add('ptr-snapping');
+        ptrContainer.style.transform = '';
+        app.style.transform = '';
+        ptrSpinner.style.transform = '';
+
+        const cleanup = () => {
+          ptrContainer.classList.remove('snapping');
+          app.classList.remove('ptr-snapping', 'ptr-refreshing');
+        };
+        app.addEventListener('transitionend', cleanup, { once: true });
+        setTimeout(cleanup, 500); // fallback
+      });
+    } else {
+      // Snap back
+      ptrContainer.classList.add('snapping');
+      app.classList.add('ptr-snapping');
+      ptrContainer.style.transform = '';
+      app.style.transform = '';
+      ptrSpinner.style.transform = '';
+
+      const cleanup = () => {
+        ptrContainer.classList.remove('snapping');
+        app.classList.remove('ptr-snapping');
+      };
+      app.addEventListener('transitionend', cleanup, { once: true });
+      setTimeout(cleanup, 500);
+    }
+  }
+
+  async function doRefresh() {
+    const tab = state.currentTab;
+    // Reset loaded flags so data actually reloads
+    if (state.loaded[tab]) state.loaded[tab] = false;
+    const loadId = ++_tabLoadId;
+    await loadTabData(tab, loadId);
+  }
+
+  document.addEventListener('touchstart', onTouchStart, { passive: true });
+  document.addEventListener('touchmove', onTouchMove, { passive: false });
+  document.addEventListener('touchend', onTouchEnd, { passive: true });
 }
 
 function showStationSheet(station) {
@@ -2453,7 +2617,7 @@ function applySettingsToState(settings = {}) {
   if (settings.fuelType) state.fuelType = settings.fuelType;
   if (settings.radiusKm) state.radiusKm = parseInt(settings.radiusKm, 10);
   if (settings.activeLocation) state.activeLocation = settings.activeLocation;
-  if (settings.currentTab) state.currentTab = settings.currentTab;
+
   if (settings.theme) state.theme = settings.theme;
   if (settings.lang) state.lang = settings.lang;
 
@@ -2476,7 +2640,7 @@ async function persistStateSettings(nextSettings = {}) {
 }
 
 async function saveSettingsRemote() {
-  const next = { fuelType: state.fuelType, radiusKm: state.radiusKm, activeLocation: state.activeLocation, currentTab: state.currentTab, theme: state.theme, lang: state.lang };
+  const next = { fuelType: state.fuelType, radiusKm: state.radiusKm, activeLocation: state.activeLocation, theme: state.theme, lang: state.lang };
   try { await api('/api/settings', { method: 'POST', body: JSON.stringify(next) }); } catch {}
 }
 
@@ -2486,7 +2650,6 @@ function saveSettingsLocal() {
       fuelType: state.fuelType,
       radiusKm: state.radiusKm,
       activeLocation: state.activeLocation,
-      currentTab: state.currentTab,
       theme: state.theme,
       lang: state.lang
     }));
