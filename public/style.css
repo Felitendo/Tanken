@@ -2096,7 +2096,10 @@ html[data-theme="dark"] .pwa-popup-icon img,
   box-shadow: 0 2px 12px rgba(0,0,0,0.12), 0 0 0 1px var(--color-separator);
   color: var(--color-accent);
   will-change: transform;
-  transition: transform 0.15s ease;
+}
+
+#ptr-container.snapping #ptr-spinner {
+  transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
 
 #ptr-spinner svg {

@@ -1089,6 +1089,8 @@ function setupPullToRefresh() {
   let isRefreshing = false;
   let lastHapticY = 0;
   let crossedThreshold = false;
+  let activeView = null;
+  let rafId = 0;
 
   function getActiveView() {
     return document.querySelector('.tab-view.active');
@@ -1099,17 +1101,25 @@ function setupPullToRefresh() {
     return sheet && sheet.classList.contains('open');
   }
 
+  function applyPullTransform() {
+    rafId = 0;
+    const progress = Math.min(1, pullY / THRESHOLD);
+    ptrContainer.style.transform = `translateY(${pullY - 20}px)`;
+    app.style.transform = `translateY(${pullY}px)`;
+    ptrSpinner.style.transform = `rotate(${progress * 270}deg) scale(${0.6 + progress * 0.4})`;
+  }
+
   function onTouchStart(e) {
     if (isRefreshing) return;
     if (isSheetOpen()) return;
 
-    const view = getActiveView();
-    if (!view) return;
+    activeView = getActiveView();
+    if (!activeView) return;
 
     // Don't hijack Leaflet map touches
     if (e.target.closest('#map') || e.target.closest('.leaflet-container')) return;
 
-    if (view.scrollTop > 0) return;
+    if (activeView.scrollTop > 0) return;
 
     startY = e.touches[0].clientY;
     pullY = 0;
@@ -1120,8 +1130,7 @@ function setupPullToRefresh() {
   function onTouchMove(e) {
     if (isRefreshing || startY === 0) return;
 
-    const view = getActiveView();
-    if (!view) return;
+    if (!activeView) return;
 
     const touchY = e.touches[0].clientY;
     const rawDelta = touchY - startY;
@@ -1129,7 +1138,7 @@ function setupPullToRefresh() {
     // Only pull down
     if (!isDragging) {
       if (rawDelta < 4) return;
-      if (view.scrollTop > 0) { startY = 0; return; }
+      if (activeView.scrollTop > 0) { startY = 0; return; }
       isDragging = true;
       ptrContainer.classList.add('dragging');
       app.classList.add('ptr-pulling');
@@ -1143,14 +1152,10 @@ function setupPullToRefresh() {
       pullY = MAX_PULL + (pullY - MAX_PULL) * 0.15;
     }
 
-    // Move indicator and content
-    ptrContainer.style.transform = `translateY(${pullY - 20}px)`;
-    app.style.transform = `translateY(${pullY}px)`;
-
-    // Rotate spinner proportionally
-    const progress = Math.min(1, pullY / THRESHOLD);
-    const rotation = progress * 270;
-    ptrSpinner.style.transform = `rotate(${rotation}deg) scale(${0.6 + progress * 0.4})`;
+    // Batch visual updates into a single rAF
+    if (!rafId) {
+      rafId = requestAnimationFrame(applyPullTransform);
+    }
 
     // Haptic ticks during drag
     const hapticDelta = Math.abs(pullY - lastHapticY);
@@ -1170,9 +1175,12 @@ function setupPullToRefresh() {
   }
 
   function onTouchEnd() {
-    if (!isDragging) { startY = 0; return; }
+    if (!isDragging) { startY = 0; activeView = null; return; }
     isDragging = false;
     startY = 0;
+    activeView = null;
+    if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+    applyPullTransform();
 
     ptrContainer.classList.remove('dragging');
     app.classList.remove('ptr-pulling');
