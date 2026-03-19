@@ -1,10 +1,10 @@
 export const APP_SHELL = `
-<div id="app">
-  <div id="ptr-container">
-    <div id="ptr-spinner">
-      <div class="native-spinner"></div>
-    </div>
+<div id="ptr-container">
+  <div id="ptr-spinner">
+    <div class="native-spinner"></div>
   </div>
+</div>
+<div id="app">
   <div class="tab-view active" id="view-map">
     <div id="map-container">
       <div id="map"></div>
