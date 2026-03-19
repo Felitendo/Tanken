@@ -426,14 +426,45 @@ async function toggleFavourite(stationId) {
 }
 
 function updateFavouriteButton(stationId, isFav) {
+  // Animate the fav button in the sheet (detail view)
   document.querySelectorAll(`.fav-btn[data-station-id="${stationId}"]`).forEach(btn => {
     btn.classList.toggle('active', isFav);
     btn.setAttribute('aria-label', isFav ? t('removeFavourite') : t('addFavourite'));
     btn.classList.remove('anim-pop', 'anim-unpop');
+
+    // Remove old sparkle elements
+    btn.querySelectorAll('.fav-sparkles, .fav-sparkle-ring').forEach(el => el.remove());
+
     void btn.offsetWidth; // force reflow to restart animation
-    btn.classList.add(isFav ? 'anim-pop' : 'anim-unpop');
-    btn.addEventListener('animationend', () => btn.classList.remove('anim-pop', 'anim-unpop'), { once: true });
+
+    if (isFav) {
+      // Inject sparkle particles + ring for the sparkle animation
+      const sparkles = document.createElement('div');
+      sparkles.className = 'fav-sparkles';
+      for (let i = 0; i < 6; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'fav-sparkle';
+        sparkles.appendChild(dot);
+      }
+      btn.appendChild(sparkles);
+      const ring = document.createElement('div');
+      ring.className = 'fav-sparkle-ring';
+      btn.appendChild(ring);
+      btn.classList.add('anim-pop');
+      btn.addEventListener('animationend', () => {
+        btn.classList.remove('anim-pop');
+        btn.querySelectorAll('.fav-sparkles, .fav-sparkle-ring').forEach(el => el.remove());
+      }, { once: true });
+    } else {
+      btn.classList.add('anim-unpop');
+      btn.addEventListener('animationend', () => btn.classList.remove('anim-unpop'), { once: true });
+    }
   });
+
+  // Re-render station list so favourite stars and sort order update immediately
+  if (state.stations.length) {
+    renderStationList(state.stations);
+  }
 }
 
 function setupAccountUi() {
@@ -900,7 +931,7 @@ function renderStationList(stations) {
           <div class="station-addr">${fixEnc(s.street)} ${s.houseNumber || ''}, ${fixEnc(s.place)}</div>
         </div>
         <div style="text-align:right;display:flex;align-items:center;gap:4px">
-          ${s.id && isFav ? `<button class="fav-btn active" data-station-id="${s.id}" aria-label="${t('removeFavourite')}"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
+          ${s.id && state.user ? `<button class="fav-btn${isFav ? ' active' : ''}" data-station-id="${s.id}" aria-label="${isFav ? t('removeFavourite') : t('addFavourite')}"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
           <div>
             <div class="station-price" style="color:${color}">${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}</div>
             <div class="station-dist">${dist}</div>
