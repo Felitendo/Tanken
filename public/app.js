@@ -886,7 +886,7 @@ function renderStationList(stations) {
           <div class="station-addr">${fixEnc(s.street)} ${s.houseNumber || ''}, ${fixEnc(s.place)}</div>
         </div>
         <div style="text-align:right;display:flex;align-items:center;gap:4px">
-          ${s.id ? `<button class="fav-btn${isFav ? ' active' : ''}" data-station-id="${s.id}" aria-label="${isFav ? t('removeFavourite') : t('addFavourite')}"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
+          ${s.id && isFav ? `<button class="fav-btn active" data-station-id="${s.id}" aria-label="${t('removeFavourite')}"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
           <div>
             <div class="station-price" style="color:${color}">${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}</div>
             <div class="station-dist">${dist}</div>
@@ -1199,6 +1199,11 @@ function parseOpeningTimes(openingTimes, wholeDay, isOpen) {
   const todaySlots = schedule[todayIdx] || [];
 
   // Compute next transition label
+  const fmtTime = (t_str) => {
+    const parts = t_str.split(':');
+    const hm = `${parts[0]}:${parts[1]}`;
+    return state.lang === 'de' ? `${hm} Uhr` : hm;
+  };
   let label = '';
   const nowMins = now.getHours() * 60 + now.getMinutes();
 
@@ -1210,7 +1215,7 @@ function parseOpeningTimes(openingTimes, wholeDay, isOpen) {
       const [sh, sm] = slot.start.split(':').map(Number);
       const startMins = sh * 60 + sm;
       if (nowMins >= startMins && nowMins < endMins) {
-        label = `${t('closesAt')} ${slot.end}`;
+        label = `${t('closesAt')} ${fmtTime(slot.end)}`;
         break;
       }
     }
@@ -1219,7 +1224,7 @@ function parseOpeningTimes(openingTimes, wholeDay, isOpen) {
     for (const slot of todaySlots) {
       const [sh, sm] = slot.start.split(':').map(Number);
       if (nowMins < sh * 60 + sm) {
-        label = `${t('opensAt')} ${slot.start}`;
+        label = `${t('opensAt')} ${fmtTime(slot.start)}`;
         break;
       }
     }
@@ -1228,7 +1233,7 @@ function parseOpeningTimes(openingTimes, wholeDay, isOpen) {
       for (let off = 1; off <= 7; off++) {
         const nextDay = (todayIdx + off) % 7;
         if (schedule[nextDay]?.length) {
-          label = `${t('opensAt')} ${dayAbbr[nextDay]} ${schedule[nextDay][0].start}`;
+          label = `${t('opensAt')} ${dayAbbr[nextDay]} ${fmtTime(schedule[nextDay][0].start)}`;
           break;
         }
       }
@@ -1236,7 +1241,8 @@ function parseOpeningTimes(openingTimes, wholeDay, isOpen) {
   }
 
   // Format all opening times for display
-  const allTimes = allRows.map(r => ({ text: r.text, hours: `${r.start} – ${r.end}` }));
+  const fmtHM = (s) => { const p = s.split(':'); return `${p[0]}:${p[1]}`; };
+  const allTimes = allRows.map(r => ({ text: r.text, hours: `${fmtHM(r.start)} – ${fmtHM(r.end)}${state.lang === 'de' ? ' Uhr' : ''}` }));
 
   return { label, todayTimes: todaySlots, allTimes };
 }
