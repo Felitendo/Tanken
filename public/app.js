@@ -1106,7 +1106,7 @@ function setupPullToRefresh() {
     const progress = Math.min(1, pullY / THRESHOLD);
     ptrContainer.style.transform = `translateY(${pullY - 20}px)`;
     app.style.transform = `translateY(${pullY}px)`;
-    ptrSpinner.style.transform = `rotate(${progress * 270}deg) scale(${0.6 + progress * 0.4})`;
+    ptrSpinner.style.opacity = progress;
   }
 
   function onTouchStart(e) {
@@ -1192,7 +1192,7 @@ function setupPullToRefresh() {
       app.classList.add('ptr-snapping', 'ptr-refreshing');
       ptrContainer.style.transform = 'translateY(16px)';
       app.style.transform = 'translateY(44px)';
-      ptrSpinner.style.transform = 'rotate(0deg) scale(1)';
+      ptrSpinner.style.opacity = '';
       haptic('medium');
 
       doRefresh().finally(() => {
@@ -1203,7 +1203,7 @@ function setupPullToRefresh() {
         app.classList.add('ptr-snapping');
         ptrContainer.style.transform = '';
         app.style.transform = '';
-        ptrSpinner.style.transform = '';
+        ptrSpinner.style.opacity = '';
 
         const cleanup = () => {
           ptrContainer.classList.remove('snapping');
@@ -1218,7 +1218,7 @@ function setupPullToRefresh() {
       app.classList.add('ptr-snapping');
       ptrContainer.style.transform = '';
       app.style.transform = '';
-      ptrSpinner.style.transform = '';
+      ptrSpinner.style.opacity = '';
 
       const cleanup = () => {
         ptrContainer.classList.remove('snapping');

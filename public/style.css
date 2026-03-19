@@ -2090,15 +2090,11 @@ html[data-theme="dark"] .pwa-popup-icon img,
 }
 
 #ptr-spinner {
-  width: 36px;
-  height: 36px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: var(--color-bg);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.12), 0 0 0 1px var(--color-separator);
-  color: var(--color-accent);
   will-change: transform;
 }
 
@@ -2106,18 +2102,25 @@ html[data-theme="dark"] .pwa-popup-icon img,
   transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
 
-#ptr-spinner svg {
+.native-spinner {
   width: 20px;
   height: 20px;
-  transition: none;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cg fill='%23000'%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.12'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.25' transform='rotate(45 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.37' transform='rotate(90 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.50' transform='rotate(135 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.62' transform='rotate(180 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.75' transform='rotate(225 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.87' transform='rotate(270 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='1' transform='rotate(315 10 10)'/%3E%3C/g%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cg fill='%23000'%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.12'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.25' transform='rotate(45 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.37' transform='rotate(90 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.50' transform='rotate(135 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.62' transform='rotate(180 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.75' transform='rotate(225 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='.87' transform='rotate(270 10 10)'/%3E%3Crect x='9' y='1' width='2' height='5' rx='1' opacity='1' transform='rotate(315 10 10)'/%3E%3C/g%3E%3C/svg%3E");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  background: var(--color-text);
 }
 
-#ptr-container.refreshing #ptr-spinner svg {
-  animation: ptr-spin 0.7s linear infinite;
+#ptr-container:not(.refreshing) .native-spinner {
+  opacity: 0.5;
 }
 
-@keyframes ptr-spin {
-  from { transform: rotate(0deg); }
+#ptr-container.refreshing .native-spinner {
+  animation: native-spin 0.8s steps(8) infinite;
+}
+
+@keyframes native-spin {
   to { transform: rotate(360deg); }
 }
 
