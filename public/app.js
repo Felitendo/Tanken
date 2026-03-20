@@ -922,7 +922,7 @@ function renderStationList(stations) {
   list.innerHTML = open.slice(0, 15).map((s, i) => {
     const ratio = maxPrice > minPrice ? (s.price - minPrice) / (maxPrice - minPrice) : 0;
     const color = priceColor(ratio);
-    const dist = s.dist ? `${s.dist.toFixed(1)} km` : '';
+    const dist = s.dist ? `${s.distApprox ? '~' : ''}${s.dist.toFixed(1)} km` : '';
     const priceParts = formatPriceParts(s.price);
     const isFav = s.id && state.favourites.includes(s.id);
 
@@ -1366,7 +1366,7 @@ function showStationSheet(station) {
     <div class="sheet-info-row" id="sheet-status-row">
       <span class="sheet-info-icon"><span id="sheet-status-dot" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:${station.isOpen ? '#34c759' : '#ff3b30'}"></span></span>
       <span id="sheet-status-text">${station.isOpen ? t('open') : t('closed')}</span>
-      ${station.dist ? `<span style="margin-left:auto;color:var(--color-hint)">${station.dist.toFixed(1)} ${t('kmAway')}</span>` : ''}
+      ${station.dist ? `<span style="margin-left:auto;color:var(--color-hint)">${station.distApprox ? '~' : ''}${station.dist.toFixed(1)} ${t('kmAway')}</span>` : ''}
     </div>
     <div class="sheet-hours-section" id="sheet-hours-section"></div>
     <div class="sheet-chart-section">

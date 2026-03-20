@@ -14,6 +14,7 @@ export interface CachedStation {
   lat: number;
   lng: number;
   dist: number;
+  distApprox?: boolean;
   price: number | null;
   isOpen: boolean;
 }
