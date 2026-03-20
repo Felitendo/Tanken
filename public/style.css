@@ -2,6 +2,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --tab-height: 56px;
 
@@ -60,7 +61,7 @@ html, body {
 /* === App Container === */
 #app {
   position: fixed;
-  top: 0;
+  top: var(--safe-top);
   left: 0;
   right: 0;
   bottom: calc(var(--tab-height) + var(--safe-bottom));
