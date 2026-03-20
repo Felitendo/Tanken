@@ -47,19 +47,57 @@ jobs:
         run: |
           PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -z "$PREVIOUS_TAG" ]; then
-            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+            ALL_COMMITS=$(git log --pretty=format:"%s (%h)" --no-merges)
             COMPARE_TEXT="Initial release"
           else
-            COMMITS=$(git log "${PREVIOUS_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+            ALL_COMMITS=$(git log "${PREVIOUS_TAG}..HEAD" --pretty=format:"%s (%h)" --no-merges)
             COMPARE_TEXT="**Full changelog**: [\`${PREVIOUS_TAG}...${{ inputs.version }}\`](https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${{ inputs.version }})"
           fi
+
+          FEATURES=""
+          FIXES=""
+          CHORES=""
+          OTHER=""
+
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            # Strip prefix for the display text
+            clean=$(echo "$line" | sed -E 's/^(feat|fix|chore)(\(.+\))?:\s*//')
+            if echo "$line" | grep -qE '^feat(\(.+\))?:'; then
+              FEATURES="${FEATURES}- ${clean}"$'\n'
+            elif echo "$line" | grep -qE '^fix(\(.+\))?:'; then
+              FIXES="${FIXES}- ${clean}"$'\n'
+            elif echo "$line" | grep -qE '^chore(\(.+\))?:'; then
+              CHORES="${CHORES}- ${clean}"$'\n'
+            else
+              OTHER="${OTHER}- ${line}"$'\n'
+            fi
+          done <<< "$ALL_COMMITS"
 
           {
             echo "body<<CHANGELOG_EOF"
             echo "## What's Changed"
             echo ""
-            echo "$COMMITS"
-            echo ""
+            if [ -n "$FEATURES" ]; then
+              echo "### 🚀 Features"
+              echo ""
+              echo "$FEATURES"
+            fi
+            if [ -n "$FIXES" ]; then
+              echo "### 🐛 Bug Fixes"
+              echo ""
+              echo "$FIXES"
+            fi
+            if [ -n "$CHORES" ]; then
+              echo "### 🧹 Chores"
+              echo ""
+              echo "$CHORES"
+            fi
+            if [ -n "$OTHER" ]; then
+              echo "### 📝 Other"
+              echo ""
+              echo "$OTHER"
+            fi
             echo "---"
             echo ""
             echo "### Docker Image"
