@@ -21,6 +21,7 @@ interface AdminLocation {
 
 interface AdminConfig {
   apiKey: string;
+  orsApiKey: string;
   fuelType: string;
   radiusKm: number;
   refreshIntervalMinutes: number;
@@ -96,6 +97,7 @@ type FeedbackType = 'success' | 'error' | 'info';
 
 const defaultConfig: AdminConfig = {
   apiKey: '',
+  orsApiKey: '',
   fuelType: 'diesel',
   radiusKm: 10,
   refreshIntervalMinutes: 60,
@@ -488,13 +490,28 @@ function ConfigFields({
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="apiKey">Tankerkoenig API Key</Label>
+            <Label htmlFor="apiKey">Tankerkönig API Key</Label>
             <Input
               id="apiKey"
               value={config.apiKey}
               onChange={(e) => onChange({ apiKey: e.target.value })}
               placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
             />
+            <p className="text-xs text-muted-foreground">
+              Kostenlos registrieren unter <a href="https://creativecommons.tankerkoenig.de" target="_blank" rel="noopener noreferrer" className="underline">creativecommons.tankerkoenig.de</a>
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="orsApiKey">OpenRouteService API Key <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Input
+              id="orsApiKey"
+              value={config.orsApiKey}
+              onChange={(e) => onChange({ orsApiKey: e.target.value })}
+              placeholder="Für Fahrtdistanzen statt Luftlinie"
+            />
+            <p className="text-xs text-muted-foreground">
+              Kostenlos registrieren unter <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener noreferrer" className="underline">openrouteservice.org</a> — zeigt echte Fahrtdistanzen statt Luftlinie
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="sessionSecret">Session Secret</Label>

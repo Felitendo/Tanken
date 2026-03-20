@@ -4,6 +4,7 @@ import { runtimeConfig } from '@/lib/server-runtime';
 import { findCachedStations, findNearbyCachedStations, getCachedStationsByLocation } from '@/lib/station-cache';
 import { fetchStationsLive } from '@/lib/measure';
 import { canMakeLiveCall, recordLiveCall } from '@/lib/rate-limit';
+import { enrichWithDrivingDistances } from '@/lib/ors';
 
 export const runtime = 'nodejs';
 
@@ -14,6 +15,9 @@ const fuelTypeSchema = z.enum(['diesel', 'e5', 'e10']);
  * 1. If near a scanned location → cached data
  * 2. If far from scanned locations → live Tankerkönig API call with user's radius
  * 3. Fallback → closest cached data available
+ *
+ * When an ORS API key is configured, beeline distances are replaced with
+ * actual driving distances via the OpenRouteService Matrix API (single request).
  */
 export async function GET(request: NextRequest) {
   const lat = Number.parseFloat(request.nextUrl.searchParams.get('lat') ?? '') || 51.1657;
@@ -23,6 +27,7 @@ export async function GET(request: NextRequest) {
   const rad = Math.max(1, Math.min(25, Number.parseFloat(
     request.nextUrl.searchParams.get('rad') ?? ''
   ) || runtimeConfig.repoConfig.radius_km));
+  const orsKey = runtimeConfig.orsApiKey;
 
   // If a specific location ID is requested, return its cached data
   const locationId = request.nextUrl.searchParams.get('location');
@@ -37,7 +42,8 @@ export async function GET(request: NextRequest) {
   // Try strict nearby cache (user is within range of a scanned location)
   const nearby = findNearbyCachedStations(lat, lng, fuel);
   if (nearby) {
-    return NextResponse.json(nearby.stations, { headers: { 'X-Cache': 'hit' } });
+    const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, nearby.stations);
+    return NextResponse.json(enriched, { headers: { 'X-Cache': 'hit' } });
   }
 
   // No nearby scanned data — try live API call with user's radius
@@ -51,14 +57,16 @@ export async function GET(request: NextRequest) {
       fuelType: fuel,
     });
     if (stations.length > 0) {
-      return NextResponse.json(stations, { headers: { 'X-Cache': 'live' } });
+      const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, stations);
+      return NextResponse.json(enriched, { headers: { 'X-Cache': 'live' } });
     }
   }
 
   // Fallback: return best available cached data (aggressive match)
   const fallback = findCachedStations(lat, lng, fuel);
   if (fallback) {
-    return NextResponse.json(fallback.stations, { headers: { 'X-Cache': 'fallback' } });
+    const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, fallback.stations);
+    return NextResponse.json(enriched, { headers: { 'X-Cache': 'fallback' } });
   }
 
   return NextResponse.json([], { headers: { 'X-Cache': 'miss' } });

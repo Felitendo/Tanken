@@ -5,6 +5,7 @@ import { loadRepoConfig, normalizeRepoConfig } from '@/config';
 
 export const adminConfigSchema = z.object({
   apiKey: z.string().default(''),
+  orsApiKey: z.string().default(''),
   fuelType: z.enum(['diesel', 'e5', 'e10']).default('diesel'),
   radiusKm: z.coerce.number().min(1).max(25).default(10),
   refreshIntervalMinutes: z.coerce.number().min(1).default(60),
@@ -49,6 +50,7 @@ function createSessionSecret() {
 export function toAdminConfig(config: RepoConfig): AdminConfigInput {
   return {
     apiKey: config.api_key,
+    orsApiKey: config.ors_api_key || '',
     fuelType: config.fuel_type,
     radiusKm: config.radius_km,
     refreshIntervalMinutes: config.refresh_interval_minutes,
@@ -89,6 +91,7 @@ export function fromAdminConfig(input: AdminConfigInput, current: RepoConfig = l
   return normalizeRepoConfig(
     {
       api_key: input.apiKey,
+      ors_api_key: input.orsApiKey,
       fuel_type: input.fuelType,
       radius_km: input.radiusKm,
       refresh_interval_minutes: input.refreshIntervalMinutes,

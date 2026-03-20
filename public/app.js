@@ -346,49 +346,6 @@ const state = {
 
 const localSettingsKey = 'tank_settings';
 
-// --- Driving distance via OSRM (client-side, lazy) ---
-const _drivingDistCache = {}; // key: "stationLat,stationLng" -> { km, ts }
-const DRIVING_DIST_TTL = 5 * 60 * 1000;
-
-async function fetchDrivingDistance(userLat, userLng, stationLat, stationLng) {
-  const key = `${stationLat},${stationLng}`;
-  const cached = _drivingDistCache[key];
-  if (cached && Date.now() - cached.ts < DRIVING_DIST_TTL) return cached.km;
-
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${userLng},${userLat};${stationLng},${stationLat}?overview=false`;
-    const resp = await fetch(url, { signal: AbortSignal.timeout(4000) });
-    const data = await resp.json();
-    if (data.code === 'Ok' && data.routes?.[0]?.distance != null) {
-      const km = data.routes[0].distance / 1000;
-      _drivingDistCache[key] = { km, ts: Date.now() };
-      return km;
-    }
-  } catch { /* fall through */ }
-  return null;
-}
-
-async function updateDrivingDistances(userLat, userLng) {
-  const displayed = state._displayedStations;
-  if (!userLat || !userLng || !displayed?.length) return;
-  const results = await Promise.allSettled(
-    displayed.map(s => fetchDrivingDistance(userLat, userLng, s.lat, s.lng))
-  );
-  results.forEach((r, i) => {
-    const km = r.status === 'fulfilled' ? r.value : null;
-    const s = displayed[i];
-    if (km != null) {
-      s.dist = km;
-      s.distApprox = false;
-    } else {
-      s.distApprox = true;
-    }
-    // Update list item DOM
-    const el = document.querySelector(`.station-item[data-idx="${i}"] .station-dist`);
-    if (el) el.textContent = `${s.distApprox ? '~' : ''}${s.dist.toFixed(1)} km`;
-  });
-}
-
 const _WebHaptics = typeof WebHapticsModule !== 'undefined' ? WebHapticsModule.WebHaptics : (typeof WebHaptics !== 'undefined' ? WebHaptics : null);
 const _haptics = _WebHaptics ? new _WebHaptics() : null;
 
@@ -791,7 +748,6 @@ async function loadMapTab() {
     state.stations = stations;
     renderStationsOnMap(stations);
     renderStationList(stations);
-    updateDrivingDistances(state.userLat, state.userLng);
     if (!stations.length) {
       loader.innerHTML = `<span style="font-size:13px;opacity:0.6">${t('noStationsYet')}</span>`;
     } else {
@@ -961,13 +917,12 @@ function renderStationList(stations) {
     return aFav - bFav;
   });
 
-  state._displayedStations = open.slice(0, 15);
   const minPrice = Math.min(...open.map(s => s.price));
   const maxPrice = Math.max(...open.map(s => s.price));
-  list.innerHTML = state._displayedStations.map((s, i) => {
+  list.innerHTML = open.slice(0, 15).map((s, i) => {
     const ratio = maxPrice > minPrice ? (s.price - minPrice) / (maxPrice - minPrice) : 0;
     const color = priceColor(ratio);
-    const dist = s.dist ? `~${s.dist.toFixed(1)} km` : '';
+    const dist = s.dist ? `${s.distApprox ? '~' : ''}${s.dist.toFixed(1)} km` : '';
     const priceParts = formatPriceParts(s.price);
     const isFav = s.id && state.favourites.includes(s.id);
 
@@ -1370,7 +1325,6 @@ function setupPullToRefresh() {
 }
 
 function showStationSheet(station) {
-  state._sheetStation = station;
   const sheet = document.getElementById('bottom-sheet');
   const body = document.getElementById('bottom-sheet-body');
   const priceParts = formatPriceParts(station.price);
@@ -1412,7 +1366,7 @@ function showStationSheet(station) {
     <div class="sheet-info-row" id="sheet-status-row">
       <span class="sheet-info-icon"><span id="sheet-status-dot" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:${station.isOpen ? '#34c759' : '#ff3b30'}"></span></span>
       <span id="sheet-status-text">${station.isOpen ? t('open') : t('closed')}</span>
-      ${station.dist ? `<span id="sheet-dist-value" style="margin-left:auto;color:var(--color-hint)">~${station.dist.toFixed(1)} ${t('kmAway')}</span>` : ''}
+      ${station.dist ? `<span style="margin-left:auto;color:var(--color-hint)">${station.distApprox ? '~' : ''}${station.dist.toFixed(1)} ${t('kmAway')}</span>` : ''}
     </div>
     <div class="sheet-hours-section" id="sheet-hours-section"></div>
     <div class="sheet-chart-section">
@@ -1493,19 +1447,6 @@ function showStationSheet(station) {
     });
   });
 
-  // Fetch driving distance for this station
-  if (station.dist && state.userLat && state.userLng) {
-    fetchDrivingDistance(state.userLat, state.userLng, station.lat, station.lng).then(km => {
-      const el = document.getElementById('sheet-dist-value');
-      if (km != null) {
-        station.dist = km;
-        station.distApprox = false;
-      } else {
-        station.distApprox = true;
-      }
-      if (el) el.textContent = `${station.distApprox ? '~' : ''}${station.dist.toFixed(1)} ${t('kmAway')}`;
-    });
-  }
 }
 
 /**

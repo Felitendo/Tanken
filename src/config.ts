@@ -109,6 +109,7 @@ export function normalizeRepoConfig(value: Partial<RepoConfig>, fallback: RepoCo
     ...fallback,
     ...value,
     api_key: String(value.api_key ?? fallback.api_key ?? DEFAULT_REPO_CONFIG.api_key),
+    ors_api_key: String(value.ors_api_key ?? fallback.ors_api_key ?? ''),
     fuel_type: normalizeFuelType(value.fuel_type ?? fallback.fuel_type ?? DEFAULT_REPO_CONFIG.fuel_type),
     radius_km: Math.max(1, Math.min(25, Math.round(normalizeNumber(value.radius_km, fallback.radius_km ?? DEFAULT_REPO_CONFIG.radius_km)))),
     refresh_interval_minutes: Math.max(1, Math.round(normalizeNumber(value.refresh_interval_minutes, fallback.refresh_interval_minutes ?? DEFAULT_REPO_CONFIG.refresh_interval_minutes))),
@@ -158,6 +159,7 @@ export function loadRuntimeConfig(): RuntimeConfig {
   return {
     port: parsePort(process.env.PORT, 3847),
     apiKey: repoConfig.api_key || process.env.TANKERKOENIG_API_KEY || '',
+    orsApiKey: repoConfig.ors_api_key || process.env.ORS_API_KEY || '',
     databaseUrl: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/tanken',
     cookieName: 'tank_session',
     sessionSecret: repoConfig.session_secret || process.env.TANKEN_SESSION_SECRET || process.env.SESSION_SECRET || 'CHANGE_ME_TANKEN_SESSION_SECRET',

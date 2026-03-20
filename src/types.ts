@@ -39,6 +39,7 @@ export interface ScanLocation {
 
 export interface RepoConfig {
   api_key: string;
+  ors_api_key?: string;
   fuel_type: FuelType;
   radius_km: number;
   refresh_interval_minutes: number;
@@ -53,6 +54,7 @@ export interface RepoConfig {
 export interface RuntimeConfig {
   port: number;
   apiKey: string;
+  orsApiKey: string;
   databaseUrl: string;
   cookieName: string;
   sessionSecret: string;
