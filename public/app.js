@@ -2569,28 +2569,38 @@ function setupMyLocationBtn() {
   locBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     haptic('medium');
-    locBtn.style.opacity = '0.5';
 
-    const gotLocation = async (lat, lng) => {
-      state.userLat = lat;
-      state.userLng = lng;
-      locBtn.style.opacity = '1';
-      if (state.map) state.map.flyTo([lat, lng], 14, { duration: 0.5 });
-      state.activeLocation = 'gps';
-      document.getElementById('map-location-banner')?.classList.add('hidden');
-      state.loaded.map = false;
-      persistStateSettings({ activeLocation: state.activeLocation });
-      loadMapTab();
+    const flyToUser = (lat, lng) => {
+      if (!state.map) return;
+      // Toggle: if already centered on user, zoom out to show all stations
+      const center = state.map.getCenter();
+      const isNearUser = Math.abs(center.lat - lat) < 0.002 && Math.abs(center.lng - lng) < 0.002 && state.map.getZoom() >= 13;
+      if (isNearUser && state.defaultBounds) {
+        state.map.flyToBounds(state.defaultBounds, { duration: 0.5 });
+      } else {
+        state.map.flyTo([lat, lng], 14, { duration: 0.5 });
+      }
     };
 
     if (state.userLat && state.userLng) {
-      gotLocation(state.userLat, state.userLng);
+      flyToUser(state.userLat, state.userLng);
       return;
     }
 
+    locBtn.style.opacity = '0.5';
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        pos => gotLocation(pos.coords.latitude, pos.coords.longitude),
+        pos => {
+          state.userLat = pos.coords.latitude;
+          state.userLng = pos.coords.longitude;
+          locBtn.style.opacity = '1';
+          state.activeLocation = 'gps';
+          document.getElementById('map-location-banner')?.classList.add('hidden');
+          persistStateSettings({ activeLocation: state.activeLocation });
+          // First time getting location — reload stations with new coords
+          state.loaded.map = false;
+          loadMapTab();
+        },
         () => {
           locBtn.style.opacity = '1';
           showPopup(t('locationTitle'), t('locationError'));
