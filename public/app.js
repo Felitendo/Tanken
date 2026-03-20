@@ -983,7 +983,16 @@ function toggleSheetExpanded(content) {
   content.classList.toggle('expanded', state.sheetExpanded);
   if (!state.sheetExpanded) content.scrollTop = 0;
   haptic('light');
-  setTimeout(() => { if (state.sheetChart) state.sheetChart.resize(); }, 400);
+  // Reload chart after transition so tick counts update for new size
+  setTimeout(() => {
+    if (state.sheetStationName) {
+      const activeRange = document.querySelector('.sheet-toggle-btn.active');
+      const days = activeRange ? parseInt(activeRange.dataset.range, 10) : 1;
+      loadSheetChart(state.sheetStationName, days);
+    } else if (state.sheetChart) {
+      state.sheetChart.resize();
+    }
+  }, 400);
   // Update expand button icon
   const btn = content.querySelector('.sheet-expand-btn');
   if (btn) updateExpandBtnIcon(btn, state.sheetExpanded);
@@ -1027,9 +1036,9 @@ function setupSheetDrag(content, handleArea, backdrop, closeSheet) {
       if (Math.abs(currentY) < 10) return; // dead zone
 
       if (currentY < 0) {
-        // Swiping up
+        // Swiping up — expand from handle or content (when scrolled to top)
         if (state.sheetExpanded) { dragSource = null; return; } // already expanded
-        if (dragSource !== 'handle') { dragSource = null; return; } // only handle expands
+        if (dragSource === 'content' && content.scrollTop > 0) { dragSource = null; return; }
         dragDirection = 'up';
       } else {
         // Swiping down
@@ -1673,11 +1682,11 @@ async function loadSheetChart(stationName, days = 1) {
         },
         scales: {
           x: {
-            ticks: { color: hintColor.trim() || '#999', font: { size: 10 }, maxTicksLimit: 5 },
+            ticks: { color: hintColor.trim() || '#999', font: { size: 10 }, maxTicksLimit: state.sheetExpanded ? 8 : 5 },
             grid: { display: false }
           },
           y: {
-            ticks: { color: hintColor.trim() || '#999', font: { size: 10 }, callback: v => formatPrice(v), maxTicksLimit: 4 },
+            ticks: { color: hintColor.trim() || '#999', font: { size: 10 }, callback: v => formatPrice(v), maxTicksLimit: state.sheetExpanded ? 10 : 4 },
             grid: { color: 'rgba(128,128,128,0.08)' }
           }
         }
