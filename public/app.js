@@ -324,6 +324,7 @@ const state = {
   chart: null,
   hourChart: null,
   sheetChart: null,
+  sheetExpanded: false,
   stationSort: 'price',
   historyDays: 7,
   theme: 'auto',
@@ -973,10 +974,33 @@ function renderStationList(stations) {
   });
 }
 
+let _expandToggleTime = 0;
+function toggleSheetExpanded(content) {
+  const now = Date.now();
+  if (now - _expandToggleTime < 400) return;
+  _expandToggleTime = now;
+  state.sheetExpanded = !state.sheetExpanded;
+  content.classList.toggle('expanded', state.sheetExpanded);
+  if (!state.sheetExpanded) content.scrollTop = 0;
+  haptic('light');
+  setTimeout(() => { if (state.sheetChart) state.sheetChart.resize(); }, 400);
+  // Update expand button icon
+  const btn = content.querySelector('.sheet-expand-btn');
+  if (btn) updateExpandBtnIcon(btn, state.sheetExpanded);
+}
+
+function updateExpandBtnIcon(btn, expanded) {
+  btn.innerHTML = expanded
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+  btn.setAttribute('aria-label', expanded ? 'Collapse' : 'Expand');
+}
+
 function setupSheetDrag(content, handleArea, backdrop, closeSheet) {
   let startY = 0, currentY = 0, isDragging = false;
   let velocityY = 0, lastY = 0, lastTime = 0;
   let dragSource = null; // 'handle' or 'content'
+  let dragDirection = null; // 'up' or 'down'
 
   function canDragFromContent() {
     return content.scrollTop <= 0;
@@ -986,6 +1010,7 @@ function setupSheetDrag(content, handleArea, backdrop, closeSheet) {
     const isHandle = handleArea && handleArea.contains(e.target);
     if (!isHandle && !canDragFromContent()) return;
     dragSource = isHandle ? 'handle' : 'content';
+    dragDirection = null;
     startY = e.touches[0].clientY;
     currentY = 0;
     velocityY = 0;
@@ -998,29 +1023,44 @@ function setupSheetDrag(content, handleArea, backdrop, closeSheet) {
     const touchY = e.touches[0].clientY;
     currentY = touchY - startY;
 
-    // Only start dragging downward
     if (!isDragging) {
-      if (currentY < 4) return; // not enough movement or moving up
-      if (dragSource === 'content' && content.scrollTop > 0) {
-        dragSource = null;
-        return;
+      if (Math.abs(currentY) < 10) return; // dead zone
+
+      if (currentY < 0) {
+        // Swiping up
+        if (state.sheetExpanded) { dragSource = null; return; } // already expanded
+        if (dragSource !== 'handle') { dragSource = null; return; } // only handle expands
+        dragDirection = 'up';
+      } else {
+        // Swiping down
+        if (dragSource === 'content' && content.scrollTop > 0) {
+          dragSource = null;
+          return;
+        }
+        dragDirection = 'down';
       }
       isDragging = true;
       content.classList.add('dragging');
     }
 
-    // Rubber-band for upward drag (pulling above origin)
-    let translateY = currentY;
-    if (translateY < 0) {
-      translateY = translateY * 0.15; // heavy resistance going up
+    let translateY;
+    if (dragDirection === 'up') {
+      translateY = currentY * 0.3; // lighter resistance pulling up
+    } else {
+      translateY = currentY;
+      if (translateY < 0) {
+        translateY = translateY * 0.15; // rubber band if pulling up while dismissing/collapsing
+      }
     }
 
     content.style.transform = `translateY(${translateY}px)`;
 
-    // Fade backdrop proportionally
-    const sheetH = content.offsetHeight || 400;
-    const progress = Math.max(0, Math.min(1, translateY / sheetH));
-    backdrop.style.opacity = String(1 - progress * 0.8);
+    // Only fade backdrop for dismiss gesture (down + not expanded)
+    if (dragDirection === 'down' && !state.sheetExpanded) {
+      const sheetH = content.offsetHeight || 400;
+      const progress = Math.max(0, Math.min(1, translateY / sheetH));
+      backdrop.style.opacity = String(1 - progress * 0.8);
+    }
 
     // Track velocity
     const now = Date.now();
@@ -1042,23 +1082,66 @@ function setupSheetDrag(content, handleArea, backdrop, closeSheet) {
     content.classList.add('snapping');
 
     const sheetH = content.offsetHeight || 400;
-    const dismiss = currentY > sheetH * 0.3 || velocityY > 0.5;
 
-    if (dismiss) {
-      content.style.transform = `translateY(${sheetH + 20}px)`;
-      backdrop.style.opacity = '0';
-      haptic('light');
-      setTimeout(() => {
-        content.classList.remove('snapping');
-        closeSheet();
-      }, 350);
+    if (dragDirection === 'up' && !state.sheetExpanded) {
+      // Expand gesture
+      const dist = Math.abs(currentY);
+      const speed = Math.abs(velocityY);
+      if (dist > 60 || speed > 0.3) {
+        content.style.transform = 'translateY(0)';
+        content.addEventListener('transitionend', () => {
+          content.classList.remove('snapping');
+        }, { once: true });
+        toggleSheetExpanded(content);
+      } else {
+        content.style.transform = 'translateY(0)';
+        content.addEventListener('transitionend', () => {
+          content.classList.remove('snapping');
+        }, { once: true });
+      }
+    } else if (dragDirection === 'down' && state.sheetExpanded) {
+      // Collapse gesture
+      const dist = currentY;
+      const speed = velocityY;
+      if (dist > 60 || speed > 0.3) {
+        content.style.transform = 'translateY(0)';
+        content.addEventListener('transitionend', () => {
+          content.classList.remove('snapping');
+        }, { once: true });
+        toggleSheetExpanded(content);
+      } else {
+        content.style.transform = 'translateY(0)';
+        content.addEventListener('transitionend', () => {
+          content.classList.remove('snapping');
+        }, { once: true });
+      }
+    } else if (dragDirection === 'down' && !state.sheetExpanded) {
+      // Dismiss gesture (existing behavior)
+      const dismiss = currentY > sheetH * 0.3 || velocityY > 0.5;
+      if (dismiss) {
+        content.style.transform = `translateY(${sheetH + 20}px)`;
+        backdrop.style.opacity = '0';
+        haptic('light');
+        setTimeout(() => {
+          content.classList.remove('snapping');
+          closeSheet();
+        }, 350);
+      } else {
+        content.style.transform = 'translateY(0)';
+        backdrop.style.opacity = '';
+        content.addEventListener('transitionend', () => {
+          content.classList.remove('snapping');
+        }, { once: true });
+      }
     } else {
+      // Fallback: snap back
       content.style.transform = 'translateY(0)';
-      backdrop.style.opacity = '';
       content.addEventListener('transitionend', () => {
         content.classList.remove('snapping');
       }, { once: true });
     }
+
+    dragDirection = null;
   }
 
   content.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -1313,13 +1396,24 @@ function showStationSheet(station) {
   const backdrop = sheet.querySelector('.bottom-sheet-backdrop');
   const content = sheet.querySelector('.bottom-sheet-content');
   content.style.transform = '';
-  content.classList.remove('dragging', 'snapping');
+  content.classList.remove('dragging', 'snapping', 'expanded');
+  state.sheetExpanded = false;
   const handleArea = document.getElementById('sheet-handle-area');
+
+  // Add expand button for desktop
+  content.querySelector('.sheet-expand-btn')?.remove();
+  const expandBtn = document.createElement('button');
+  expandBtn.className = 'sheet-expand-btn';
+  updateExpandBtnIcon(expandBtn, false);
+  expandBtn.addEventListener('click', () => toggleSheetExpanded(content));
+  content.appendChild(expandBtn);
 
   const closeSheet = () => {
     if (state.sheetChart) { state.sheetChart.destroy(); state.sheetChart = null; }
+    state.sheetExpanded = false;
     content.style.transform = '';
-    content.classList.remove('dragging', 'snapping');
+    content.classList.remove('dragging', 'snapping', 'expanded');
+    content.querySelector('.sheet-expand-btn')?.remove();
     backdrop.style.opacity = '';
     sheet.classList.add('hidden');
     backdrop.removeEventListener('click', closeSheet);
