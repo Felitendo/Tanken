@@ -733,8 +733,6 @@ async function loadMapTab() {
 
     setupMapZoomGesture();
     setupMapSearch();
-  } else {
-    state.map.setView([coords.lat, coords.lng], 12);
   }
 
   const loader = document.getElementById('map-loading');
