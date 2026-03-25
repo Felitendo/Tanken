@@ -1067,7 +1067,7 @@ html, body {
 }
 
 .bottom-sheet-content.expanded .sheet-chart-container {
-  height: 45vh;
+  height: 28vh;
 }
 
 .sheet-chart-container canvas {

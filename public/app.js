@@ -1395,6 +1395,16 @@ function showStationSheet(station) {
       ${station.dist ? `<span style="margin-left:auto;color:var(--color-hint)">${station.distApprox ? '~' : ''}${station.dist.toFixed(1)} ${t('kmAway')}</span>` : ''}
     </div>
     <div class="sheet-hours-section" id="sheet-hours-section"></div>
+    <div class="sheet-nav-buttons${isAndroid ? ' android-only' : ''}">
+      <a href="${gmapsUrl}" target="_blank" class="sheet-nav-btn gmaps">
+        <img src="/icons/google-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
+        <span>Google Maps</span>
+      </a>
+      ${isAndroid ? '' : `<a href="${appleMapsUrl}" target="_blank" class="sheet-nav-btn amaps">
+        <img src="/icons/apple-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
+        <span>Apple Maps</span>
+      </a>`}
+    </div>
     <div class="sheet-chart-section">
       <div class="sheet-chart-header-row">
         <div class="sheet-chart-header">${t('priceHistory')}</div>
@@ -1407,16 +1417,6 @@ function showStationSheet(station) {
         <div id="sheet-chart-loading" class="sheet-chart-empty"><div class="spinner"></div></div>
         <canvas id="sheet-price-chart" style="display:none"></canvas>
       </div>
-    </div>
-    <div class="sheet-nav-buttons${isAndroid ? ' android-only' : ''}">
-      <a href="${gmapsUrl}" target="_blank" class="sheet-nav-btn gmaps">
-        <img src="/icons/google-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
-        <span>Google Maps</span>
-      </a>
-      ${isAndroid ? '' : `<a href="${appleMapsUrl}" target="_blank" class="sheet-nav-btn amaps">
-        <img src="/icons/apple-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
-        <span>Apple Maps</span>
-      </a>`}
     </div>`;
 
   const sheetFavBtn = body.querySelector('.sheet-fav-btn');
@@ -2296,9 +2296,15 @@ function setupSettings() {
   const contribToggle = document.getElementById('about-contributors-toggle');
   const contribList = document.getElementById('about-contributors-list');
   if (contribToggle && contribList) {
+    const contribCount = contribList.querySelectorAll('.about-contributor').length;
+    const chevron = contribToggle.querySelector('.about-contributors-chevron');
+    // Auto-expand if 3 or fewer contributors
+    if (contribCount <= 3) {
+      contribList.classList.add('open');
+      if (chevron) chevron.classList.add('open');
+    }
     contribToggle.addEventListener('click', () => {
       haptic('light');
-      const chevron = contribToggle.querySelector('.about-contributors-chevron');
       const isOpen = contribList.classList.toggle('open');
       if (chevron) chevron.classList.toggle('open', isOpen);
     });
