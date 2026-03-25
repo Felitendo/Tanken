@@ -296,6 +296,18 @@ html, body {
   min-height: 250px;
 }
 
+#map-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(env(safe-area-inset-top, 0px) + 56px);
+  background: #000;
+  z-index: 2;
+  pointer-events: none;
+}
+
 .top-cta-section {
   margin-top: 12px;
 }
