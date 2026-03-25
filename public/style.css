@@ -2,7 +2,6 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --tab-height: 56px;
 
@@ -75,7 +74,6 @@ html, body {
   left: 0;
   right: 0;
   bottom: 0;
-  padding-top: var(--safe-top);
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -92,10 +90,6 @@ html, body {
   opacity: 1;
   transform: scale(1);
   pointer-events: auto;
-}
-
-#view-map {
-  padding-top: 0;
 }
 
 /* === Sections (iOS Settings Style) === */
@@ -341,7 +335,7 @@ html, body {
 /* === Map Search Bar === */
 #map-search-wrapper {
   position: absolute;
-  top: calc(12px + var(--safe-top));
+  top: 12px;
   left: 12px;
   right: 12px;
   z-index: 1000;
@@ -435,7 +429,7 @@ html, body {
 /* === Map Location Banner === */
 #map-location-banner {
   position: absolute;
-  top: calc(64px + var(--safe-top));
+  top: 64px;
   right: 12px;
   z-index: 1000;
   background: rgba(255, 204, 0, 0.75);
