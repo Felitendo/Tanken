@@ -1287,6 +1287,11 @@ body {
   z-index: 100;
 }
 
+html[data-ios-pwa="true"] .tab-bar {
+  height: calc(var(--tab-height) + var(--safe-bottom));
+  padding-bottom: 0;
+}
+
 .tab-item {
   display: flex;
   flex-direction: column;

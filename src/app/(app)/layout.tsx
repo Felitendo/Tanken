@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <>
-      <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=JSON.parse(localStorage.getItem('tank_settings')||'{}').theme;if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t)}catch(e){}}())` }} />
+      <script dangerouslySetInnerHTML={{ __html: `(function(){try{var d=document.documentElement;var t=JSON.parse(localStorage.getItem('tank_settings')||'{}').theme;if(t&&t!=='auto')d.setAttribute('data-theme',t);var ua=navigator.userAgent||'';var isIOS=/iPhone|iPad|iPod/i.test(ua)||(/MacIntel/i.test(navigator.platform||'')&&navigator.maxTouchPoints>1);var isStandalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;if(isIOS&&isStandalone)d.setAttribute('data-ios-pwa','true')}catch(e){}}())` }} />
       <link rel="stylesheet" href="/style.css" />
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
       <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
