@@ -2608,9 +2608,8 @@ function setupMyLocationBtn() {
           state.activeLocation = 'gps';
           document.getElementById('map-location-banner')?.classList.add('hidden');
           persistStateSettings({ activeLocation: state.activeLocation });
-          flyToUser(state.userLat, state.userLng);
           state.loaded.map = false;
-          loadMapTab();
+          loadMapTab().then(() => flyToUser(state.userLat, state.userLng));
         },
         () => {
           locBtn.style.opacity = '1';
