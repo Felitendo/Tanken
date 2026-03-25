@@ -57,6 +57,14 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
+html {
+  background: #000;
+}
+
+body {
+  background: #000;
+}
+
 /* === App Container === */
 #app {
   position: fixed;
@@ -65,6 +73,7 @@ html, body {
   right: 0;
   bottom: calc(var(--tab-height) + var(--safe-bottom));
   overflow: hidden;
+  background: var(--color-bg);
 }
 
 /* === Tab Views === */

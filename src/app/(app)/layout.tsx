@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'Tanken'
   }
 };
@@ -19,10 +19,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#007aff' },
-    { media: '(prefers-color-scheme: dark)', color: '#000000' }
-  ]
+  themeColor: '#000000'
 };
 
 export default function AppLayout({ children }: { children: ReactNode }) {
