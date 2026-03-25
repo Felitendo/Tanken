@@ -867,24 +867,9 @@ function setupStationSort() {
 }
 
 function priceColor(ratio) {
-  // green (#34c759) → yellow (#f5c542) → orange (#ff9500) → red (#ff3b30)
-  let r, g, b;
-  if (ratio <= 0.33) {
-    const t = ratio / 0.33;
-    r = Math.round(52 + t * (245 - 52));
-    g = Math.round(199 + t * (197 - 199));
-    b = Math.round(89 - t * (89 - 66));
-  } else if (ratio <= 0.66) {
-    const t = (ratio - 0.33) / 0.33;
-    r = Math.round(245 + t * (255 - 245));
-    g = Math.round(197 - t * (197 - 149));
-    b = Math.round(66 - t * 66);
-  } else {
-    const t = (ratio - 0.66) / 0.34;
-    r = 255;
-    g = Math.round(149 - t * (149 - 59));
-    b = Math.round(0 + t * 48);
-  }
+  const r = Math.round(52 + ratio * 203);
+  const g = Math.round(199 - ratio * 140);
+  const b = Math.round(89 - ratio * 41);
   return `rgb(${r},${g},${b})`;
 }
 
