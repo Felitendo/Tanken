@@ -66,6 +66,13 @@ const i18n = {
     themeDark: 'Dunkel',
     language: 'SPRACHE',
     languageLabel: 'Sprache',
+    about: 'ÜBER',
+    versionLabel: 'Version',
+    viewOnGithub: 'Auf GitHub ansehen',
+    contributors: 'Mitwirkende',
+    ownerRole: 'Ersteller & Maintainer',
+    madeWith: 'Gemacht mit',
+    madeIn: 'in Deutschland',
     currentCheapest: 'Aktuell günstigster Preis',
     // Account
     notLoggedIn: 'Nicht eingeloggt',
@@ -193,6 +200,13 @@ const i18n = {
     themeDark: 'Dark',
     language: 'LANGUAGE',
     languageLabel: 'Language',
+    about: 'ABOUT',
+    versionLabel: 'Version',
+    viewOnGithub: 'View on GitHub',
+    contributors: 'Contributors',
+    ownerRole: 'Creator & Maintainer',
+    madeWith: 'Made with',
+    madeIn: 'in Germany',
     currentCheapest: 'Current cheapest price',
     notLoggedIn: 'Not logged in',
     loginSubline: 'Login optional, to sync your settings.',
@@ -384,9 +398,21 @@ async function init() {
   setupPullToRefresh();
   initLocation();
   refreshAlertUi();
+  fetchAppVersion();
 }
 
-
+async function fetchAppVersion() {
+  try {
+    const res = await fetch('https://api.github.com/repos/Felitendo/Tanken/releases/latest');
+    if (!res.ok) return;
+    const data = await res.json();
+    const version = data.tag_name || data.name;
+    if (version) {
+      const el = document.getElementById('app-version');
+      if (el) el.textContent = `${t('versionLabel')} ${version}`;
+    }
+  } catch {}
+}
 
 
 async function refreshMe() {
@@ -714,7 +740,7 @@ function showStationSkeletons(count = 5) {
     </div>`).join('');
 }
 
-async function loadMapTab({ skipFitBounds = false } = {}) {
+async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
   state.loaded.map = true;
   const coords = getActiveCoords();
 
@@ -736,8 +762,10 @@ async function loadMapTab({ skipFitBounds = false } = {}) {
   }
 
   const loader = document.getElementById('map-loading');
-  loader.classList.remove('hidden');
-  showStationSkeletons();
+  if (!silent) {
+    loader.classList.remove('hidden');
+    showStationSkeletons();
+  }
 
   try {
     const result = await api(`/api/stations?lat=${coords.lat}&lng=${coords.lng}&rad=${state.radiusKm}&fuel=${state.fuelType}`);
@@ -2609,7 +2637,7 @@ function setupMyLocationBtn() {
           document.getElementById('map-location-banner')?.classList.add('hidden');
           persistStateSettings({ activeLocation: state.activeLocation });
           state.loaded.map = false;
-          loadMapTab({ skipFitBounds: true }).then(() => flyToUser(state.userLat, state.userLng));
+          loadMapTab({ skipFitBounds: true, silent: true }).then(() => flyToUser(state.userLat, state.userLng));
         },
         () => {
           locBtn.style.opacity = '1';
