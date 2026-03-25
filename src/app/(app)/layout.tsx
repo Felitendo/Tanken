@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from 'next';
+import type { Metadata } from 'next';
 import Script from 'next/script';
 import type { ReactNode } from 'react';
 
@@ -11,18 +11,6 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'Tanken'
   }
-};
-
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  viewportFit: 'cover',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f2f2f7' },
-    { media: '(prefers-color-scheme: dark)', color: '#1c1c1e' }
-  ]
 };
 
 export default function AppLayout({ children }: { children: ReactNode }) {
