@@ -1637,7 +1637,23 @@ async function loadSheetChart(stationName, days = 1) {
     let filtered = data.filter(d => new Date(d.timestamp) >= cutoff);
     if (filtered.length < 2) filtered = data.slice(-10);
 
-    const labels = filtered.map(d => {
+    // For 7-day view: aggregate to 1 value per day (lowest price)
+    let chartData;
+    if (days === 7) {
+      const dayMap = {};
+      filtered.forEach(d => {
+        const dt = new Date(d.timestamp);
+        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+        if (!dayMap[key] || d.min_price < dayMap[key].min_price) {
+          dayMap[key] = { timestamp: key, min_price: d.min_price };
+        }
+      });
+      chartData = Object.values(dayMap);
+    } else {
+      chartData = filtered;
+    }
+
+    const labels = chartData.map(d => {
       const dt = new Date(d.timestamp);
       if (days <= 1) return `${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}`;
       return `${dt.getDate()}.${dt.getMonth() + 1}`;
@@ -1655,13 +1671,13 @@ async function loadSheetChart(stationName, days = 1) {
         datasets: [
           {
             label: 'Min',
-            data: filtered.map(d => d.min_price),
+            data: chartData.map(d => d.min_price),
             borderColor: '#34c759',
             backgroundColor: 'rgba(52,199,89,0.08)',
             borderWidth: 2,
             fill: true,
             tension: 0.35,
-            pointRadius: filtered.length < 15 ? 3 : 0,
+            pointRadius: 5,
             pointBackgroundColor: '#34c759',
           }
         ]
@@ -2580,13 +2596,9 @@ function setupMyLocationBtn() {
       }
     };
 
-    if (state.userLat && state.userLng) {
-      flyToUser(state.userLat, state.userLng);
-      return;
-    }
-
-    locBtn.style.opacity = '0.5';
+    // Always try device GPS first, fall back to last known location
     if (navigator.geolocation) {
+      locBtn.style.opacity = '0.5';
       navigator.geolocation.getCurrentPosition(
         pos => {
           state.userLat = pos.coords.latitude;
@@ -2595,18 +2607,26 @@ function setupMyLocationBtn() {
           state.activeLocation = 'gps';
           document.getElementById('map-location-banner')?.classList.add('hidden');
           persistStateSettings({ activeLocation: state.activeLocation });
-          // First time getting location — reload stations with new coords
+          flyToUser(state.userLat, state.userLng);
           state.loaded.map = false;
           loadMapTab();
         },
         () => {
           locBtn.style.opacity = '1';
-          showPopup(t('locationTitle'), t('locationError'));
+          // GPS unavailable — fall back to last known coordinates (e.g. search result)
+          if (state.userLat && state.userLng) {
+            flyToUser(state.userLat, state.userLng);
+          } else {
+            showPopup(t('locationTitle'), t('locationError'));
+          }
         },
         { timeout: 10000, maximumAge: 60000 }
       );
+    } else if (state.userLat && state.userLng) {
+      // No geolocation API — fall back to last known coordinates
+      flyToUser(state.userLat, state.userLng);
     } else {
-      locBtn.style.opacity = '1';
+      showPopup(t('locationTitle'), t('locationError'));
     }
   });
 }
