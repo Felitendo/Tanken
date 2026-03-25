@@ -12,18 +12,6 @@ A Progressive Web App for tracking real-time diesel and fuel prices near you. Co
 - **OIDC authentication** - optionally secure access with any OpenID Connect provider
 - **Admin panel** at `/admin` for setup, configuration, and user management
 
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 16 (App Router) |
-| Frontend | React 19, TypeScript |
-| Styling | Tailwind CSS 4, Radix UI |
-| Database | PostgreSQL 17 |
-| Runtime | Node.js 22 |
-| Auth | Local admin + OIDC |
-| Email | Nodemailer |
-
 ## Installation with Docker Compose (GHCR)
 
 ### Prerequisites
