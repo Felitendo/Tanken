@@ -1677,7 +1677,7 @@ async function loadSheetChart(stationName, days = 1) {
             borderWidth: 2,
             fill: true,
             tension: 0.35,
-            pointRadius: 5,
+            pointRadius: days === 7 ? 3 : 0,
             pointBackgroundColor: '#34c759',
           }
         ]
@@ -2153,9 +2153,10 @@ function renderStats(stats) {
   }
 
   if (stats.hourAvgs.length) {
+    const topHours = stats.hourAvgs.slice(0, 6);
     html += `<div class="section"><div class="section-header">${t('hourRanking')}</div><div class="card-list">`;
-    const hourLen = stats.hourAvgs.length;
-    stats.hourAvgs.forEach((h, i) => {
+    const hourLen = topHours.length;
+    topHours.forEach((h, i) => {
       const ratio = hourLen > 1 ? i / (hourLen - 1) : 0;
       const color = rankColor(ratio);
       const label = t('oclock') ? `${h.hour}:00 ${t('oclock')}` : `${h.hour}:00`;
