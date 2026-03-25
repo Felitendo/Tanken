@@ -265,7 +265,6 @@ export const APP_SHELL = `
     <div class="pwa-popup-tabs">
       <button class="pwa-popup-tab active" data-pwa-tab="android">Android</button>
       <button class="pwa-popup-tab" data-pwa-tab="ios">iOS</button>
-      <button class="pwa-popup-tab" data-pwa-tab="desktop">Desktop</button>
     </div>
 
     <div class="pwa-popup-instructions">
@@ -310,28 +309,6 @@ export const APP_SHELL = `
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
             </span>
             <span data-i18n-html="pwaIos3">Tippe oben rechts auf <strong>„Hinzufügen"</strong></span>
-          </li>
-        </ol>
-      </div>
-      <div class="pwa-popup-panel" data-pwa-panel="desktop">
-        <ol class="pwa-popup-steps">
-          <li>
-            <span class="pwa-step-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18 15v3H6v-3H4v3c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-3h-2zm-1-4l-1.41-1.41L13 12.17V4h-2v8.17L8.41 9.59 7 11l5 5 5-5z"/></svg>
-            </span>
-            <span data-i18n-html="pwaWin1">Klicke auf das <strong>Installations-Symbol</strong> in der Adressleiste</span>
-          </li>
-          <li>
-            <span class="pwa-step-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-            </span>
-            <span data-i18n-html="pwaWin2">Bestätige mit <strong>„Installieren"</strong></span>
-          </li>
-          <li>
-            <span class="pwa-step-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
-            </span>
-            <span data-i18n-html="pwaWin3">Optional: <strong>An Taskleiste anheften</strong> für schnellen Zugriff</span>
           </li>
         </ol>
       </div>

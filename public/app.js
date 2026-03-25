@@ -2855,17 +2855,17 @@ if ('serviceWorker' in navigator) {
 
   if (isStandalone || dismissed) return;
 
+  // Don't show PWA popup on desktop — only mobile
+  var ua = navigator.userAgent || '';
+  var isIos = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var isAndroid = /Android/i.test(ua);
+  if (!isIos && !isAndroid) return;
+
   var popup = document.getElementById('pwa-popup');
   if (!popup) return;
 
   // Auto-detect platform and pre-select the right tab
-  var ua = navigator.userAgent || '';
-  var defaultTab = 'android';
-  if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
-    defaultTab = 'ios';
-  } else if (/Win/.test(navigator.platform)) {
-    defaultTab = 'desktop';
-  }
+  var defaultTab = isIos ? 'ios' : 'android';
 
   function activateTab(name) {
     popup.querySelectorAll('.pwa-popup-tab').forEach(function(t) {
