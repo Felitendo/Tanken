@@ -204,37 +204,40 @@ export const APP_SHELL = `
     <div class="section">
       <div class="section-header" data-i18n="about">ÜBER</div>
       <div class="card about-card">
-          <div class="about-header">
-            <img src="/icons/icon-192.png" alt="Tanken" width="44" height="44" class="about-icon" />
-            <div>
-              <div class="about-name">Tanken</div>
-              <div id="app-version" class="about-version" data-i18n="versionLabel"></div>
-            </div>
+        <div class="about-app-row">
+          <img src="/icons/icon-192.png" alt="Tanken" width="48" height="48" class="about-app-icon" />
+          <div class="about-app-info">
+            <div class="about-app-name">Tanken</div>
+            <div id="app-version" class="about-app-version"></div>
           </div>
-          <div class="about-divider"></div>
-          <a href="https://github.com/Felitendo/Tanken" target="_blank" rel="noopener" class="about-link">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
-            <div class="about-link-text">
-              <span data-i18n="viewOnGithub">Auf GitHub ansehen</span>
-              <span class="about-link-url">github.com/Felitendo/Tanken</span>
+        </div>
+      </div>
+      <div class="card about-card about-links-card">
+        <a href="https://github.com/Felitendo/Tanken" target="_blank" rel="noopener" class="about-row">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" class="about-row-icon"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+          <span class="about-row-label" data-i18n="viewOnGithub">Auf GitHub ansehen</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="about-row-chevron"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+        </a>
+        <div class="about-row-divider"></div>
+        <button class="about-row" id="about-contributors-toggle">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" class="about-row-icon"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          <span class="about-row-label" data-i18n="contributors">Mitwirkende</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="about-row-chevron about-contributors-chevron"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+        </button>
+        <div class="about-contributors-list" id="about-contributors-list">
+          <a href="https://github.com/Felitendo" target="_blank" rel="noopener" class="about-contributor">
+            <img src="https://github.com/Felitendo.png" alt="Felitendo" width="36" height="36" class="about-contributor-avatar" loading="lazy" />
+            <div class="about-contributor-info">
+              <div class="about-contributor-name">Felitendo</div>
+              <div class="about-contributor-role" data-i18n="ownerRole">Ersteller & Maintainer</div>
             </div>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="about-chevron"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" class="about-row-chevron"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
           </a>
-          <div class="about-divider"></div>
-          <div class="about-contributors">
-            <div class="about-contributors-title" data-i18n="contributors">Mitwirkende</div>
-            <div class="about-contributor">
-              <img src="https://github.com/Felitendo.png" alt="Felitendo" width="32" height="32" class="about-avatar" loading="lazy" />
-              <div>
-                <div class="about-contributor-name">Felitendo</div>
-                <div class="about-contributor-role" data-i18n="ownerRole">Ersteller & Maintainer</div>
-              </div>
-            </div>
-          </div>
+        </div>
       </div>
     </div>
 
-    <div style="text-align:center;padding:8px 0 24px;font-size:11px;color:var(--color-hint);opacity:0.5">
+    <div class="about-footer">
       <span data-i18n="madeWith">Gemacht mit</span> ❤️ <span data-i18n="madeIn">in Deutschland</span>
     </div>
 

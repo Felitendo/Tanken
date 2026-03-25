@@ -1689,6 +1689,16 @@ async function loadSheetChart(stationName, days = 1) {
 
     const hintColor = getComputedStyle(document.body).getPropertyValue('--color-hint') || '#999';
 
+    // Calculate Y-axis range with minimum visible spread (at least 0.06€)
+    const prices = chartData.map(d => d.min_price);
+    const minP = Math.min(...prices);
+    const maxP = Math.max(...prices);
+    const spread = maxP - minP;
+    const minSpread = 0.06;
+    const padding = spread < minSpread ? (minSpread - spread) / 2 + 0.01 : (spread * 0.15);
+    const yMin = Math.max(0, Math.floor((minP - padding) * 100) / 100);
+    const yMax = Math.ceil((maxP + padding) * 100) / 100;
+
     loading.style.display = 'none';
     canvas.style.display = 'block';
 
@@ -1699,7 +1709,7 @@ async function loadSheetChart(stationName, days = 1) {
         datasets: [
           {
             label: 'Min',
-            data: chartData.map(d => d.min_price),
+            data: prices,
             borderColor: '#34c759',
             backgroundColor: 'rgba(52,199,89,0.08)',
             borderWidth: 2,
@@ -1729,6 +1739,8 @@ async function loadSheetChart(stationName, days = 1) {
             grid: { display: false }
           },
           y: {
+            min: yMin,
+            max: yMax,
             ticks: { color: hintColor.trim() || '#999', font: { size: 10 }, callback: v => formatPrice(v), maxTicksLimit: state.sheetExpanded ? 10 : 4 },
             grid: { color: 'rgba(128,128,128,0.08)' }
           }
@@ -2279,6 +2291,18 @@ function setupSettings() {
   });
 
   initAlertUI();
+
+  // Contributors collapsible
+  const contribToggle = document.getElementById('about-contributors-toggle');
+  const contribList = document.getElementById('about-contributors-list');
+  if (contribToggle && contribList) {
+    contribToggle.addEventListener('click', () => {
+      haptic('light');
+      const chevron = contribToggle.querySelector('.about-contributors-chevron');
+      const isOpen = contribList.classList.toggle('open');
+      if (chevron) chevron.classList.toggle('open', isOpen);
+    });
+  }
 }
 
 function setupMapSearch() {
