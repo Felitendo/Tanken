@@ -714,7 +714,7 @@ function showStationSkeletons(count = 5) {
     </div>`).join('');
 }
 
-async function loadMapTab() {
+async function loadMapTab({ skipFitBounds = false } = {}) {
   state.loaded.map = true;
   const coords = getActiveCoords();
 
@@ -744,7 +744,7 @@ async function loadMapTab() {
     const stations = Array.isArray(result) ? result : [];
     const cacheStatus = result._cacheStatus || 'fresh';
     state.stations = stations;
-    renderStationsOnMap(stations);
+    renderStationsOnMap(stations, { skipFitBounds });
     renderStationList(stations);
     if (!stations.length) {
       loader.innerHTML = `<span style="font-size:13px;opacity:0.6">${t('noStationsYet')}</span>`;
@@ -770,7 +770,7 @@ async function loadMapTab() {
   }
 }
 
-function renderStationsOnMap(stations) {
+function renderStationsOnMap(stations, { skipFitBounds = false } = {}) {
   state.markers.forEach(m => state.map.removeLayer(m));
   state.markers = [];
   if (state.userMarker) {
@@ -833,8 +833,8 @@ function renderStationsOnMap(stations) {
   if (state.markers.length > 1) {
     const group = L.featureGroup(state.markers);
     const bounds = group.getBounds().pad(0.1);
-    state.map.fitBounds(bounds);
     state.defaultBounds = bounds;
+    if (!skipFitBounds) state.map.fitBounds(bounds);
   }
 }
 
@@ -2609,7 +2609,7 @@ function setupMyLocationBtn() {
           document.getElementById('map-location-banner')?.classList.add('hidden');
           persistStateSettings({ activeLocation: state.activeLocation });
           state.loaded.map = false;
-          loadMapTab().then(() => flyToUser(state.userLat, state.userLng));
+          loadMapTab({ skipFitBounds: true }).then(() => flyToUser(state.userLat, state.userLng));
         },
         () => {
           locBtn.style.opacity = '1';
