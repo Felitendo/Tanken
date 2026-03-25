@@ -409,7 +409,7 @@ async function fetchAppVersion() {
     const version = data.tag_name || data.name;
     if (version) {
       const el = document.getElementById('app-version');
-      if (el) el.textContent = `${t('versionLabel')} ${version}`;
+      if (el) el.textContent = version;
     }
   } catch {}
 }
