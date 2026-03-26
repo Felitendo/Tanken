@@ -147,6 +147,26 @@ body.logged-in .sync-badge {
   to { transform: rotate(360deg); }
 }
 
+.cloud-sync-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 16px 4px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--color-bg-secondary);
+  font-size: 12px;
+  color: var(--color-hint);
+  line-height: 1.4;
+}
+.cloud-sync-hint svg {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+body.logged-in .cloud-sync-hint {
+  display: none;
+}
+
 /* === Cards === */
 .card {
   background: var(--color-bg-secondary);
