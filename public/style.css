@@ -113,12 +113,38 @@ html, body {
 .sync-badge {
   display: none;
   align-items: center;
-  color: var(--color-accent);
-  opacity: 0.6;
+  color: #fff;
+  opacity: 0.45;
   cursor: help;
+  width: 14px;
+  height: 14px;
+  position: relative;
 }
 body.logged-in .sync-badge {
   display: inline-flex;
+}
+.sync-badge svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transition: opacity 0.25s ease;
+}
+.sync-badge .sync-icon-idle { opacity: 1; }
+.sync-badge .sync-icon-ok { opacity: 0; }
+.sync-badge .sync-icon-spin { opacity: 0; }
+
+.sync-badge.syncing .sync-icon-idle { opacity: 0; }
+.sync-badge.syncing .sync-icon-spin { opacity: 1; animation: sync-rotate 0.8s linear infinite; }
+.sync-badge.syncing .sync-icon-ok { opacity: 0; }
+
+.sync-badge.synced .sync-icon-idle { opacity: 0; }
+.sync-badge.synced .sync-icon-spin { opacity: 0; }
+.sync-badge.synced .sync-icon-ok { opacity: 1; }
+.sync-badge.synced { opacity: 0.7; }
+
+@keyframes sync-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* === Cards === */

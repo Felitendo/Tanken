@@ -566,7 +566,8 @@ function setupTheme() {
   select.addEventListener('change', () => {
     haptic('light');
     applyTheme(select.value);
-    persistStateSettings({ theme: state.theme });
+    // Theme is device-local only — don't trigger cloud sync
+    saveSettingsLocal();
   });
 }
 
@@ -2836,7 +2837,25 @@ async function persistStateSettings(nextSettings = {}) {
   applySettingsToState(nextSettings);
   saveSettingsLocal();
   if (state.user) {
-    await saveSettingsRemote();
+    setSyncBadgeState('syncing');
+    try {
+      await saveSettingsRemote();
+      setSyncBadgeState('synced');
+    } catch {
+      setSyncBadgeState('idle');
+    }
+  }
+}
+
+function setSyncBadgeState(s) {
+  // s = 'idle' | 'syncing' | 'synced'
+  document.querySelectorAll('.sync-badge').forEach(el => {
+    el.classList.remove('syncing', 'synced');
+    if (s !== 'idle') el.classList.add(s);
+  });
+  if (s === 'synced') {
+    clearTimeout(state._syncBadgeTimer);
+    state._syncBadgeTimer = setTimeout(() => setSyncBadgeState('idle'), 2500);
   }
 }
 
