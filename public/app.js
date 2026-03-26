@@ -72,7 +72,7 @@ const i18n = {
     contributors: 'Mitwirkende',
     ownerRole: 'Ersteller & Maintainer',
     syncedSetting: 'Wird zwischen Geräten synchronisiert',
-    cloudSyncHint: 'Anmelden für Cloud-Sync — Einstellungen geräteübergreifend synchronisieren',
+    cloudSyncHint: 'Anmelden für Cloud-Sync, um Einstellungen geräteübergreifend zu synchronisieren',
     madeWith: 'Gemacht mit',
     madeIn: 'in Deutschland',
     currentCheapest: 'Aktuell günstigster Preis',
@@ -208,7 +208,7 @@ const i18n = {
     contributors: 'Contributors',
     ownerRole: 'Creator & Maintainer',
     syncedSetting: 'Synced across devices',
-    cloudSyncHint: 'Sign in for Cloud Sync — sync settings across devices',
+    cloudSyncHint: 'Sign in for Cloud Sync to sync settings across devices',
     madeWith: 'Made with',
     madeIn: 'in Germany',
     currentCheapest: 'Current cheapest price',
@@ -2848,10 +2848,12 @@ async function persistStateSettings(nextSettings = {}) {
   saveSettingsLocal();
   if (state.user) {
     setSyncBadgeState('syncing', changedKeys);
+    const minDelay = new Promise(r => setTimeout(r, 1000));
     try {
-      await saveSettingsRemote();
+      await Promise.all([saveSettingsRemote(), minDelay]);
       setSyncBadgeState('synced', changedKeys);
     } catch {
+      await minDelay;
       setSyncBadgeState('idle', changedKeys);
     }
   }
