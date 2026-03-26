@@ -2535,6 +2535,7 @@ async function saveAlert() {
     return;
   }
 
+  if (state.user) setSyncBadgeState('syncing', ['alert']);
   try {
     const result = await api(state.user ? '/api/alert' : '/api/alert/local', {
       method: 'POST',
@@ -2549,6 +2550,7 @@ async function saveAlert() {
     });
     if (result?.ok) {
       haptic('success');
+      if (state.user) setSyncBadgeState('synced', ['alert']);
       const chLabel = state.alertChannel === 'email' ? ' (E-Mail)' : ' (ntfy.sh)';
       document.getElementById('alert-active-info').style.display = 'block';
       document.getElementById('alert-active-info').textContent = `${t('alertActive')} ${formatPrice(state.alertPrice)}${chLabel}`;
@@ -2556,6 +2558,7 @@ async function saveAlert() {
       await refreshMe();
     }
   } catch (error) {
+    if (state.user) setSyncBadgeState('idle', ['alert']);
     showPopup(t('alertFailed'), error.message || t('serverError'));
   }
 }
@@ -2634,12 +2637,15 @@ async function checkPriceAlert(stations) {
 }
 
 async function deleteAlert() {
+  if (state.user) setSyncBadgeState('syncing', ['alert']);
   try {
     await api(state.user ? '/api/alert' : '/api/alert/local', { method: 'DELETE' });
     document.getElementById('alert-config').style.display = 'none';
     document.getElementById('alert-active-info').style.display = 'none';
     haptic('success');
+    if (state.user) setSyncBadgeState('synced', ['alert']);
   } catch (error) {
+    if (state.user) setSyncBadgeState('idle', ['alert']);
     showPopup(t('deleteFailed'), error.message || t('deleteError'));
   }
 }
@@ -2834,28 +2840,36 @@ function applySettingsToState(settings = {}) {
 }
 
 async function persistStateSettings(nextSettings = {}) {
+  // Determine which sync keys are affected by this change
+  const changedKeys = Object.keys(nextSettings);
   applySettingsToState(nextSettings);
   saveSettingsLocal();
   if (state.user) {
-    setSyncBadgeState('syncing');
+    setSyncBadgeState('syncing', changedKeys);
     try {
       await saveSettingsRemote();
-      setSyncBadgeState('synced');
+      setSyncBadgeState('synced', changedKeys);
     } catch {
-      setSyncBadgeState('idle');
+      setSyncBadgeState('idle', changedKeys);
     }
   }
 }
 
-function setSyncBadgeState(s) {
+function setSyncBadgeState(s, keys) {
   // s = 'idle' | 'syncing' | 'synced'
-  document.querySelectorAll('.sync-badge').forEach(el => {
+  // keys = array of setting keys to target, e.g. ['fuelType']
+  const badges = keys && keys.length
+    ? keys.map(k => document.querySelector(`.sync-badge[data-sync-key="${k}"]`)).filter(Boolean)
+    : document.querySelectorAll('.sync-badge');
+  badges.forEach(el => {
     el.classList.remove('syncing', 'synced');
     if (s !== 'idle') el.classList.add(s);
   });
   if (s === 'synced') {
-    clearTimeout(state._syncBadgeTimer);
-    state._syncBadgeTimer = setTimeout(() => setSyncBadgeState('idle'), 2500);
+    const timerKey = keys ? keys.join(',') : '_all';
+    state._syncTimers = state._syncTimers || {};
+    clearTimeout(state._syncTimers[timerKey]);
+    state._syncTimers[timerKey] = setTimeout(() => setSyncBadgeState('idle', keys), 2500);
   }
 }
 
