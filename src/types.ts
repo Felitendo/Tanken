@@ -87,6 +87,7 @@ export interface UserSettings {
   theme?: 'auto' | 'light' | 'dark';
   activeLocation?: string;
   lang?: string;
+  contributorsOpen?: boolean;
 }
 
 export interface PriceAlert {

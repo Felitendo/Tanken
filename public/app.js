@@ -71,6 +71,7 @@ const i18n = {
     viewOnGithub: 'Auf GitHub ansehen',
     contributors: 'Mitwirkende',
     ownerRole: 'Ersteller & Maintainer',
+    syncedSetting: 'Wird zwischen Geräten synchronisiert',
     madeWith: 'Gemacht mit',
     madeIn: 'in Deutschland',
     currentCheapest: 'Aktuell günstigster Preis',
@@ -205,6 +206,7 @@ const i18n = {
     viewOnGithub: 'View on GitHub',
     contributors: 'Contributors',
     ownerRole: 'Creator & Maintainer',
+    syncedSetting: 'Synced across devices',
     madeWith: 'Made with',
     madeIn: 'in Germany',
     currentCheapest: 'Current cheapest price',
@@ -421,10 +423,12 @@ async function refreshMe() {
     state.me = me;
     state.user = me.user || null;
     state.favourites = state.user?.favourites || [];
+    document.body.classList.toggle('logged-in', !!state.user);
   } catch {
     state.me = null;
     state.user = null;
     state.favourites = [];
+    document.body.classList.remove('logged-in');
   }
 }
 
@@ -502,6 +506,7 @@ function setupAccountUi() {
     if (state.user) {
       await api('/api/logout', { method: 'POST' });
       state.user = null;
+      document.body.classList.remove('logged-in');
       renderAccountUi();
       showToast(t('loggedOut'));
       return;
@@ -2298,8 +2303,9 @@ function setupSettings() {
   if (contribToggle && contribList) {
     const contribCount = contribList.querySelectorAll('.about-contributor').length;
     const chevron = contribToggle.querySelector('.about-contributors-chevron');
-    // Auto-expand if 3 or fewer contributors
-    if (contribCount <= 3) {
+    // Use saved preference, or default to open if ≤3 contributors
+    const shouldOpen = typeof state.contributorsOpen === 'boolean' ? state.contributorsOpen : contribCount <= 3;
+    if (shouldOpen) {
       contribList.classList.add('open');
       if (chevron) chevron.classList.add('open');
     }
@@ -2307,6 +2313,8 @@ function setupSettings() {
       haptic('light');
       const isOpen = contribList.classList.toggle('open');
       if (chevron) chevron.classList.toggle('open', isOpen);
+      state.contributorsOpen = isOpen;
+      persistStateSettings({ contributorsOpen: isOpen });
     });
   }
 }
@@ -2791,7 +2799,11 @@ function showResetViewBtn() {
 
 async function loadSettings() {
   loadFromLocal();
-  if (state.user?.settings) applySettingsToState(state.user.settings);
+  if (state.user?.settings) {
+    // Theme is device-local only — don't let server override it
+    const { theme, ...remoteSettings } = state.user.settings;
+    applySettingsToState(remoteSettings);
+  }
 }
 
 function loadFromLocal() {
@@ -2808,6 +2820,7 @@ function applySettingsToState(settings = {}) {
 
   if (settings.theme) state.theme = settings.theme;
   if (settings.lang) state.lang = settings.lang;
+  if (typeof settings.contributorsOpen === 'boolean') state.contributorsOpen = settings.contributorsOpen;
 
   const slider = document.getElementById('radius-slider');
   const label = document.getElementById('radius-label');
@@ -2828,7 +2841,8 @@ async function persistStateSettings(nextSettings = {}) {
 }
 
 async function saveSettingsRemote() {
-  const next = { fuelType: state.fuelType, radiusKm: state.radiusKm, activeLocation: state.activeLocation, theme: state.theme, lang: state.lang };
+  // Theme is intentionally excluded — it stays device-local
+  const next = { fuelType: state.fuelType, radiusKm: state.radiusKm, activeLocation: state.activeLocation, lang: state.lang, contributorsOpen: state.contributorsOpen };
   try { await api('/api/settings', { method: 'POST', body: JSON.stringify(next) }); } catch {}
 }
 
@@ -2839,7 +2853,8 @@ function saveSettingsLocal() {
       radiusKm: state.radiusKm,
       activeLocation: state.activeLocation,
       theme: state.theme,
-      lang: state.lang
+      lang: state.lang,
+      contributorsOpen: state.contributorsOpen
     }));
   } catch {}
 }

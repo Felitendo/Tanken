@@ -14,7 +14,8 @@ const settingsSchema = z
     currentTab: z.string().min(1).optional(),
     theme: themeSchema.optional(),
     activeLocation: z.string().min(1).optional(),
-    lang: z.string().min(1).max(10).optional()
+    lang: z.string().min(1).max(10).optional(),
+    contributorsOpen: z.boolean().optional()
   })
   .partial();
 
@@ -65,6 +66,10 @@ export async function POST(request: NextRequest) {
 
   if (updates.lang) {
     nextSettings.lang = updates.lang;
+  }
+
+  if (typeof updates.contributorsOpen === 'boolean') {
+    nextSettings.contributorsOpen = updates.contributorsOpen;
   }
 
   await stores.userStore.updateUser(user.id, (currentUser) => {

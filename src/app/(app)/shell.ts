@@ -99,7 +99,7 @@ export const APP_SHELL = `
     </div>
 
     <div class="section">
-      <div class="section-header" data-i18n="fuelType">KRAFTSTOFF</div>
+      <div class="section-header"><span data-i18n="fuelType">KRAFTSTOFF</span><span class="sync-badge" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg></span></div>
       <div class="chip-row" id="fuel-chips">
         <button class="chip" data-fuel="diesel">Diesel</button>
         <button class="chip" data-fuel="e5">Super E5</button>
@@ -108,7 +108,7 @@ export const APP_SHELL = `
     </div>
 
     <div class="section">
-      <div class="section-header" data-i18n="searchRadius">SUCHRADIUS</div>
+      <div class="section-header"><span data-i18n="searchRadius">SUCHRADIUS</span><span class="sync-badge" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg></span></div>
       <div class="card">
         <div class="slider-row">
           <span id="radius-label">10 km</span>
@@ -118,7 +118,7 @@ export const APP_SHELL = `
     </div>
 
     <div class="section">
-      <div class="section-header" data-i18n="priceAlert">PREISALARM</div>
+      <div class="section-header"><span data-i18n="priceAlert">PREISALARM</span><span class="sync-badge" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg></span></div>
       <div class="card">
         <div class="card-row" style="padding: 12px 16px;">
           <div class="card-row-left">
@@ -186,7 +186,7 @@ export const APP_SHELL = `
     </div>
 
     <div class="section">
-      <div class="section-header" data-i18n="language">SPRACHE</div>
+      <div class="section-header"><span data-i18n="language">SPRACHE</span><span class="sync-badge" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg></span></div>
       <div class="card">
         <div class="settings-row">
           <div class="settings-row-left">

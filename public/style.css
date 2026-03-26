@@ -105,6 +105,20 @@ html, body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 16px 0 8px 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sync-badge {
+  display: none;
+  align-items: center;
+  color: var(--color-accent);
+  opacity: 0.6;
+  cursor: help;
+}
+body.logged-in .sync-badge {
+  display: inline-flex;
 }
 
 /* === Cards === */
