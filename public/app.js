@@ -141,6 +141,10 @@ const i18n = {
     removeFavourite: 'Aus Favoriten entfernen',
     maxFavourites: 'Maximale Anzahl an Favoriten erreicht',
     loginRequiredFavourite: 'Bitte einloggen, um Favoriten zu speichern',
+    priceAge: 'Aktualisiert vor',
+    minutesAgo: 'Min.',
+    hoursAgo: 'Std.',
+    justNow: 'gerade eben',
   },
   en: {
     tabMap: 'Map',
@@ -271,6 +275,10 @@ const i18n = {
     removeFavourite: 'Remove from favourites',
     maxFavourites: 'Maximum number of favourites reached',
     loginRequiredFavourite: 'Please log in to save favourites',
+    priceAge: 'Updated',
+    minutesAgo: 'min ago',
+    hoursAgo: 'h ago',
+    justNow: 'just now',
   }
 };
 
@@ -619,6 +627,9 @@ async function api(url, options = {}) {
   if (response.headers.get('X-Cache')) {
     data._cacheStatus = response.headers.get('X-Cache');
   }
+  if (response.headers.get('X-Data-Timestamp')) {
+    data._dataTimestamp = response.headers.get('X-Data-Timestamp');
+  }
 
   return data;
 }
@@ -768,31 +779,31 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     setupMapZoomGesture();
     setupMapSearch();
 
-    // Reload stations when user pans/zooms the map
+    // Reload stations from cache when user pans/zooms the map
     let moveEndTimer = null;
     state.map.on('moveend', () => {
       clearTimeout(moveEndTimer);
       moveEndTimer = setTimeout(async () => {
         if (!state.map) return;
-        const center = state.map.getCenter();
         const bounds = state.map.getBounds();
-        // Calculate radius from center to corner of visible bounds (in km)
-        const ne = bounds.getNorthEast();
-        const viewRadiusKm = Math.min(25, Math.max(1, Math.round(
-          state.map.distance(center, ne) / 1000
-        )));
-        // Skip if center hasn't moved significantly (< 500m)
-        if (state._lastMapFetchCenter) {
-          const moved = state.map.distance(center, state._lastMapFetchCenter);
-          if (moved < 500 && Math.abs(viewRadiusKm - (state._lastViewRadius || 0)) < 1) return;
+        const south = bounds.getSouth();
+        const west = bounds.getWest();
+        const north = bounds.getNorth();
+        const east = bounds.getEast();
+        // Skip if bounds haven't changed significantly
+        if (state._lastBounds) {
+          const lb = state._lastBounds;
+          const delta = Math.abs(south - lb.s) + Math.abs(west - lb.w)
+            + Math.abs(north - lb.n) + Math.abs(east - lb.e);
+          if (delta < 0.005) return;
         }
-        state._lastMapFetchCenter = center;
-        state._lastViewRadius = viewRadiusKm;
+        state._lastBounds = { s: south, w: west, n: north, e: east };
         try {
-          const result = await api(`/api/stations?lat=${center.lat}&lng=${center.lng}&rad=${viewRadiusKm}&fuel=${state.fuelType}`);
+          const result = await api(`/api/stations?bounds=${south},${west},${north},${east}&fuel=${state.fuelType}`);
           const stations = Array.isArray(result) ? result : [];
           if (stations.length) {
             state.stations = stations;
+            state.dataTimestamp = result._dataTimestamp || null;
             renderStationsOnMap(stations, { skipFitBounds: true, skipRadiusFilter: true });
             renderStationList(stations);
           }
@@ -812,10 +823,14 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     const stations = Array.isArray(result) ? result : [];
     const cacheStatus = result._cacheStatus || 'fresh';
     state.stations = stations;
+    state.dataTimestamp = result._dataTimestamp || null;
     renderStationsOnMap(stations, { skipFitBounds });
     renderStationList(stations);
-    // Mark initial center so moveend doesn't immediately re-fetch
-    if (state.map) state._lastMapFetchCenter = state.map.getCenter();
+    // Mark initial bounds so moveend doesn't immediately re-fetch
+    if (state.map) {
+      const b = state.map.getBounds();
+      state._lastBounds = { s: b.getSouth(), w: b.getWest(), n: b.getNorth(), e: b.getEast() };
+    }
     if (!stations.length) {
       loader.innerHTML = `<span style="font-size:13px;opacity:0.6">${t('noStationsYet')}</span>`;
     } else {
@@ -1436,6 +1451,10 @@ function showStationSheet(station) {
       <span id="sheet-status-text">${station.isOpen ? t('open') : t('closed')}</span>
       ${station.dist ? `<span style="margin-left:auto;color:var(--color-hint)">${station.distApprox ? '~' : ''}${station.dist.toFixed(1)} ${t('kmAway')}</span>` : ''}
     </div>
+    ${state.dataTimestamp ? `<div class="sheet-info-row" style="color:var(--color-hint)">
+      <svg class="sheet-info-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+      <span>${formatDataAge(state.dataTimestamp)}</span>
+    </div>` : ''}
     <div class="sheet-hours-section" id="sheet-hours-section"></div>
     <div class="sheet-nav-buttons${isAndroid ? ' android-only' : ''}">
       <a href="${gmapsUrl}" target="_blank" class="sheet-nav-btn gmaps">
@@ -2946,6 +2965,16 @@ function showToast(message) {
 function fixEnc(s) { return (s || '').replace(/\x81/g, 'ü').replace(/\x9A/g, 'Ü').replace(/\x84/g, 'ä').replace(/\x8E/g, 'Ä').replace(/\x94/g, 'ö').replace(/\x99/g, 'Ö').replace(/\xE1/g, 'ß'); }
 function formatPrice(price) { return Number(price).toFixed(2).replace('.', ',') + '€'; }
 function formatPriceParts(price) { return { main: Number(price).toFixed(2).replace('.', ','), decimal: '' }; }
+
+function formatDataAge(isoTimestamp) {
+  if (!isoTimestamp) return null;
+  const seconds = Math.round((Date.now() - new Date(isoTimestamp).getTime()) / 1000);
+  if (seconds < 60) return t('justNow');
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${t('priceAge')} ${minutes} ${t('minutesAgo')}`;
+  const hours = Math.round(minutes / 60);
+  return `${t('priceAge')} ${hours} ${t('hoursAgo')}`;
+}
 
 if (document.getElementById('app')) {
   init();

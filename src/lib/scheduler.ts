@@ -1,6 +1,7 @@
 import { loadRepoConfig } from '@/config';
-import { measureLocation } from '@/lib/measure';
+import { measureLocation, fetchStationsLive } from '@/lib/measure';
 import { setCachedStations } from '@/lib/station-cache';
+import { generateGermanyGrid, GRID_POINT_COUNT } from '@/lib/grid';
 
 export interface LocationScanInfo {
   timestamp: string;
@@ -25,6 +26,14 @@ export interface ScanLogEntry {
   error?: string;
 }
 
+export interface GridScanStatus {
+  scanning: boolean;
+  progress: string | null;
+  lastFullScanAt: string | null;
+  totalStationsCached: number;
+  cycleCount: number;
+}
+
 export interface SchedulerStatus {
   running: boolean;
   scanning: boolean;
@@ -36,6 +45,7 @@ export interface SchedulerStatus {
   locationScans: Record<string, LocationScanInfo>;
   scanLog: ScanLogEntry[];
   errors: string[];
+  grid: GridScanStatus;
 }
 
 const MAX_ERRORS = 20;
@@ -56,19 +66,33 @@ class ScanScheduler {
   private _scanLog: ScanLogEntry[] = [];
   private recentErrors: string[] = [];
 
+  // Grid scan state
+  private _gridScanning = false;
+  private _gridProgress: string | null = null;
+  private _gridLastFullScanAt: Date | null = null;
+  private _gridTotalStations = 0;
+  private _gridCycleCount = 0;
+  private _gridTimer: ReturnType<typeof setTimeout> | null = null;
+
   start(): void {
     if (this.timer) return;
     console.log('[Scheduler] Starting scan scheduler (tick every 60s)');
     this.timer = setInterval(() => this.tick(), 60_000);
     this.tick();
+    // Start grid scan after a short delay
+    this._gridTimer = setTimeout(() => this.startGridScan(), 10_000);
   }
 
   stop(): void {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
-      console.log('[Scheduler] Stopped');
     }
+    if (this._gridTimer) {
+      clearTimeout(this._gridTimer);
+      this._gridTimer = null;
+    }
+    console.log('[Scheduler] Stopped');
   }
 
   restart(): void {
@@ -117,6 +141,13 @@ class ScanScheduler {
       locationScans: { ...this.locationScans },
       scanLog: [...this._scanLog],
       errors: [...this.recentErrors],
+      grid: {
+        scanning: this._gridScanning,
+        progress: this._gridProgress,
+        lastFullScanAt: this._gridLastFullScanAt?.toISOString() ?? null,
+        totalStationsCached: this._gridTotalStations,
+        cycleCount: this._gridCycleCount,
+      },
     };
   }
 
@@ -214,6 +245,75 @@ class ScanScheduler {
       this._scanning = false;
       this._currentLocation = null;
       this._scanProgress = null;
+    }
+  }
+
+  private async startGridScan(): Promise<void> {
+    const config = loadRepoConfig();
+    const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
+    const fuelType = config.fuel_type || 'diesel';
+    if (!apiKey) {
+      console.log('[Grid] No API key configured, skipping grid scan');
+      return;
+    }
+
+    // Run grid scan continuously
+    while (this.timer) {
+      await this.runGridCycle(apiKey, fuelType);
+      // Wait 5 minutes between full cycles
+      if (this.timer) await sleep(5 * 60_000);
+    }
+  }
+
+  private async runGridCycle(apiKey: string, fuelType: string): Promise<void> {
+    const grid = generateGermanyGrid();
+    this._gridScanning = true;
+    this._gridTotalStations = 0;
+    console.log(`[Grid] Starting grid scan: ${grid.length} points, fuel type: ${fuelType}`);
+
+    try {
+      for (let i = 0; i < grid.length; i++) {
+        if (!this.timer) break; // Stop if scheduler was stopped
+        const point = grid[i];
+        this._gridProgress = `${i + 1}/${grid.length}`;
+
+        try {
+          const stations = await fetchStationsLive({
+            apiKey,
+            lat: point.lat,
+            lng: point.lng,
+            radiusKm: 25,
+            fuelType,
+          });
+
+          if (stations.length > 0) {
+            setCachedStations(point.id, {
+              stations,
+              lat: point.lat,
+              lng: point.lng,
+              radiusKm: 25,
+              fuelType,
+            });
+            this._gridTotalStations += stations.length;
+          }
+        } catch (err) {
+          const msg = `[Grid] ${point.id}: ${err instanceof Error ? err.message : String(err)}`;
+          console.error(msg);
+          this.addError(msg);
+        }
+
+        // Wait 12 seconds between API calls to avoid rate limiting
+        if (i < grid.length - 1 && this.timer) {
+          await sleep(12_000);
+        }
+      }
+
+      this._gridLastFullScanAt = new Date();
+      this._gridCycleCount++;
+      console.log(`[Grid] Grid scan complete: ${this._gridTotalStations} total station entries cached`);
+    } finally {
+      this._gridScanning = false;
+      this._gridProgress = null;
     }
   }
 

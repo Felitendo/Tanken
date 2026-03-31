@@ -134,6 +134,53 @@ export function getAllCachedLocations(): Array<{ locationId: string; stationCoun
   return result;
 }
 
+/**
+ * Find all cached stations within a bounding box.
+ * Merges stations from overlapping grid cells and deduplicates by station ID.
+ * Returns null if no cached data covers the requested area.
+ */
+export function findStationsInBounds(
+  bounds: { north: number; south: number; east: number; west: number },
+  fuelType: string,
+): { stations: CachedStation[]; oldestTimestamp: number; newestTimestamp: number } | null {
+  const merged = new Map<string, { station: CachedStation; timestamp: number }>();
+  let oldest = Infinity;
+  let newest = 0;
+  let found = false;
+
+  for (const entry of getCache().values()) {
+    if (entry.fuelType !== fuelType) continue;
+    // Include cache entries whose center + radius overlaps the bounding box
+    const margin = entry.radiusKm / 111; // rough degree margin
+    if (
+      entry.lat + margin < bounds.south ||
+      entry.lat - margin > bounds.north ||
+      entry.lng + margin < bounds.west ||
+      entry.lng - margin > bounds.east
+    ) continue;
+
+    found = true;
+    if (entry.timestamp < oldest) oldest = entry.timestamp;
+    if (entry.timestamp > newest) newest = entry.timestamp;
+
+    for (const s of entry.stations) {
+      // Only include stations actually within the viewport
+      if (s.lat < bounds.south || s.lat > bounds.north || s.lng < bounds.west || s.lng > bounds.east) continue;
+      const existing = merged.get(s.id);
+      if (!existing || entry.timestamp > existing.timestamp) {
+        merged.set(s.id, { station: s, timestamp: entry.timestamp });
+      }
+    }
+  }
+
+  if (!found) return null;
+  return {
+    stations: Array.from(merged.values()).map(e => e.station),
+    oldestTimestamp: oldest === Infinity ? Date.now() : oldest,
+    newestTimestamp: newest || Date.now(),
+  };
+}
+
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
