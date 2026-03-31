@@ -767,6 +767,38 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
 
     setupMapZoomGesture();
     setupMapSearch();
+
+    // Reload stations when user pans/zooms the map
+    let moveEndTimer = null;
+    state.map.on('moveend', () => {
+      clearTimeout(moveEndTimer);
+      moveEndTimer = setTimeout(async () => {
+        if (!state.map) return;
+        const center = state.map.getCenter();
+        const bounds = state.map.getBounds();
+        // Calculate radius from center to corner of visible bounds (in km)
+        const ne = bounds.getNorthEast();
+        const viewRadiusKm = Math.min(25, Math.max(1, Math.round(
+          state.map.distance(center, ne) / 1000
+        )));
+        // Skip if center hasn't moved significantly (< 500m)
+        if (state._lastMapFetchCenter) {
+          const moved = state.map.distance(center, state._lastMapFetchCenter);
+          if (moved < 500 && Math.abs(viewRadiusKm - (state._lastViewRadius || 0)) < 1) return;
+        }
+        state._lastMapFetchCenter = center;
+        state._lastViewRadius = viewRadiusKm;
+        try {
+          const result = await api(`/api/stations?lat=${center.lat}&lng=${center.lng}&rad=${viewRadiusKm}&fuel=${state.fuelType}`);
+          const stations = Array.isArray(result) ? result : [];
+          if (stations.length) {
+            state.stations = stations;
+            renderStationsOnMap(stations, { skipFitBounds: true, skipRadiusFilter: true });
+            renderStationList(stations);
+          }
+        } catch {}
+      }, 400);
+    });
   }
 
   const loader = document.getElementById('map-loading');
@@ -782,6 +814,8 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     state.stations = stations;
     renderStationsOnMap(stations, { skipFitBounds });
     renderStationList(stations);
+    // Mark initial center so moveend doesn't immediately re-fetch
+    if (state.map) state._lastMapFetchCenter = state.map.getCenter();
     if (!stations.length) {
       loader.innerHTML = `<span style="font-size:13px;opacity:0.6">${t('noStationsYet')}</span>`;
     } else {
@@ -806,7 +840,7 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
   }
 }
 
-function renderStationsOnMap(stations, { skipFitBounds = false } = {}) {
+function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter = false } = {}) {
   state.markers.forEach(m => state.map.removeLayer(m));
   state.markers = [];
   if (state.userMarker) {
@@ -816,9 +850,9 @@ function renderStationsOnMap(stations, { skipFitBounds = false } = {}) {
 
   if (!stations.length) return;
 
-  // Filter by user-set radius
+  // Filter by user-set radius (skip when loading for viewport)
   const radiusKm = state.radiusKm || 25;
-  const filtered = stations.filter(s => !s.dist || s.dist <= radiusKm);
+  const filtered = skipRadiusFilter ? stations : stations.filter(s => !s.dist || s.dist <= radiusKm);
 
   const prices = filtered.filter(s => s.price).map(s => s.price);
   const minPrice = Math.min(...prices);
