@@ -31,11 +31,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=JSON.parse(localStorage.getItem('tank_settings')||'{}').theme;if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t)}catch(e){}}())` }} />
       <link rel="stylesheet" href="/style.css" />
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
       <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       <link rel="icon" href="/favicon.ico" sizes="32x32" />
       <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
       {children}
       <Script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" strategy="beforeInteractive" />
+      <Script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" strategy="beforeInteractive" />
       <Script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" strategy="beforeInteractive" />
       <Script src="/web-haptics.js" strategy="beforeInteractive" />
       <Script src="/app.js" strategy="afterInteractive" />

@@ -3,7 +3,7 @@ export async function register() {
     const { loadRepoConfig } = await import('./config');
     const { getScheduler } = await import('./lib/scheduler');
     const config = loadRepoConfig();
-    if (config.api_key && (config.locations ?? []).length > 0) {
+    if (config.api_key) {
       getScheduler().start();
     }
   }

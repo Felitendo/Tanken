@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Fuel, KeyRound, LogOut, Mail, MapPin, Plus, Save, Search, Shield, Settings, Trash2, UserPlus } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Fuel, KeyRound, LogOut, Mail, Save, Shield, Settings, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,15 +9,6 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
-interface AdminLocation {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-  radiusKm: number;
-  fuelType: string;
-}
 
 interface AdminConfig {
   apiKey: string;
@@ -44,7 +35,6 @@ interface AdminConfig {
     pass: string;
     from: string;
   };
-  locations: AdminLocation[];
 }
 
 interface AdminStatus {
@@ -52,45 +42,6 @@ interface AdminStatus {
   authenticated: boolean;
   user?: { username?: string; displayName?: string };
   config?: AdminConfig;
-}
-
-interface SchedulerStatus {
-  running: boolean;
-  scanning: boolean;
-  currentLocation: string | null;
-  scanProgress: string | null;
-  lastCycleAt: string | null;
-  nextCycleAt: string | null;
-  cycleCount: number;
-  locationScans: Record<string, {
-    timestamp: string;
-    stationCount: number;
-    openCount: number;
-    minPrice: number | null;
-    avgPrice: number | null;
-    maxPrice: number | null;
-    cheapestStation: string | null;
-  }>;
-  scanLog: Array<{
-    timestamp: string;
-    locationId: string;
-    locationName: string;
-    stationCount: number;
-    openCount: number;
-    minPrice: number | null;
-    avgPrice: number | null;
-    maxPrice: number | null;
-    cheapestStation: string | null;
-    error?: string;
-  }>;
-  errors: string[];
-}
-
-interface NominatimResult {
-  place_id: number;
-  display_name: string;
-  lat: string;
-  lon: string;
 }
 
 type FeedbackType = 'success' | 'error' | 'info';
@@ -105,7 +56,6 @@ const defaultConfig: AdminConfig = {
   thresholds: { goodBelowAvgCents: 3, okayBelowAvgCents: 1 },
   oidc: { issuerUrl: '', clientId: '', clientSecret: '', scope: 'openid profile email', usernameClaim: 'preferred_username', pictureClaim: 'picture', name: '' },
   smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
-  locations: [],
 };
 
 async function api<T = unknown>(url: string, options?: RequestInit): Promise<T> {
@@ -118,346 +68,7 @@ async function api<T = unknown>(url: string, options?: RequestInit): Promise<T> 
   return payload as T;
 }
 
-function generateLocationId(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 40);
-  return `${slug}-${Date.now().toString(36)}`;
-}
 
-function LocationsSection({
-  locations,
-  defaultFuelType,
-  defaultRadius,
-  onChange,
-}: {
-  locations: AdminLocation[];
-  defaultFuelType: string;
-  defaultRadius: number;
-  onChange: (locations: AdminLocation[]) => void;
-}) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<NominatimResult[]>([]);
-  const [searching, setSearching] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleSearch = useCallback(async (query: string) => {
-    if (query.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    setSearching(true);
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&accept-language=de`,
-        { headers: { 'User-Agent': 'Tanken-Admin/1.0' } }
-      );
-      const data: NominatimResult[] = await res.json();
-      setSearchResults(data);
-    } catch {
-      setSearchResults([]);
-    } finally {
-      setSearching(false);
-    }
-  }, []);
-
-  const handleSearchInput = useCallback((value: string) => {
-    setSearchQuery(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => handleSearch(value), 400);
-  }, [handleSearch]);
-
-  const addLocation = useCallback((result: NominatimResult) => {
-    const name = result.display_name.split(',').slice(0, 2).join(',').trim();
-    const newLoc: AdminLocation = {
-      id: generateLocationId(name),
-      name,
-      lat: parseFloat(result.lat),
-      lng: parseFloat(result.lon),
-      radiusKm: defaultRadius,
-      fuelType: defaultFuelType,
-    };
-    onChange([...locations, newLoc]);
-    setSearchQuery('');
-    setSearchResults([]);
-  }, [locations, onChange, defaultFuelType, defaultRadius]);
-
-  const removeLocation = useCallback((id: string) => {
-    onChange(locations.filter(l => l.id !== id));
-  }, [locations, onChange]);
-
-  const updateLocation = useCallback((id: string, patch: Partial<AdminLocation>) => {
-    onChange(locations.map(l => l.id === id ? { ...l, ...patch } : l));
-  }, [locations, onChange]);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-        <MapPin className="h-4 w-4" />
-        Scan-Standorte
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Standorte hinzufügen, die automatisch nach Preisen gescannt werden. Zwischen den Abfragen wird mindestens 1 Minute gewartet.
-      </p>
-
-      {/* Search */}
-      <div className="space-y-2">
-        <div className="flex gap-2">
-          <Input
-            placeholder="Ort suchen, z.B. München..."
-            value={searchQuery}
-            onChange={(e) => handleSearchInput(e.target.value)}
-          />
-          <Button type="button" variant="outline" size="icon" onClick={() => handleSearch(searchQuery)} disabled={searching || searchQuery.length < 2}>
-            <Search className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {searchResults.length > 0 && (
-          <div className="border rounded-lg divide-y bg-card">
-            {searchResults.map((result) => (
-              <div key={result.place_id} className="flex items-center justify-between gap-2 px-3 py-2">
-                <div className="min-w-0">
-                  <p className="text-sm truncate">{result.display_name}</p>
-                  <p className="text-xs text-muted-foreground">{parseFloat(result.lat).toFixed(4)}, {parseFloat(result.lon).toFixed(4)}</p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => addLocation(result)}
-                  disabled={locations.some(l => Math.abs(l.lat - parseFloat(result.lat)) < 0.001 && Math.abs(l.lng - parseFloat(result.lon)) < 0.001)}
-                >
-                  <Plus className="h-3 w-3" />
-                  Hinzufügen
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Location list */}
-      {locations.length === 0 ? (
-        <p className="text-sm text-muted-foreground italic">Keine Standorte konfiguriert. Suche oben nach einem Ort.</p>
-      ) : (
-        <div className="space-y-3">
-          {locations.map((loc) => (
-            <div key={loc.id} className="border rounded-lg p-3 bg-card space-y-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-medium text-sm">{loc.name}</p>
-                  <p className="text-xs text-muted-foreground">{loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</p>
-                </div>
-                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeLocation(loc.id)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Radius (km)</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={25}
-                    value={loc.radiusKm}
-                    onChange={(e) => updateLocation(loc.id, { radiusKm: Math.max(1, Math.min(25, Number(e.target.value) || 10)) })}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Kraftstoff</Label>
-                  <Select value={loc.fuelType} onValueChange={(v) => updateLocation(loc.id, { fuelType: v })}>
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="diesel">Diesel</SelectItem>
-                      <SelectItem value="e5">Super E5</SelectItem>
-                      <SelectItem value="e10">Super E10</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SchedulerStatusBadge({ locations }: { locations: AdminLocation[] }) {
-  const [status, setStatus] = useState<SchedulerStatus | null>(null);
-  const [scanningNow, setScanningNow] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const data = await api<SchedulerStatus>('/api/admin/scheduler');
-        if (!cancelled) {
-          setStatus(data);
-          if (!data.scanning) setScanningNow(false);
-        }
-      } catch {
-        // ignore
-      }
-    }
-    load();
-    const interval = setInterval(load, 5_000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, []);
-
-  const handleToggle = async () => {
-    if (!status) return;
-    try {
-      const result = await api<{ status: SchedulerStatus }>('/api/admin/scheduler', {
-        method: 'POST',
-        body: JSON.stringify({ action: status.running ? 'stop' : 'start' }),
-      });
-      setStatus(result.status);
-    } catch {
-      // ignore
-    }
-  };
-
-  const handleScanNow = async () => {
-    setScanningNow(true);
-    try {
-      const result = await api<{ status: SchedulerStatus }>('/api/admin/scheduler', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'scan-now' }),
-      });
-      setStatus(result.status);
-    } catch {
-      setScanningNow(false);
-    }
-  };
-
-  const locName = (id: string) => locations.find(l => l.id === id)?.name ?? id;
-
-  const fmtTime = (iso: string) => {
-    try { return new Date(iso).toLocaleString('de-DE'); } catch { return iso; }
-  };
-
-  const fmtRelative = (iso: string) => {
-    try {
-      const diff = Date.now() - new Date(iso).getTime();
-      if (diff < 60_000) return 'gerade eben';
-      if (diff < 3_600_000) return `vor ${Math.floor(diff / 60_000)} Min.`;
-      if (diff < 86_400_000) return `vor ${Math.floor(diff / 3_600_000)} Std.`;
-      return fmtTime(iso);
-    } catch { return iso; }
-  };
-
-  if (!status) return null;
-
-  const isScanning = status.scanning || scanningNow;
-
-  return (
-    <div className="border rounded-lg bg-card overflow-hidden">
-      {/* Header row */}
-      <div className="flex items-center gap-3 p-3">
-        <div className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${status.running ? (isScanning ? 'bg-yellow-500 animate-pulse' : 'bg-green-500') : 'bg-gray-400'}`} />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium">
-            Scheduler: {status.running ? (isScanning ? 'Scannt...' : 'Aktiv') : 'Gestoppt'}
-          </p>
-          {isScanning && status.currentLocation && (
-            <p className="text-xs text-muted-foreground">
-              {status.scanProgress} — {status.currentLocation}
-            </p>
-          )}
-        </div>
-        <div className="flex gap-1.5 flex-shrink-0">
-          <Button type="button" variant="outline" size="sm" onClick={handleScanNow} disabled={isScanning || locations.length === 0}>
-            {isScanning ? 'Scannt...' : 'Jetzt scannen'}
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={handleToggle}>
-            {status.running ? 'Stoppen' : 'Starten'}
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="border-t px-3 py-2 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <div>Zyklen: <span className="text-foreground font-medium">{status.cycleCount}</span></div>
-        <div>Standorte: <span className="text-foreground font-medium">{locations.length}</span></div>
-        {status.lastCycleAt && (
-          <div>Letzter Zyklus: <span className="text-foreground font-medium">{fmtRelative(status.lastCycleAt)}</span></div>
-        )}
-        {status.nextCycleAt && !isScanning && (
-          <div>Nächster: <span className="text-foreground font-medium">{fmtTime(status.nextCycleAt)}</span></div>
-        )}
-      </div>
-
-      {/* Per-location last scan */}
-      {Object.keys(status.locationScans).length > 0 && (
-        <div className="border-t px-3 py-2">
-          <p className="text-xs font-medium text-muted-foreground mb-1">Letzte Scans pro Standort</p>
-          <div className="space-y-1.5">
-            {Object.entries(status.locationScans).map(([id, info]) => (
-              <div key={id} className="text-xs border rounded p-2 bg-muted/30">
-                <div className="flex justify-between gap-2 mb-0.5">
-                  <span className="font-medium text-foreground truncate">{locName(id)}</span>
-                  <span className="text-muted-foreground flex-shrink-0">{fmtRelative(info.timestamp)}</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-0.5 text-muted-foreground">
-                  <div>Offen: <span className="text-foreground font-medium">{info.openCount}/{info.stationCount}</span></div>
-                  {info.minPrice != null && (
-                    <div>Min: <span className="text-green-600 font-medium">{info.minPrice.toFixed(3)}€</span></div>
-                  )}
-                  {info.avgPrice != null && (
-                    <div>Avg: <span className="text-foreground font-medium">{info.avgPrice.toFixed(3)}€</span></div>
-                  )}
-                  {info.maxPrice != null && (
-                    <div>Max: <span className="text-red-500 font-medium">{info.maxPrice.toFixed(3)}€</span></div>
-                  )}
-                </div>
-                {info.cheapestStation && (
-                  <div className="text-muted-foreground mt-0.5">Günstigste: <span className="text-foreground">{info.cheapestStation}</span></div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Scan log */}
-      {status.scanLog && status.scanLog.length > 0 && (
-        <div className="border-t px-3 py-2">
-          <p className="text-xs font-medium text-muted-foreground mb-1">Scan-Verlauf (letzte {status.scanLog.length})</p>
-          <div className="space-y-0.5 max-h-48 overflow-y-auto">
-            {status.scanLog.slice().reverse().map((entry, i) => (
-              <div key={i} className={`text-xs font-mono break-all ${entry.error ? 'text-destructive' : 'text-muted-foreground'}`}>
-                {fmtTime(entry.timestamp)} — {entry.locationName}
-                {entry.error
-                  ? ` — Fehler: ${entry.error}`
-                  : ` — ${entry.openCount}/${entry.stationCount} offen, ${entry.minPrice?.toFixed(3)}€–${entry.maxPrice?.toFixed(3)}€, Günstigste: ${entry.cheapestStation}`
-                }
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Recent errors */}
-      {status.errors.length > 0 && (
-        <div className="border-t px-3 py-2">
-          <p className="text-xs font-medium text-destructive mb-1">Letzte Fehler ({status.errors.length})</p>
-          <div className="space-y-0.5 max-h-32 overflow-y-auto">
-            {status.errors.slice().reverse().map((err, i) => (
-              <p key={i} className="text-xs text-muted-foreground font-mono break-all">{err}</p>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function ConfigFields({
   config,
@@ -468,7 +79,6 @@ function ConfigFields({
   testingEmail,
   testEmailRecipient,
   onTestEmailRecipientChange,
-  showScheduler,
 }: {
   config: AdminConfig;
   onChange: (patch: Partial<AdminConfig>) => void;
@@ -478,7 +88,6 @@ function ConfigFields({
   testingEmail?: boolean;
   testEmailRecipient?: string;
   onTestEmailRecipientChange?: (value: string) => void;
-  showScheduler?: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -593,17 +202,6 @@ function ConfigFields({
           </Button>
         )}
       </div>
-
-      <Separator />
-
-      {/* Scan Locations */}
-      <LocationsSection
-        locations={config.locations}
-        defaultFuelType={config.fuelType}
-        defaultRadius={config.radiusKm}
-        onChange={(locations) => onChange({ locations })}
-      />
-      {showScheduler && config.locations.length > 0 && <SchedulerStatusBadge locations={config.locations} />}
 
       <Separator />
 
@@ -812,7 +410,7 @@ export default function AdminPage() {
       const data = await api<AdminStatus>('/api/admin/status');
       setStatus(data);
       if (data.config) {
-        setConfig({ ...defaultConfig, ...data.config, locations: data.config.locations ?? [] });
+        setConfig({ ...defaultConfig, ...data.config });
       }
     } catch (err) {
       showFeedback((err as Error).message || 'Admin Panel konnte nicht geladen werden.', 'error');
@@ -879,7 +477,7 @@ export default function AdminPage() {
         body: JSON.stringify(config),
       });
       if (result.config) {
-        setConfig({ ...defaultConfig, ...result.config, locations: result.config.locations ?? [] });
+        setConfig({ ...defaultConfig, ...result.config });
       }
       showFeedback('Konfiguration gespeichert.', 'success');
     } catch (err) {
@@ -1096,7 +694,7 @@ export default function AdminPage() {
             </CardHeader>
             <form onSubmit={handleSaveConfig}>
               <CardContent>
-                <ConfigFields config={config} onChange={handleConfigChange} onTestApiKey={handleTestApiKey} testingApiKey={testingApiKey} onTestEmail={handleTestEmail} testingEmail={testingEmail} testEmailRecipient={testEmailRecipient} onTestEmailRecipientChange={setTestEmailRecipient} showScheduler />
+                <ConfigFields config={config} onChange={handleConfigChange} onTestApiKey={handleTestApiKey} testingApiKey={testingApiKey} onTestEmail={handleTestEmail} testingEmail={testingEmail} testEmailRecipient={testEmailRecipient} onTestEmailRecipientChange={setTestEmailRecipient} />
               </CardContent>
               <CardFooter className="justify-end">
                 <Button type="submit" disabled={submitting}>

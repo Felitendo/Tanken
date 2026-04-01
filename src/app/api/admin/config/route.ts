@@ -37,7 +37,7 @@ export async function PUT(request: NextRequest) {
 
   // Restart or stop scheduler based on new config
   const scheduler = getScheduler();
-  if (nextConfig.api_key && (nextConfig.locations ?? []).length > 0) {
+  if (nextConfig.api_key) {
     scheduler.restart();
   } else {
     scheduler.stop();

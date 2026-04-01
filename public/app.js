@@ -346,6 +346,7 @@ const state = {
   tabOrder: ['map', 'history', 'stats', 'settings'],
   map: null,
   markers: [],
+  clusterGroup: null,
   userMarker: null,
   chart: null,
   hourChart: null,
@@ -732,16 +733,9 @@ function showLocationBanner() {
 }
 
 function getActiveCoords() {
-  if (state.activeLocation === 'gps' && state.userLat && state.userLng) {
+  if (state.userLat && state.userLng) {
     return { lat: state.userLat, lng: state.userLng };
   }
-  const locs = state.config?.locations || [];
-  // Find by ID if activeLocation is a location ID
-  const loc = locs.find(l => l.id === state.activeLocation);
-  if (loc && loc.lat && loc.lng) return { lat: loc.lat, lng: loc.lng };
-  // Fall back to first configured location
-  const first = locs[0];
-  if (first && first.lat && first.lng) return { lat: first.lat, lng: first.lng };
   return { lat: 48.2453, lng: 12.5225 };
 }
 
@@ -856,6 +850,11 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
 }
 
 function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter = false } = {}) {
+  // Remove previous cluster group or individual markers
+  if (state.clusterGroup) {
+    state.map.removeLayer(state.clusterGroup);
+    state.clusterGroup = null;
+  }
   state.markers.forEach(m => state.map.removeLayer(m));
   state.markers = [];
   if (state.userMarker) {
@@ -881,8 +880,41 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
       iconAnchor: [7, 7]
     });
     state.userMarker = L.marker([state.userLat, state.userLng], { icon: userIcon }).addTo(state.map);
-    state.markers.push(state.userMarker);
   }
+
+  // Use MarkerClusterGroup if available, otherwise fall back to direct markers
+  const useCluster = typeof L.markerClusterGroup === 'function';
+  const cluster = useCluster ? L.markerClusterGroup({
+    maxClusterRadius: 50,
+    disableClusteringAtZoom: 14,
+    spiderfyOnMaxZoom: false,
+    showCoverageOnHover: false,
+    iconCreateFunction: function(clusterObj) {
+      const count = clusterObj.getChildCount();
+      // Compute average price for the cluster
+      const childMarkers = clusterObj.getAllChildMarkers();
+      let totalPrice = 0, priceCount = 0;
+      childMarkers.forEach(function(m) {
+        if (m._stationPrice) { totalPrice += m._stationPrice; priceCount++; }
+      });
+      const avgPrice = priceCount > 0 ? totalPrice / priceCount : 0;
+      const avgRatio = (maxPrice > minPrice && avgPrice > 0) ? (avgPrice - minPrice) / (maxPrice - minPrice) : 0;
+      const color = priceColor(avgRatio);
+      const pParts = avgPrice > 0 ? formatPriceParts(avgPrice) : null;
+      const size = count > 20 ? 56 : count > 5 ? 48 : 40;
+      return L.divIcon({
+        className: '',
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.8)">
+          <span style="font-size:${size > 48 ? 14 : 12}px;line-height:1">${count}</span>
+          ${pParts ? `<span style="font-size:${size > 48 ? 11 : 10}px;line-height:1;opacity:0.9">~${pParts.main}<sup style="font-size:7px">${pParts.decimal}</sup></span>` : ''}
+        </div>`,
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2]
+      });
+    }
+  }) : null;
+
+  const stationMarkers = [];
 
   filtered.forEach((s) => {
     if (!s.price || !s.isOpen) return;
@@ -902,7 +934,6 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
     });
 
     const marker = L.marker([s.lat, s.lng], { icon })
-      .addTo(state.map)
       .on('click', () => {
         haptic('light');
         if (state.map && s.lat && s.lng) {
@@ -912,11 +943,26 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
         showStationSheet(s);
       });
 
-    state.markers.push(marker);
+    marker._stationPrice = s.price;
+
+    if (cluster) {
+      cluster.addLayer(marker);
+    } else {
+      marker.addTo(state.map);
+    }
+    stationMarkers.push(marker);
   });
 
-  if (state.markers.length > 1) {
-    const group = L.featureGroup(state.markers);
+  if (cluster) {
+    state.map.addLayer(cluster);
+    state.clusterGroup = cluster;
+  }
+
+  state.markers = stationMarkers;
+
+  const allMarkers = state.userMarker ? [state.userMarker, ...stationMarkers] : stationMarkers;
+  if (allMarkers.length > 1) {
+    const group = L.featureGroup(allMarkers);
     const bounds = group.getBounds().pad(0.1);
     state.defaultBounds = bounds;
     if (!skipFitBounds) state.map.fitBounds(bounds);
@@ -1819,15 +1865,6 @@ async function loadLocationPickers() {
     const locations = res && res.locations ? res.locations : [];
     state.availableLocations = locations;
 
-    // Also get location names from config
-    let configLocations = {};
-    try {
-      const cfg = await api('/api/config');
-      if (cfg && cfg.locations) {
-        cfg.locations.forEach(l => { configLocations[l.id] = l.name; });
-      }
-    } catch { /* ignore */ }
-
     ['history-location-picker', 'stats-location-picker'].forEach(id => {
       const picker = document.getElementById(id);
       if (!picker) return;
@@ -1836,7 +1873,7 @@ async function loadLocationPickers() {
       locations.forEach(locId => {
         const opt = document.createElement('option');
         opt.value = locId;
-        opt.textContent = configLocations[locId] || locId;
+        opt.textContent = locId;
         picker.appendChild(opt);
       });
       picker.value = state.selectedLocation;

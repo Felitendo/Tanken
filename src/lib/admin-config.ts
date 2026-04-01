@@ -31,14 +31,6 @@ export const adminConfigSchema = z.object({
     pass: z.string().default(''),
     from: z.string().default('')
   }),
-  locations: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    lat: z.coerce.number(),
-    lng: z.coerce.number(),
-    radiusKm: z.coerce.number().min(1).max(25).default(10),
-    fuelType: z.enum(['diesel', 'e5', 'e10']).default('diesel'),
-  })).default([])
 });
 
 export type AdminConfigInput = z.infer<typeof adminConfigSchema>;
@@ -76,14 +68,6 @@ export function toAdminConfig(config: RepoConfig): AdminConfigInput {
       pass: config.smtp?.pass || '',
       from: config.smtp?.from || ''
     },
-    locations: (config.locations ?? []).map(loc => ({
-      id: loc.id,
-      name: loc.name,
-      lat: loc.lat,
-      lng: loc.lng,
-      radiusKm: loc.radius_km,
-      fuelType: loc.fuel_type,
-    }))
   };
 }
 
@@ -119,14 +103,6 @@ export function fromAdminConfig(input: AdminConfigInput, current: RepoConfig = l
         pass: input.smtp.pass,
         from: input.smtp.from
       },
-      locations: input.locations.map(loc => ({
-        id: loc.id,
-        name: loc.name,
-        lat: loc.lat,
-        lng: loc.lng,
-        radius_km: loc.radiusKm,
-        fuel_type: loc.fuelType as 'diesel' | 'e5' | 'e10',
-      }))
     },
     current
   );
