@@ -9,7 +9,7 @@ const i18n = {
     loadingStations: 'Tankstellen laden…',
     noOpenStations: 'Keine offenen Tankstellen gefunden',
     showAll: 'Alle anzeigen',
-    noStationsYet: 'Noch keine Stationsdaten — bitte zuerst einen Scan im Admin-Panel starten',
+    noStationsYet: 'Keine Tankstellen in der Nähe gefunden',
     errorLoading: '❌ Fehler beim Laden',
     pricesStale: 'Preise evtl. veraltet (API nicht erreichbar)',
     pricesStaleConnection: 'Preise evtl. veraltet (Verbindungsfehler)',
@@ -154,7 +154,7 @@ const i18n = {
     loadingStations: 'Loading stations…',
     noOpenStations: 'No open gas stations found',
     showAll: 'Show all',
-    noStationsYet: 'No station data yet — please start a scan in the admin panel first',
+    noStationsYet: 'No gas stations found nearby',
     errorLoading: '❌ Error loading',
     pricesStale: 'Prices may be outdated (API unreachable)',
     pricesStaleConnection: 'Prices may be outdated (connection error)',
@@ -736,7 +736,8 @@ function getActiveCoords() {
   if (state.userLat && state.userLng) {
     return { lat: state.userLat, lng: state.userLng };
   }
-  return { lat: 48.2453, lng: 12.5225 };
+  // Fallback: Berlin
+  return { lat: 52.52, lng: 13.405 };
 }
 
 function showStationSkeletons(count = 5) {
