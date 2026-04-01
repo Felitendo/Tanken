@@ -38,6 +38,72 @@ export async function fetchStationsLive(params: {
   }
 }
 
+// ─── E-Control (Austria) ─────────────────────────────────────────────
+
+interface EControlStation {
+  id: number;
+  name: string;
+  location: {
+    address: string;
+    postalCode: string;
+    city: string;
+    latitude: number;
+    longitude: number;
+  };
+  open: boolean;
+  distance: number;
+  prices: Array<{ fuelType: string; amount: number; label: string }>;
+}
+
+/** Map app fuel type to E-Control fuel type code. */
+function toEControlFuel(fuelType: string): string {
+  switch (fuelType) {
+    case 'diesel': return 'DIE';
+    case 'e5': return 'SUP';
+    case 'e10': return 'SUP';
+    default: return 'DIE';
+  }
+}
+
+/**
+ * Fetch stations from E-Control API (Austria). No API key needed.
+ * Returns ~10 nearest stations around the given coordinates.
+ */
+export async function fetchStationsEControl(params: {
+  lat: number;
+  lng: number;
+  fuelType: string;
+}): Promise<CachedStation[]> {
+  const { lat, lng, fuelType } = params;
+  const ecFuel = toEControlFuel(fuelType);
+  try {
+    const url = `https://api.e-control.at/sprit/1.0/search/gas-stations/by-address?latitude=${lat}&longitude=${lng}&fuelType=${ecFuel}&includeClosed=true`;
+    const { data } = await fetchJson<EControlStation[]>(url);
+    if (!Array.isArray(data) || !data.length) return [];
+    return data.map(s => {
+      const price = s.prices?.find(p => p.fuelType === ecFuel);
+      return {
+        id: `at-${s.id}`,
+        name: s.name || '',
+        brand: s.name || '',
+        street: s.location?.address || '',
+        houseNumber: '',
+        postCode: s.location?.postalCode || '',
+        place: s.location?.city || '',
+        lat: s.location?.latitude || 0,
+        lng: s.location?.longitude || 0,
+        dist: s.distance || 0,
+        price: price && price.amount > 0 ? price.amount : null,
+        isOpen: Boolean(s.open),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+// ─── Tankerkönig (Germany) helpers ───────────────────────────────────
+
 function mapStations(stations: Record<string, unknown>[]): CachedStation[] {
   return stations.map(s => ({
     id: String(s.id ?? ''),

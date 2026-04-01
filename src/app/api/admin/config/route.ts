@@ -35,13 +35,9 @@ export async function PUT(request: NextRequest) {
   const nextConfig = fromAdminConfig(parsed.data);
   saveRepoConfig(nextConfig);
 
-  // Restart or stop scheduler based on new config
+  // Always restart scheduler (Austria works without API key)
   const scheduler = getScheduler();
-  if (nextConfig.api_key) {
-    scheduler.restart();
-  } else {
-    scheduler.stop();
-  }
+  scheduler.restart();
 
   return NextResponse.json({
     ok: true,

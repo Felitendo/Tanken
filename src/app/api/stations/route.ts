@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { runtimeConfig } from '@/lib/server-runtime';
 import { findCachedStations, findNearbyCachedStations, getCachedStationsByLocation, findStationsInBounds } from '@/lib/station-cache';
-import { fetchStationsLive } from '@/lib/measure';
+import { fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
 import { canMakeLiveCall, recordLiveCall } from '@/lib/rate-limit';
 import { enrichWithDrivingDistances } from '@/lib/ors';
 
@@ -73,7 +73,16 @@ export async function GET(request: NextRequest) {
   }
 
   // No nearby scanned data — try live API call with user's radius
-  if (runtimeConfig.apiKey && canMakeLiveCall()) {
+  const isAustria = lat >= 46.3 && lat <= 49.1 && lng >= 9.4 && lng <= 17.2;
+  if (isAustria) {
+    // E-Control API (no key needed)
+    const stations = await fetchStationsEControl({ lat, lng, fuelType: fuel });
+    if (stations.length > 0) {
+      const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, stations);
+      return NextResponse.json(enriched, { headers: { 'X-Cache': 'live-at' } });
+    }
+  } else if (runtimeConfig.apiKey && canMakeLiveCall()) {
+    // Tankerkönig API (Germany)
     recordLiveCall();
     const stations = await fetchStationsLive({
       apiKey: runtimeConfig.apiKey,

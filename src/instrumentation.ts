@@ -7,9 +7,7 @@ export async function register() {
     // Restore cached stations from database so they're available immediately
     await restoreCacheFromDb();
 
-    const config = loadRepoConfig();
-    if (config.api_key) {
-      getScheduler().start();
-    }
+    // Always start scheduler — Germany needs API key, Austria works without
+    getScheduler().start();
   }
 }

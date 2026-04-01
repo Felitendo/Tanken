@@ -1,7 +1,7 @@
 import { loadRepoConfig } from '@/config';
-import { measureLocation, fetchStationsLive } from '@/lib/measure';
+import { measureLocation, fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
 import { setCachedStations, getAllCachedLocations } from '@/lib/station-cache';
-import { generateGermanyGrid, GRID_POINT_COUNT } from '@/lib/grid';
+import { generateGermanyGrid, generateAustriaGrid } from '@/lib/grid';
 
 export interface LocationScanInfo {
   timestamp: string;
@@ -277,30 +277,37 @@ class ScanScheduler {
     const config = loadRepoConfig();
     const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
     const fuelType = config.fuel_type || 'diesel';
-    if (!apiKey) {
-      console.log('[Grid] No API key configured, skipping grid scan');
-      return;
-    }
 
     // Run grid scan continuously
     while (this.timer) {
-      await this.runGridCycle(apiKey, fuelType);
+      this._gridTotalStations = 0;
+      // Germany scan (requires API key)
+      if (apiKey) {
+        await this.runDeGridCycle(apiKey, fuelType);
+      }
+      // Austria scan (no API key needed)
+      if (this.timer) {
+        await this.runAtGridCycle(fuelType);
+      }
+
+      this._gridLastFullScanAt = new Date();
+      this._gridCycleCount++;
+
       // Wait 5 minutes between full cycles
       if (this.timer) await sleep(5 * 60_000);
     }
   }
 
-  private async runGridCycle(apiKey: string, fuelType: string): Promise<void> {
+  private async runDeGridCycle(apiKey: string, fuelType: string): Promise<void> {
     const grid = generateGermanyGrid();
     this._gridScanning = true;
-    this._gridTotalStations = 0;
-    console.log(`[Grid] Starting grid scan: ${grid.length} points, fuel type: ${fuelType}`);
+    console.log(`[Grid-DE] Starting Germany scan: ${grid.length} points, fuel type: ${fuelType}`);
 
     try {
       for (let i = 0; i < grid.length; i++) {
-        if (!this.timer) break; // Stop if scheduler was stopped
+        if (!this.timer) break;
         const point = grid[i];
-        this._gridProgress = `${i + 1}/${grid.length}`;
+        this._gridProgress = `DE ${i + 1}/${grid.length}`;
 
         try {
           const stations = await fetchStationsLive({
@@ -322,7 +329,7 @@ class ScanScheduler {
             this._gridTotalStations += stations.length;
           }
         } catch (err) {
-          const msg = `[Grid] ${point.id}: ${err instanceof Error ? err.message : String(err)}`;
+          const msg = `[Grid-DE] ${point.id}: ${err instanceof Error ? err.message : String(err)}`;
           console.error(msg);
           this.addError(msg);
         }
@@ -333,9 +340,54 @@ class ScanScheduler {
         }
       }
 
-      this._gridLastFullScanAt = new Date();
-      this._gridCycleCount++;
-      console.log(`[Grid] Grid scan complete: ${this._gridTotalStations} total station entries cached`);
+      console.log(`[Grid-DE] Germany scan complete`);
+    } finally {
+      this._gridScanning = false;
+      this._gridProgress = null;
+    }
+  }
+
+  private async runAtGridCycle(fuelType: string): Promise<void> {
+    const grid = generateAustriaGrid();
+    this._gridScanning = true;
+    console.log(`[Grid-AT] Starting Austria scan: ${grid.length} points, fuel type: ${fuelType}`);
+
+    try {
+      for (let i = 0; i < grid.length; i++) {
+        if (!this.timer) break;
+        const point = grid[i];
+        this._gridProgress = `AT ${i + 1}/${grid.length}`;
+
+        try {
+          const stations = await fetchStationsEControl({
+            lat: point.lat,
+            lng: point.lng,
+            fuelType,
+          });
+
+          if (stations.length > 0) {
+            setCachedStations(point.id, {
+              stations,
+              lat: point.lat,
+              lng: point.lng,
+              radiusKm: 5,
+              fuelType,
+            });
+            this._gridTotalStations += stations.length;
+          }
+        } catch (err) {
+          const msg = `[Grid-AT] ${point.id}: ${err instanceof Error ? err.message : String(err)}`;
+          console.error(msg);
+          this.addError(msg);
+        }
+
+        // Wait 2 seconds between E-Control API calls
+        if (i < grid.length - 1 && this.timer) {
+          await sleep(2_000);
+        }
+      }
+
+      console.log(`[Grid-AT] Austria scan complete`);
     } finally {
       this._gridScanning = false;
       this._gridProgress = null;
