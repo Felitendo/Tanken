@@ -1,6 +1,6 @@
 import { loadRepoConfig } from '@/config';
 import { measureLocation, fetchStationsLive } from '@/lib/measure';
-import { setCachedStations } from '@/lib/station-cache';
+import { setCachedStations, getAllCachedLocations } from '@/lib/station-cache';
 import { generateGermanyGrid, GRID_POINT_COUNT } from '@/lib/grid';
 
 export interface LocationScanInfo {
@@ -34,6 +34,13 @@ export interface GridScanStatus {
   cycleCount: number;
 }
 
+export interface CacheStats {
+  gridCells: number;
+  totalStations: number;
+  oldestScan: string | null;
+  newestScan: string | null;
+}
+
 export interface SchedulerStatus {
   running: boolean;
   scanning: boolean;
@@ -46,6 +53,7 @@ export interface SchedulerStatus {
   scanLog: ScanLogEntry[];
   errors: string[];
   grid: GridScanStatus;
+  cache: CacheStats;
 }
 
 const MAX_ERRORS = 20;
@@ -130,6 +138,17 @@ class ScanScheduler {
       nextCycleAt = new Date().toISOString();
     }
 
+    // Compute cache stats
+    const cachedLocations = getAllCachedLocations();
+    let totalStations = 0;
+    let oldestTs = Infinity;
+    let newestTs = 0;
+    for (const loc of cachedLocations) {
+      totalStations += loc.stationCount;
+      if (loc.timestamp < oldestTs) oldestTs = loc.timestamp;
+      if (loc.timestamp > newestTs) newestTs = loc.timestamp;
+    }
+
     return {
       running: this.timer !== null,
       scanning: this._scanning,
@@ -147,6 +166,12 @@ class ScanScheduler {
         lastFullScanAt: this._gridLastFullScanAt?.toISOString() ?? null,
         totalStationsCached: this._gridTotalStations,
         cycleCount: this._gridCycleCount,
+      },
+      cache: {
+        gridCells: cachedLocations.length,
+        totalStations,
+        oldestScan: oldestTs === Infinity ? null : new Date(oldestTs).toISOString(),
+        newestScan: newestTs === 0 ? null : new Date(newestTs).toISOString(),
       },
     };
   }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Fuel, KeyRound, LogOut, Mail, Save, Shield, Settings, UserPlus } from 'lucide-react';
+import { Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,42 @@ interface AdminStatus {
   config?: AdminConfig;
 }
 
+interface SchedulerStatus {
+  running: boolean;
+  scanning: boolean;
+  currentLocation: string | null;
+  scanProgress: string | null;
+  lastCycleAt: string | null;
+  nextCycleAt: string | null;
+  cycleCount: number;
+  scanLog: Array<{
+    timestamp: string;
+    locationId: string;
+    locationName: string;
+    stationCount: number;
+    openCount: number;
+    minPrice: number | null;
+    avgPrice: number | null;
+    maxPrice: number | null;
+    cheapestStation: string | null;
+    error?: string;
+  }>;
+  errors: string[];
+  grid: {
+    scanning: boolean;
+    progress: string | null;
+    lastFullScanAt: string | null;
+    totalStationsCached: number;
+    cycleCount: number;
+  };
+  cache: {
+    gridCells: number;
+    totalStations: number;
+    oldestScan: string | null;
+    newestScan: string | null;
+  };
+}
+
 type FeedbackType = 'success' | 'error' | 'info';
 
 const defaultConfig: AdminConfig = {
@@ -69,6 +105,200 @@ async function api<T = unknown>(url: string, options?: RequestInit): Promise<T> 
 }
 
 
+
+function ScannerConsole() {
+  const [status, setStatus] = useState<SchedulerStatus | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const data = await api<SchedulerStatus>('/api/admin/scheduler');
+        if (!cancelled) setStatus(data);
+      } catch { /* ignore */ }
+    }
+    load();
+    const interval = setInterval(load, 3_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  const handleAction = async (action: string) => {
+    try {
+      const result = await api<{ status: SchedulerStatus }>('/api/admin/scheduler', {
+        method: 'POST',
+        body: JSON.stringify({ action }),
+      });
+      setStatus(result.status);
+    } catch { /* ignore */ }
+  };
+
+  const fmtTime = (iso: string) => {
+    try { return new Date(iso).toLocaleString('de-DE'); } catch { return iso; }
+  };
+
+  const fmtRelative = (iso: string) => {
+    try {
+      const diff = Date.now() - new Date(iso).getTime();
+      if (diff < 60_000) return 'gerade eben';
+      if (diff < 3_600_000) return `vor ${Math.floor(diff / 60_000)} Min.`;
+      if (diff < 86_400_000) return `vor ${Math.floor(diff / 3_600_000)} Std.`;
+      return fmtTime(iso);
+    } catch { return iso; }
+  };
+
+  if (!status) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          <div className="animate-pulse">Scanner-Status wird geladen...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const isScanning = status.scanning || status.grid.scanning;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${status.running ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
+              <Radio className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle className="text-xl">Scanner</CardTitle>
+              <CardDescription>
+                {status.running
+                  ? isScanning
+                    ? 'Scannt gerade Tankstellen...'
+                    : 'Aktiv — wartet auf nächsten Zyklus'
+                  : 'Gestoppt'}
+              </CardDescription>
+            </div>
+          </div>
+          <div className="flex gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => handleAction(status.running ? 'stop' : 'start')}>
+              {status.running ? 'Stoppen' : 'Starten'}
+            </Button>
+            {status.running && (
+              <Button variant="outline" size="sm" onClick={() => handleAction('restart')}>
+                Neustart
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Stats overview */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="border rounded-lg p-3 bg-muted/30">
+            <p className="text-xs text-muted-foreground">Grid-Zellen</p>
+            <p className="text-lg font-bold">{status.cache.gridCells}</p>
+          </div>
+          <div className="border rounded-lg p-3 bg-muted/30">
+            <p className="text-xs text-muted-foreground">Tankstellen gesamt</p>
+            <p className="text-lg font-bold">{status.cache.totalStations.toLocaleString('de-DE')}</p>
+          </div>
+          <div className="border rounded-lg p-3 bg-muted/30">
+            <p className="text-xs text-muted-foreground">Grid-Zyklen</p>
+            <p className="text-lg font-bold">{status.grid.cycleCount}</p>
+          </div>
+          <div className="border rounded-lg p-3 bg-muted/30">
+            <p className="text-xs text-muted-foreground">Letzter Scan</p>
+            <p className="text-sm font-medium">
+              {status.cache.newestScan ? fmtRelative(status.cache.newestScan) : '—'}
+            </p>
+          </div>
+        </div>
+
+        {/* Grid scan progress */}
+        {status.grid.scanning && status.grid.progress && (
+          <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-950/30">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+              <span className="text-sm font-medium">Grid-Scan läuft: {status.grid.progress}</span>
+            </div>
+            {(() => {
+              const parts = status.grid.progress.split('/');
+              const current = parseInt(parts[0]);
+              const total = parseInt(parts[1]);
+              const pct = total > 0 ? (current / total) * 100 : 0;
+              return (
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Scan log */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Scan-Verlauf</p>
+          {status.scanLog.length === 0 && !status.grid.lastFullScanAt ? (
+            <p className="text-sm text-muted-foreground italic">Noch keine Scan-Einträge vorhanden.</p>
+          ) : (
+            <div className="border rounded-lg bg-muted/20 max-h-64 overflow-y-auto">
+              <div className="divide-y">
+                {status.grid.lastFullScanAt && (
+                  <div className="px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">{fmtTime(status.grid.lastFullScanAt)}</span>
+                    <span className="text-green-600 font-medium ml-2">
+                      Grid-Scan abgeschlossen — {status.grid.totalStationsCached.toLocaleString('de-DE')} Stationen gecacht
+                    </span>
+                  </div>
+                )}
+                {status.scanLog.slice().reverse().map((entry, i) => (
+                  <div key={i} className="px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">{fmtTime(entry.timestamp)}</span>
+                    {entry.error ? (
+                      <span className="text-destructive ml-2">
+                        {entry.locationName} — Fehler: {entry.error}
+                      </span>
+                    ) : (
+                      <span className="ml-2">
+                        <span className="font-medium">{entry.locationName}</span>
+                        {' — '}
+                        <span className="text-green-600">{entry.openCount}/{entry.stationCount} offen</span>
+                        {entry.minPrice != null && (
+                          <>
+                            {', '}
+                            <span className="text-foreground">{entry.minPrice.toFixed(3)}€–{entry.maxPrice?.toFixed(3)}€</span>
+                          </>
+                        )}
+                        {entry.cheapestStation && (
+                          <>
+                            {', Günstigste: '}
+                            <span className="text-foreground font-medium">{entry.cheapestStation}</span>
+                          </>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Errors */}
+        {status.errors.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-destructive uppercase tracking-wider mb-2">Fehler ({status.errors.length})</p>
+            <div className="border border-destructive/20 rounded-lg bg-destructive/5 max-h-40 overflow-y-auto">
+              <div className="divide-y divide-destructive/10">
+                {status.errors.slice().reverse().map((err, i) => (
+                  <p key={i} className="px-3 py-1.5 text-xs text-muted-foreground font-mono break-all">{err}</p>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function ConfigFields({
   config,
@@ -705,6 +935,9 @@ export default function AdminPage() {
             </form>
           </Card>
         )}
+
+        {/* Scanner Console — only visible when logged in */}
+        {panel === 'dashboard' && <ScannerConsole />}
       </div>
     </div>
   );

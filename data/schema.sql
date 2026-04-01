@@ -54,3 +54,14 @@ CREATE TABLE IF NOT EXISTS station_prices (
 CREATE INDEX IF NOT EXISTS idx_station_prices_timestamp ON station_prices(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_station_prices_location ON station_prices(location_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_station_prices_name ON station_prices(station_name, timestamp DESC);
+
+-- Persistent station cache (survives restarts, populated by grid/location scans)
+CREATE TABLE IF NOT EXISTS station_cache (
+  location_id TEXT PRIMARY KEY,
+  lat DOUBLE PRECISION NOT NULL,
+  lng DOUBLE PRECISION NOT NULL,
+  radius_km DOUBLE PRECISION NOT NULL,
+  fuel_type TEXT NOT NULL,
+  stations JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

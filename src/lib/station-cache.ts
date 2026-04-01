@@ -1,6 +1,7 @@
 /**
- * In-memory cache of raw station data populated by the scheduler.
+ * Station cache with in-memory lookups backed by PostgreSQL persistence.
  * The /api/stations route reads from this instead of calling Tankerkönig directly.
+ * On startup, cached data is restored from the database so scans survive restarts.
  */
 
 export interface CachedStation {
@@ -48,9 +49,15 @@ export function setCachedStations(locationId: string, data: {
   radiusKm: number;
   fuelType: string;
 }): void {
-  getCache().set(locationId, {
+  const entry: LocationCache = {
     ...data,
     timestamp: Date.now(),
+  };
+  getCache().set(locationId, entry);
+
+  // Persist to database asynchronously (fire-and-forget)
+  persistToDb(locationId, entry).catch(err => {
+    console.error(`[StationCache] DB persist error for ${locationId}:`, err instanceof Error ? err.message : err);
   });
 }
 
@@ -179,6 +186,72 @@ export function findStationsInBounds(
     oldestTimestamp: oldest === Infinity ? Date.now() : oldest,
     newestTimestamp: newest || Date.now(),
   };
+}
+
+// ─── Database persistence ────────────────────────────────────────────
+
+let _db: { query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> } | null = null;
+let _dbResolved = false;
+
+function getDb() {
+  if (_dbResolved) return _db;
+  _dbResolved = true;
+  try {
+    // Dynamic import to avoid circular dependency — server-runtime creates the db singleton
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { database } = require('@/lib/server-runtime');
+    _db = database;
+  } catch {
+    _db = null;
+  }
+  return _db;
+}
+
+async function persistToDb(locationId: string, entry: LocationCache): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+  await db.query(
+    `INSERT INTO station_cache (location_id, lat, lng, radius_km, fuel_type, stations, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW())
+     ON CONFLICT (location_id) DO UPDATE SET
+       lat = EXCLUDED.lat, lng = EXCLUDED.lng, radius_km = EXCLUDED.radius_km,
+       fuel_type = EXCLUDED.fuel_type, stations = EXCLUDED.stations, updated_at = NOW()`,
+    [locationId, entry.lat, entry.lng, entry.radiusKm, entry.fuelType, JSON.stringify(entry.stations)]
+  );
+}
+
+/** Restore all cached stations from the database into memory. Called once at startup. */
+export async function restoreCacheFromDb(): Promise<number> {
+  const db = getDb();
+  if (!db) return 0;
+  try {
+    const { rows } = await db.query(
+      `SELECT location_id, lat, lng, radius_km, fuel_type, stations,
+              EXTRACT(EPOCH FROM updated_at) * 1000 AS ts
+       FROM station_cache`
+    );
+    const c = getCache();
+    let count = 0;
+    for (const row of rows) {
+      const stations: CachedStation[] = typeof row.stations === 'string'
+        ? JSON.parse(row.stations as string)
+        : row.stations as CachedStation[];
+      c.set(row.location_id as string, {
+        stations,
+        lat: row.lat as number,
+        lng: row.lng as number,
+        radiusKm: row.radius_km as number,
+        fuelType: row.fuel_type as string,
+        timestamp: Math.round(row.ts as number),
+      });
+      count += stations.length;
+    }
+    console.log(`[StationCache] Restored ${rows.length} grid cells (${count} stations) from database`);
+    return rows.length;
+  } catch (err) {
+    console.error('[StationCache] Failed to restore from DB:', err instanceof Error ? err.message : err);
+    return 0;
+  }
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
