@@ -47,23 +47,7 @@ interface AdminStatus {
 interface SchedulerStatus {
   running: boolean;
   scanning: boolean;
-  currentLocation: string | null;
   scanProgress: string | null;
-  lastCycleAt: string | null;
-  nextCycleAt: string | null;
-  cycleCount: number;
-  scanLog: Array<{
-    timestamp: string;
-    locationId: string;
-    locationName: string;
-    stationCount: number;
-    openCount: number;
-    minPrice: number | null;
-    avgPrice: number | null;
-    maxPrice: number | null;
-    cheapestStation: string | null;
-    error?: string;
-  }>;
   errors: string[];
   grid: {
     scanning: boolean;
@@ -217,12 +201,14 @@ function ScannerConsole() {
           <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-950/30">
             <div className="flex items-center gap-2 mb-2">
               <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-sm font-medium">Grid-Scan läuft: {status.grid.progress}</span>
+              <span className="text-sm font-medium">
+                {status.grid.progress.startsWith('DE') ? '🇩🇪' : '🇦🇹'} Grid-Scan läuft: {status.grid.progress}
+              </span>
             </div>
             {(() => {
-              const parts = status.grid.progress.split('/');
-              const current = parseInt(parts[0]);
-              const total = parseInt(parts[1]);
+              const match = status.grid.progress.match(/(\d+)\/(\d+)/);
+              const current = match ? parseInt(match[1]) : 0;
+              const total = match ? parseInt(match[2]) : 0;
               const pct = total > 0 ? (current / total) * 100 : 0;
               return (
                 <div className="w-full bg-muted rounded-full h-2">
@@ -233,54 +219,15 @@ function ScannerConsole() {
           </div>
         )}
 
-        {/* Scan log */}
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Scan-Verlauf</p>
-          {status.scanLog.length === 0 && !status.grid.lastFullScanAt ? (
-            <p className="text-sm text-muted-foreground italic">Noch keine Scan-Einträge vorhanden.</p>
-          ) : (
-            <div className="border rounded-lg bg-muted/20 max-h-64 overflow-y-auto">
-              <div className="divide-y">
-                {status.grid.lastFullScanAt && (
-                  <div className="px-3 py-2 text-xs">
-                    <span className="text-muted-foreground">{fmtTime(status.grid.lastFullScanAt)}</span>
-                    <span className="text-green-600 font-medium ml-2">
-                      Grid-Scan abgeschlossen — {status.grid.totalStationsCached.toLocaleString('de-DE')} Stationen gecacht
-                    </span>
-                  </div>
-                )}
-                {status.scanLog.slice().reverse().map((entry, i) => (
-                  <div key={i} className="px-3 py-2 text-xs">
-                    <span className="text-muted-foreground">{fmtTime(entry.timestamp)}</span>
-                    {entry.error ? (
-                      <span className="text-destructive ml-2">
-                        {entry.locationName} — Fehler: {entry.error}
-                      </span>
-                    ) : (
-                      <span className="ml-2">
-                        <span className="font-medium">{entry.locationName}</span>
-                        {' — '}
-                        <span className="text-green-600">{entry.openCount}/{entry.stationCount} offen</span>
-                        {entry.minPrice != null && (
-                          <>
-                            {', '}
-                            <span className="text-foreground">{entry.minPrice.toFixed(3)}€–{entry.maxPrice?.toFixed(3)}€</span>
-                          </>
-                        )}
-                        {entry.cheapestStation && (
-                          <>
-                            {', Günstigste: '}
-                            <span className="text-foreground font-medium">{entry.cheapestStation}</span>
-                          </>
-                        )}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Grid scan info */}
+        {status.grid.lastFullScanAt && (
+          <div className="border rounded-lg p-3 bg-green-50 dark:bg-green-950/20">
+            <p className="text-xs text-muted-foreground">Letzter vollständiger Zyklus</p>
+            <p className="text-sm font-medium">
+              {fmtTime(status.grid.lastFullScanAt)} — {status.grid.totalStationsCached.toLocaleString('de-DE')} Stationen gecacht
+            </p>
+          </div>
+        )}
 
         {/* Errors */}
         {status.errors.length > 0 && (

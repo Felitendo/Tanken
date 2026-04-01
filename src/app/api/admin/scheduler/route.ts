@@ -29,10 +29,8 @@ export async function POST(request: NextRequest) {
     scheduler.stop();
   } else if (action === 'restart') {
     scheduler.restart();
-  } else if (action === 'scan-now') {
-    scheduler.scanNow();
   } else {
-    return NextResponse.json({ error: 'Ungültige Aktion. Erlaubt: start, stop, restart, scan-now' }, { status: 400 });
+    return NextResponse.json({ error: 'Ungültige Aktion. Erlaubt: start, stop, restart' }, { status: 400 });
   }
 
   return NextResponse.json({ ok: true, status: scheduler.getStatus() });

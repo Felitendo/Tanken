@@ -1,30 +1,7 @@
 import { loadRepoConfig } from '@/config';
-import { measureLocation, fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
+import { fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
 import { setCachedStations, getAllCachedLocations } from '@/lib/station-cache';
 import { generateGermanyGrid, generateAustriaGrid } from '@/lib/grid';
-
-export interface LocationScanInfo {
-  timestamp: string;
-  stationCount: number;
-  openCount: number;
-  minPrice: number | null;
-  avgPrice: number | null;
-  maxPrice: number | null;
-  cheapestStation: string | null;
-}
-
-export interface ScanLogEntry {
-  timestamp: string;
-  locationId: string;
-  locationName: string;
-  stationCount: number;
-  openCount: number;
-  minPrice: number | null;
-  avgPrice: number | null;
-  maxPrice: number | null;
-  cheapestStation: string | null;
-  error?: string;
-}
 
 export interface GridScanStatus {
   scanning: boolean;
@@ -44,20 +21,13 @@ export interface CacheStats {
 export interface SchedulerStatus {
   running: boolean;
   scanning: boolean;
-  currentLocation: string | null;
   scanProgress: string | null;
-  lastCycleAt: string | null;
-  nextCycleAt: string | null;
-  cycleCount: number;
-  locationScans: Record<string, LocationScanInfo>;
-  scanLog: ScanLogEntry[];
   errors: string[];
   grid: GridScanStatus;
   cache: CacheStats;
 }
 
 const MAX_ERRORS = 20;
-const MAX_SCAN_LOG = 50;
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -65,28 +35,19 @@ function sleep(ms: number): Promise<void> {
 
 class ScanScheduler {
   private timer: ReturnType<typeof setInterval> | null = null;
-  private _scanning = false;
-  private _currentLocation: string | null = null;
-  private _scanProgress: string | null = null;
-  private lastCycleAt: Date | null = null;
-  private _cycleCount = 0;
-  private locationScans: Record<string, LocationScanInfo> = {};
-  private _scanLog: ScanLogEntry[] = [];
-  private recentErrors: string[] = [];
-
-  // Grid scan state
   private _gridScanning = false;
   private _gridProgress: string | null = null;
   private _gridLastFullScanAt: Date | null = null;
   private _gridTotalStations = 0;
   private _gridCycleCount = 0;
   private _gridTimer: ReturnType<typeof setTimeout> | null = null;
+  private recentErrors: string[] = [];
 
   start(): void {
     if (this.timer) return;
-    console.log('[Scheduler] Starting scan scheduler (tick every 60s)');
-    this.timer = setInterval(() => this.tick(), 60_000);
-    this.tick();
+    console.log('[Scheduler] Starting grid scan scheduler');
+    // Use a keep-alive interval so this.timer is truthy while scanning runs
+    this.timer = setInterval(() => {}, 60_000);
     // Start grid scan after a short delay
     this._gridTimer = setTimeout(() => this.startGridScan(), 10_000);
   }
@@ -112,33 +73,7 @@ class ScanScheduler {
     return this.timer !== null;
   }
 
-  /** Trigger an immediate scan cycle, regardless of interval timer. */
-  scanNow(): void {
-    if (this._scanning) return;
-
-    const config = loadRepoConfig();
-    const locations = config.locations ?? [];
-    const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
-
-    if (!apiKey || locations.length === 0) return;
-
-    this.runCycle(apiKey, locations).catch(err => {
-      this.addError(`Cycle error: ${err instanceof Error ? err.message : String(err)}`);
-    });
-  }
-
   getStatus(): SchedulerStatus {
-    const config = loadRepoConfig();
-    const intervalMs = (config.refresh_interval_minutes ?? 60) * 60_000;
-    let nextCycleAt: string | null = null;
-
-    if (this.timer && this.lastCycleAt) {
-      nextCycleAt = new Date(this.lastCycleAt.getTime() + intervalMs).toISOString();
-    } else if (this.timer) {
-      nextCycleAt = new Date().toISOString();
-    }
-
-    // Compute cache stats
     const cachedLocations = getAllCachedLocations();
     let totalStations = 0;
     let oldestTs = Infinity;
@@ -151,14 +86,8 @@ class ScanScheduler {
 
     return {
       running: this.timer !== null,
-      scanning: this._scanning,
-      currentLocation: this._currentLocation,
-      scanProgress: this._scanProgress,
-      lastCycleAt: this.lastCycleAt?.toISOString() ?? null,
-      nextCycleAt,
-      cycleCount: this._cycleCount,
-      locationScans: { ...this.locationScans },
-      scanLog: [...this._scanLog],
+      scanning: this._gridScanning,
+      scanProgress: this._gridProgress,
       errors: [...this.recentErrors],
       grid: {
         scanning: this._gridScanning,
@@ -174,103 +103,6 @@ class ScanScheduler {
         newestScan: newestTs === 0 ? null : new Date(newestTs).toISOString(),
       },
     };
-  }
-
-  private tick(): void {
-    if (this._scanning) return;
-
-    const config = loadRepoConfig();
-    const intervalMs = (config.refresh_interval_minutes ?? 60) * 60_000;
-    const locations = config.locations ?? [];
-    const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
-
-    if (!apiKey || locations.length === 0) return;
-
-    if (this.lastCycleAt && (Date.now() - this.lastCycleAt.getTime()) < intervalMs) {
-      return;
-    }
-
-    this.runCycle(apiKey, locations).catch(err => {
-      this.addError(`Cycle error: ${err instanceof Error ? err.message : String(err)}`);
-    });
-  }
-
-  private async runCycle(apiKey: string, locations: Array<{ id: string; name: string; lat: number; lng: number; radius_km: number; fuel_type: 'diesel' | 'e5' | 'e10' }>): Promise<void> {
-    this._scanning = true;
-    console.log(`[Scheduler] Starting scan cycle for ${locations.length} location(s)`);
-
-    try {
-      for (let i = 0; i < locations.length; i++) {
-        const loc = locations[i];
-        this._currentLocation = loc.name;
-        this._scanProgress = `${i + 1}/${locations.length}`;
-        try {
-          console.log(`[Scheduler] Scanning "${loc.name}" (${i + 1}/${locations.length})`);
-          const result = await measureLocation({
-            apiKey,
-            lat: loc.lat,
-            lng: loc.lng,
-            radius: loc.radius_km,
-            fuelType: loc.fuel_type,
-            locationId: loc.id,
-          });
-          // Cache raw station data so /api/stations can serve it
-          setCachedStations(loc.id, {
-            stations: result.rawStations,
-            lat: loc.lat,
-            lng: loc.lng,
-            radiusKm: loc.radius_km,
-            fuelType: loc.fuel_type,
-          });
-          const openCount = result.rawStations.filter(s => s.isOpen && s.price !== null && s.price > 0).length;
-          const scanInfo: LocationScanInfo = {
-            timestamp: new Date().toISOString(),
-            stationCount: result.rawStations.length,
-            openCount,
-            minPrice: result.min_price,
-            avgPrice: result.avg_price,
-            maxPrice: result.max_price,
-            cheapestStation: result.station || null,
-          };
-          this.locationScans[loc.id] = scanInfo;
-          this.addScanLog({
-            ...scanInfo,
-            locationId: loc.id,
-            locationName: loc.name,
-          });
-          console.log(`[Scheduler] "${loc.name}": ${openCount}/${result.rawStations.length} offen, Min ${result.min_price.toFixed(3)}€, Avg ${result.avg_price.toFixed(3)}€, Max ${result.max_price.toFixed(3)}€, Günstigste: ${result.station}`);
-        } catch (err) {
-          const msg = `"${loc.name}": ${err instanceof Error ? err.message : String(err)}`;
-          console.error(`[Scheduler] ${msg}`);
-          this.addError(msg);
-          this.addScanLog({
-            timestamp: new Date().toISOString(),
-            locationId: loc.id,
-            locationName: loc.name,
-            stationCount: 0,
-            openCount: 0,
-            minPrice: null,
-            avgPrice: null,
-            maxPrice: null,
-            cheapestStation: null,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-
-        // Wait at least 60 seconds between API calls (rate limit protection)
-        if (i < locations.length - 1) {
-          await sleep(60_000);
-        }
-      }
-
-      this.lastCycleAt = new Date();
-      this._cycleCount++;
-      console.log('[Scheduler] Scan cycle complete');
-    } finally {
-      this._scanning = false;
-      this._currentLocation = null;
-      this._scanProgress = null;
-    }
   }
 
   private async startGridScan(): Promise<void> {
@@ -292,6 +124,7 @@ class ScanScheduler {
 
       this._gridLastFullScanAt = new Date();
       this._gridCycleCount++;
+      console.log(`[Grid] Full scan cycle complete: ${this._gridTotalStations} total station entries`);
 
       // Wait 5 minutes between full cycles
       if (this.timer) await sleep(5 * 60_000);
@@ -398,13 +231,6 @@ class ScanScheduler {
     this.recentErrors.push(`${new Date().toISOString()} ${msg}`);
     if (this.recentErrors.length > MAX_ERRORS) {
       this.recentErrors = this.recentErrors.slice(-MAX_ERRORS);
-    }
-  }
-
-  private addScanLog(entry: ScanLogEntry): void {
-    this._scanLog.push(entry);
-    if (this._scanLog.length > MAX_SCAN_LOG) {
-      this._scanLog = this._scanLog.slice(-MAX_SCAN_LOG);
     }
   }
 }
