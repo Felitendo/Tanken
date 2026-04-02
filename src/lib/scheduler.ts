@@ -1,6 +1,6 @@
 import { loadRepoConfig } from '@/config';
 import { fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
-import { setCachedStations, getAllCachedLocations, countUniqueStations, clearAllCache } from '@/lib/station-cache';
+import { setCachedStations, getAllCachedLocations, countUniqueStations, persistPriceSnapshot, clearAllCache } from '@/lib/station-cache';
 import { generateGermanyGrid, generateAustriaGrid } from '@/lib/grid';
 
 export interface ScanLogEntry {
@@ -221,6 +221,20 @@ class ScanScheduler {
       const cycleDuration = (Date.now() - cycleStart) / 1000;
       this._lastCycleDurationSec = Math.round(cycleDuration);
       this._scanStartedAt = null;
+
+      // Persist price snapshot for history charts
+      try {
+        const persisted = await persistPriceSnapshot();
+        if (persisted > 0) {
+          const pMsg = `${persisted.toLocaleString('de-DE')} Preise in History gespeichert`;
+          this.de.addLog(pMsg, 'info');
+          this.at.addLog(pMsg, 'info');
+        }
+      } catch (err) {
+        const eMsg = `History-Fehler: ${err instanceof Error ? err.message : String(err)}`;
+        this.de.addLog(eMsg, 'error');
+        console.error(`[Grid] ${eMsg}`);
+      }
 
       const total = this.de.stationsScanned + this.at.stationsScanned;
       const msg = `Zyklus #${this._cycleCount} fertig: ${total.toLocaleString('de-DE')} Stationen in ${fmtDuration(cycleDuration)}`;

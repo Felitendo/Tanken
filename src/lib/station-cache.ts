@@ -164,6 +164,66 @@ export function countUniqueStations(): number {
   return ids.size;
 }
 
+/** Get all unique stations across all cached grid cells (newest data wins). */
+export function getAllUniqueStations(): CachedStation[] {
+  const map = new Map<string, { station: CachedStation; timestamp: number }>();
+  for (const entry of getCache().values()) {
+    for (const s of entry.stations) {
+      const existing = map.get(s.id);
+      if (!existing || entry.timestamp > existing.timestamp) {
+        map.set(s.id, { station: s, timestamp: entry.timestamp });
+      }
+    }
+  }
+  return Array.from(map.values()).map(e => e.station);
+}
+
+/** Max age for station price history. */
+const PRICE_HISTORY_RETENTION_DAYS = 30;
+
+/**
+ * Persist a price snapshot of all unique cached stations to station_prices.
+ * Called once per scan cycle to build price history for charts.
+ * Also cleans up entries older than PRICE_HISTORY_RETENTION_DAYS.
+ */
+export async function persistPriceSnapshot(): Promise<number> {
+  const db = getDb();
+  if (!db) return 0;
+
+  // Clean up old history
+  await db.query(
+    `DELETE FROM station_prices WHERE timestamp < NOW() - INTERVAL '${PRICE_HISTORY_RETENTION_DAYS} days'`
+  ).catch(err => {
+    console.error('[StationCache] History cleanup error:', err instanceof Error ? err.message : err);
+  });
+
+  const stations = getAllUniqueStations().filter(s => s.isOpen && s.price != null && s.price > 0);
+  if (!stations.length) return 0;
+
+  const timestamp = new Date().toISOString();
+  const BATCH_SIZE = 5000; // ~4 params each → well within PG's 65535 param limit
+  let written = 0;
+
+  for (let i = 0; i < stations.length; i += BATCH_SIZE) {
+    const batch = stations.slice(i, i + BATCH_SIZE);
+    const values: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+    for (const s of batch) {
+      values.push(`($${idx++}::timestamptz, $${idx++}, $${idx++}, $${idx++})`);
+      params.push(timestamp, s.name, s.brand, s.price);
+    }
+    await db.query(
+      `INSERT INTO station_prices (timestamp, station_name, station_brand, price) VALUES ${values.join(', ')}`,
+      params
+    );
+    written += batch.length;
+  }
+
+  console.log(`[StationCache] Persisted ${written} station prices to history`);
+  return written;
+}
+
 /**
  * Find all cached stations within a bounding box.
  * Merges stations from overlapping grid cells and deduplicates by station ID.
