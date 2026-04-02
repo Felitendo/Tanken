@@ -153,6 +153,17 @@ export function getAllCachedLocations(): Array<{ locationId: string; stationCoun
   return result;
 }
 
+/** Count unique stations across all cached grid cells. */
+export function countUniqueStations(): number {
+  const ids = new Set<string>();
+  for (const entry of getCache().values()) {
+    for (const s of entry.stations) {
+      ids.add(s.id);
+    }
+  }
+  return ids.size;
+}
+
 /**
  * Find all cached stations within a bounding box.
  * Merges stations from overlapping grid cells and deduplicates by station ID.

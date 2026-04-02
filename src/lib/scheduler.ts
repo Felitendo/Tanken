@@ -1,6 +1,6 @@
 import { loadRepoConfig } from '@/config';
 import { fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
-import { setCachedStations, getAllCachedLocations, clearAllCache } from '@/lib/station-cache';
+import { setCachedStations, getAllCachedLocations, countUniqueStations, clearAllCache } from '@/lib/station-cache';
 import { generateGermanyGrid, generateAustriaGrid } from '@/lib/grid';
 
 export interface ScanLogEntry {
@@ -173,9 +173,8 @@ class ScanScheduler {
 
   getStatus(): SchedulerStatus {
     const cachedLocations = getAllCachedLocations();
-    let totalStations = 0, oldestTs = Infinity, newestTs = 0;
+    let oldestTs = Infinity, newestTs = 0;
     for (const loc of cachedLocations) {
-      totalStations += loc.stationCount;
       if (loc.timestamp < oldestTs) oldestTs = loc.timestamp;
       if (loc.timestamp > newestTs) newestTs = loc.timestamp;
     }
@@ -187,7 +186,7 @@ class ScanScheduler {
       lastCycleDurationSec: this._lastCycleDurationSec,
       cache: {
         gridCells: cachedLocations.length,
-        totalStations,
+        totalStations: countUniqueStations(),
         oldestScan: oldestTs === Infinity ? null : new Date(oldestTs).toISOString(),
         newestScan: newestTs === 0 ? null : new Date(newestTs).toISOString(),
       },
