@@ -18,6 +18,7 @@ function mapRows(rows: HistoryRow[]): HistoryEntry[] {
 export async function readPriceHistoryByStation(stationName: string): Promise<HistoryEntry[]> {
   // Query individual station prices from station_prices table (has ALL stations),
   // not price_history which only stores the cheapest station's name.
+  // Uses exact match to leverage idx_station_prices_name index.
   const result = await database.query<{
     timestamp: Date;
     price: number;
@@ -27,10 +28,10 @@ export async function readPriceHistoryByStation(stationName: string): Promise<Hi
     `
       SELECT timestamp, price, station_name, location_id
       FROM station_prices
-      WHERE station_name ILIKE $1
+      WHERE station_name = $1
       ORDER BY timestamp ASC
     `,
-    [`%${stationName}%`]
+    [stationName]
   );
   return result.rows.map(row => ({
     timestamp: row.timestamp.toISOString(),

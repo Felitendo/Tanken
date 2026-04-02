@@ -31,9 +31,13 @@ export async function fetchStationsLive(params: {
   try {
     const url = `https://creativecommons.tankerkoenig.de/json/list.php?lat=${lat}&lng=${lng}&rad=${radiusKm}&sort=price&type=${fuelType}&apikey=${apiKey}`;
     const { data } = await fetchJson<{ ok?: boolean; message?: string; stations?: Record<string, unknown>[] }>(url);
-    if (!data.ok || !data.stations?.length) return [];
+    if (!data.ok || !data.stations?.length) {
+      if (!data.ok && data.message) console.warn(`[TK] ${lat},${lng}: ${data.message}`);
+      return [];
+    }
     return mapStations(data.stations);
-  } catch {
+  } catch (err) {
+    console.error(`[TK] ${lat},${lng}: ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 }
@@ -97,7 +101,8 @@ export async function fetchStationsEControl(params: {
         isOpen: Boolean(s.open),
       };
     });
-  } catch {
+  } catch (err) {
+    console.error(`[EC] ${lat},${lng}: ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 }

@@ -54,6 +54,7 @@ export function setCachedStations(locationId: string, data: {
     timestamp: Date.now(),
   };
   getCache().set(locationId, entry);
+  invalidateUniqueCount();
 
   // Persist to database asynchronously (fire-and-forget)
   persistToDb(locationId, entry).catch(err => {
@@ -135,6 +136,7 @@ export function findNearbyCachedStations(lat: number, lng: number, fuelType: str
 /** Clear all cached stations from memory and database. */
 export async function clearAllCache(): Promise<void> {
   getCache().clear();
+  invalidateUniqueCount();
   const db = getDb();
   if (db) {
     await db.query('DELETE FROM station_cache').catch(err => {
@@ -153,15 +155,28 @@ export function getAllCachedLocations(): Array<{ locationId: string; stationCoun
   return result;
 }
 
-/** Count unique stations across all cached grid cells. */
+/** Count unique stations across all cached grid cells (cached for 30s). */
+let _uniqueCount = 0;
+let _uniqueCountTs = 0;
+const UNIQUE_COUNT_TTL = 30_000;
+
 export function countUniqueStations(): number {
+  const now = Date.now();
+  if (now - _uniqueCountTs < UNIQUE_COUNT_TTL) return _uniqueCount;
   const ids = new Set<string>();
   for (const entry of getCache().values()) {
     for (const s of entry.stations) {
       ids.add(s.id);
     }
   }
-  return ids.size;
+  _uniqueCount = ids.size;
+  _uniqueCountTs = now;
+  return _uniqueCount;
+}
+
+/** Invalidate the unique station count cache (called after cache changes). */
+function invalidateUniqueCount(): void {
+  _uniqueCountTs = 0;
 }
 
 /** Get all unique stations across all cached grid cells (newest data wins). */
