@@ -1,7 +1,7 @@
 import { loadRepoConfig } from '@/config';
 import { fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
 import { setCachedStations, getAllCachedLocations, clearAllCache } from '@/lib/station-cache';
-import { generateGermanyGrid, generateAustriaGrid, DE_GRID_POINT_COUNT, AT_GRID_POINT_COUNT } from '@/lib/grid';
+import { generateGermanyGrid, generateAustriaGrid, AT_GRID_POINT_COUNT } from '@/lib/grid';
 
 export interface GridScanStatus {
   scanning: boolean;
@@ -12,13 +12,9 @@ export interface GridScanStatus {
 }
 
 export interface ScanTiming {
-  /** ISO timestamp when the current scan phase started */
   scanStartedAt: string | null;
-  /** Estimated ISO timestamp when the current scan will finish */
   estimatedEndAt: string | null;
-  /** Duration of the last completed full cycle in seconds */
   lastCycleDurationSec: number | null;
-  /** Average seconds per API call (rolling) */
   avgCallDurationSec: number | null;
 }
 
@@ -44,12 +40,19 @@ export interface SchedulerStatus {
   cache: CacheStats;
   timing: ScanTiming;
   log: ScanLogEntry[];
-  /** Currently scanned grid point coordinates */
   currentPoint: { lat: number; lng: number; country: string } | null;
 }
 
 const MAX_ERRORS = 20;
 const MAX_LOG = 50;
+
+// ─── Timing constants ───────────────────────────────────────────────
+/** Delay between Tankerkönig calls (DE). 6s = 10 req/min, their stated limit. */
+const DE_DELAY_MS = 6_000;
+/** Concurrent E-Control requests (AT). No documented rate limit. */
+const AT_CONCURRENCY = 5;
+/** Small pause between AT batches to avoid hammering. */
+const AT_BATCH_DELAY_MS = 500;
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -213,7 +216,7 @@ class ScanScheduler {
   private async runDeGridCycle(apiKey: string, fuelType: string): Promise<void> {
     const grid = generateGermanyGrid();
     this._gridScanning = true;
-    this.addLog(`Deutschland-Scan: ${grid.length} Grid-Punkte`, 'info');
+    this.addLog(`Deutschland-Scan: ${grid.length} Grid-Punkte (${DE_DELAY_MS / 1000}s Delay)`, 'info');
     console.log(`[Grid-DE] Starting Germany scan: ${grid.length} points, fuel type: ${fuelType}`);
 
     let scannedStations = 0;
@@ -225,8 +228,11 @@ class ScanScheduler {
         this._gridProgress = `DE ${i + 1}/${grid.length}`;
         this._currentPoint = { lat: point.lat, lng: point.lng, country: 'DE' };
 
-        // Update ETA based on average call duration
-        this.updateEta(i, grid.length, AT_GRID_POINT_COUNT, 2000);
+        // ETA: remaining DE points at DE_DELAY_MS + AT phase estimate
+        const remainingDe = grid.length - i - 1;
+        const atBatches = Math.ceil(AT_GRID_POINT_COUNT / AT_CONCURRENCY);
+        const remainingMs = remainingDe * DE_DELAY_MS + atBatches * AT_BATCH_DELAY_MS;
+        this._estimatedEndAt = new Date(Date.now() + remainingMs);
 
         try {
           const callStart = Date.now();
@@ -258,7 +264,7 @@ class ScanScheduler {
         }
 
         if (i < grid.length - 1 && this.timer) {
-          await sleep(10_000);
+          await sleep(DE_DELAY_MS);
         }
       }
 
@@ -273,50 +279,63 @@ class ScanScheduler {
   private async runAtGridCycle(fuelType: string): Promise<void> {
     const grid = generateAustriaGrid();
     this._gridScanning = true;
-    this.addLog(`Österreich-Scan: ${grid.length} Grid-Punkte`, 'info');
-    console.log(`[Grid-AT] Starting Austria scan: ${grid.length} points, fuel type: ${fuelType}`);
+    const totalBatches = Math.ceil(grid.length / AT_CONCURRENCY);
+    this.addLog(`Österreich-Scan: ${grid.length} Grid-Punkte (${AT_CONCURRENCY}× parallel)`, 'info');
+    console.log(`[Grid-AT] Starting Austria scan: ${grid.length} points in ${totalBatches} batches, fuel type: ${fuelType}`);
 
     let scannedStations = 0;
+    let processed = 0;
 
     try {
-      for (let i = 0; i < grid.length; i++) {
+      for (let b = 0; b < totalBatches; b++) {
         if (!this.timer) break;
-        const point = grid[i];
-        this._gridProgress = `AT ${i + 1}/${grid.length}`;
-        this._currentPoint = { lat: point.lat, lng: point.lng, country: 'AT' };
+        const batchStart = b * AT_CONCURRENCY;
+        const batch = grid.slice(batchStart, batchStart + AT_CONCURRENCY);
+        processed += batch.length;
+        this._gridProgress = `AT ${processed}/${grid.length}`;
+        this._currentPoint = { lat: batch[0].lat, lng: batch[0].lng, country: 'AT' };
 
-        // Update ETA (no remaining DE points, only AT)
-        this.updateEta(i, 0, grid.length, 2000);
+        // ETA: remaining batches
+        const remainingBatches = totalBatches - b - 1;
+        this._estimatedEndAt = new Date(Date.now() + remainingBatches * AT_BATCH_DELAY_MS);
 
-        try {
-          const callStart = Date.now();
-          const stations = await fetchStationsEControl({
-            lat: point.lat,
-            lng: point.lng,
-            fuelType,
-          });
-          this._callDurations.push(Date.now() - callStart);
-
-          if (stations.length > 0) {
-            setCachedStations(point.id, {
-              stations,
+        // Fire all requests in this batch concurrently
+        const results = await Promise.allSettled(
+          batch.map(async (point) => {
+            const callStart = Date.now();
+            const stations = await fetchStationsEControl({
               lat: point.lat,
               lng: point.lng,
-              radiusKm: 5,
               fuelType,
             });
-            this._gridTotalStations += stations.length;
-            scannedStations += stations.length;
+            this._callDurations.push(Date.now() - callStart);
+            return { point, stations };
+          })
+        );
+
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            const { point, stations } = result.value;
+            if (stations.length > 0) {
+              setCachedStations(point.id, {
+                stations,
+                lat: point.lat,
+                lng: point.lng,
+                radiusKm: 5,
+                fuelType,
+              });
+              this._gridTotalStations += stations.length;
+              scannedStations += stations.length;
+            }
+          } else {
+            const msg = `[Grid-AT] batch ${b}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`;
+            console.error(msg);
+            this.addError(msg);
           }
-        } catch (err) {
-          const msg = `[Grid-AT] ${point.id}: ${err instanceof Error ? err.message : String(err)}`;
-          console.error(msg);
-          this.addError(msg);
-          this.addLog(`Fehler bei ${point.lat},${point.lng}: ${err instanceof Error ? err.message : String(err)}`, 'error');
         }
 
-        if (i < grid.length - 1 && this.timer) {
-          await sleep(2_000);
+        if (b < totalBatches - 1 && this.timer) {
+          await sleep(AT_BATCH_DELAY_MS);
         }
       }
 
@@ -326,35 +345,6 @@ class ScanScheduler {
       this._gridScanning = false;
       this._gridProgress = null;
     }
-  }
-
-  /** Estimate when the current scan will finish based on remaining points and delays. */
-  private updateEta(currentIdx: number, remainingDePoints: number, remainingAtTotal: number, atDelayMs: number): void {
-    // How long has each call taken on average (including delay)?
-    const progress = this._gridProgress;
-    if (!progress) return;
-
-    const isDE = progress.startsWith('DE');
-    let remainingMs = 0;
-
-    if (isDE) {
-      const match = progress.match(/(\d+)\/(\d+)/);
-      if (match) {
-        const total = parseInt(match[2]);
-        const remaining = total - currentIdx - 1;
-        remainingMs += remaining * 10_000; // 10s delay per DE call
-        remainingMs += remainingAtTotal * atDelayMs; // AT phase
-      }
-    } else {
-      const match = progress.match(/(\d+)\/(\d+)/);
-      if (match) {
-        const total = parseInt(match[2]);
-        const remaining = total - currentIdx - 1;
-        remainingMs += remaining * atDelayMs;
-      }
-    }
-
-    this._estimatedEndAt = new Date(Date.now() + remainingMs);
   }
 
   private fmtDuration(totalSeconds: number): string {
