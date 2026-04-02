@@ -70,6 +70,7 @@ class CountryScan {
   progress: string | null = null;
   currentPoint: { lat: number; lng: number } | null = null;
   stationsScanned = 0;
+  private _uniqueStationIds = new Set<string>();
   gridPoints = 0;
   estimatedEndAt: Date | null = null;
   lastCompletedAt: Date | null = null;
@@ -77,6 +78,13 @@ class CountryScan {
   callDurations: number[] = [];
   errors: string[] = [];
   log: ScanLogEntry[] = [];
+
+  addStations(stations: { id: string }[]): void {
+    for (const s of stations) {
+      this._uniqueStationIds.add(s.id);
+    }
+    this.stationsScanned = this._uniqueStationIds.size;
+  }
 
   addLog(message: string, type: ScanLogEntry['type'] = 'info'): void {
     this.log.push({ time: new Date().toISOString(), message, type });
@@ -86,6 +94,11 @@ class CountryScan {
   addError(msg: string): void {
     this.errors.push(`${new Date().toISOString()} ${msg}`);
     if (this.errors.length > MAX_ERRORS) this.errors = this.errors.slice(-MAX_ERRORS);
+  }
+
+  resetCycle(): void {
+    this.stationsScanned = 0;
+    this._uniqueStationIds.clear();
   }
 
   reset(): void {
@@ -152,8 +165,8 @@ class ScanScheduler {
 
   async clearCache(): Promise<void> {
     await clearAllCache();
-    this.de.stationsScanned = 0;
-    this.at.stationsScanned = 0;
+    this.de.resetCycle();
+    this.at.resetCycle();
     this.de.addLog('Cache geleert', 'warn');
     this.at.addLog('Cache geleert', 'warn');
   }
@@ -230,7 +243,7 @@ class ScanScheduler {
     const grid = generateGermanyGrid();
     const cs = this.de;
     cs.scanning = true;
-    cs.stationsScanned = 0;
+    cs.resetCycle();
     cs.callDurations = [];
     cs.gridPoints = grid.length;
     cs.addLog(`Scan gestartet: ${grid.length} Punkte (${DE_DELAY_MS / 1000}s Delay)`, 'info');
@@ -253,7 +266,7 @@ class ScanScheduler {
 
           if (stations.length > 0) {
             setCachedStations(point.id, { stations, lat: point.lat, lng: point.lng, radiusKm: 25, fuelType });
-            cs.stationsScanned += stations.length;
+            cs.addStations(stations);
           }
         } catch (err) {
           const msg = `${point.id}: ${err instanceof Error ? err.message : String(err)}`;
@@ -281,7 +294,7 @@ class ScanScheduler {
     const grid = generateAustriaGrid();
     const cs = this.at;
     cs.scanning = true;
-    cs.stationsScanned = 0;
+    cs.resetCycle();
     cs.callDurations = [];
     cs.gridPoints = grid.length;
     const totalBatches = Math.ceil(grid.length / AT_CONCURRENCY);
@@ -313,7 +326,7 @@ class ScanScheduler {
           if (r.status === 'fulfilled' && r.value.stations.length > 0) {
             const { point, stations } = r.value;
             setCachedStations(point.id, { stations, lat: point.lat, lng: point.lng, radiusKm: 5, fuelType });
-            cs.stationsScanned += stations.length;
+            cs.addStations(stations);
           } else if (r.status === 'rejected') {
             const msg = `batch ${b}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`;
             console.error(`[Grid-AT] ${msg}`);
