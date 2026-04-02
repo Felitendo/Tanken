@@ -132,6 +132,18 @@ export function findNearbyCachedStations(lat: number, lng: number, fuelType: str
   return best;
 }
 
+/** Clear all cached stations from memory and database. */
+export async function clearAllCache(): Promise<void> {
+  getCache().clear();
+  const db = getDb();
+  if (db) {
+    await db.query('DELETE FROM station_cache').catch(err => {
+      console.error('[StationCache] DB clear error:', err instanceof Error ? err.message : err);
+    });
+  }
+  console.log('[StationCache] Cache cleared (memory + database)');
+}
+
 /** Get all cached location entries (for debug / status). */
 export function getAllCachedLocations(): Array<{ locationId: string; stationCount: number; timestamp: number }> {
   const result: Array<{ locationId: string; stationCount: number; timestamp: number }> = [];

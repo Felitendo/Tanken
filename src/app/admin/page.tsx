@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings, UserPlus } from 'lucide-react';
+import { Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings, UserPlus, Trash2, MapPin, Clock, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -62,6 +62,14 @@ interface SchedulerStatus {
     oldestScan: string | null;
     newestScan: string | null;
   };
+  timing: {
+    scanStartedAt: string | null;
+    estimatedEndAt: string | null;
+    lastCycleDurationSec: number | null;
+    avgCallDurationSec: number | null;
+  };
+  log: Array<{ time: string; message: string; type: 'info' | 'success' | 'error' | 'warn' }>;
+  currentPoint: { lat: number; lng: number; country: string } | null;
 }
 
 type FeedbackType = 'success' | 'error' | 'info';
@@ -92,6 +100,8 @@ async function api<T = unknown>(url: string, options?: RequestInit): Promise<T> 
 
 function ScannerConsole() {
   const [status, setStatus] = useState<SchedulerStatus | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [showLog, setShowLog] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,12 +118,15 @@ function ScannerConsole() {
 
   const handleAction = async (action: string) => {
     try {
+      if (action === 'clearCache') setClearing(true);
       const result = await api<{ status: SchedulerStatus }>('/api/admin/scheduler', {
         method: 'POST',
         body: JSON.stringify({ action }),
       });
       setStatus(result.status);
-    } catch { /* ignore */ }
+    } catch { /* ignore */ } finally {
+      if (action === 'clearCache') setClearing(false);
+    }
   };
 
   const fmtTime = (iso: string) => {
@@ -123,10 +136,28 @@ function ScannerConsole() {
   const fmtRelative = (iso: string) => {
     try {
       const diff = Date.now() - new Date(iso).getTime();
+      if (diff < 0) return 'gleich';
       if (diff < 60_000) return 'gerade eben';
       if (diff < 3_600_000) return `vor ${Math.floor(diff / 60_000)} Min.`;
       if (diff < 86_400_000) return `vor ${Math.floor(diff / 3_600_000)} Std.`;
       return fmtTime(iso);
+    } catch { return iso; }
+  };
+
+  const fmtDuration = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.round(seconds % 60);
+    if (h > 0) return `${h} Std. ${m} Min.`;
+    if (m > 0) return `${m} Min. ${s} Sek.`;
+    return `${s} Sek.`;
+  };
+
+  const fmtEta = (iso: string) => {
+    try {
+      const diff = new Date(iso).getTime() - Date.now();
+      if (diff <= 0) return 'gleich fertig';
+      return `noch ~${fmtDuration(diff / 1000)}`;
     } catch { return iso; }
   };
 
@@ -141,6 +172,18 @@ function ScannerConsole() {
   }
 
   const isScanning = status.scanning || status.grid.scanning;
+  const logTypeColors: Record<string, string> = {
+    info: 'text-blue-600 dark:text-blue-400',
+    success: 'text-green-600 dark:text-green-400',
+    error: 'text-red-600 dark:text-red-400',
+    warn: 'text-amber-600 dark:text-amber-400',
+  };
+  const logTypeDots: Record<string, string> = {
+    info: 'bg-blue-500',
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    warn: 'bg-amber-500',
+  };
 
   return (
     <Card>
@@ -185,7 +228,7 @@ function ScannerConsole() {
             <p className="text-lg font-bold">{status.cache.totalStations.toLocaleString('de-DE')}</p>
           </div>
           <div className="border rounded-lg p-3 bg-muted/30">
-            <p className="text-xs text-muted-foreground">Grid-Zyklen</p>
+            <p className="text-xs text-muted-foreground">Scan-Zyklen</p>
             <p className="text-lg font-bold">{status.grid.cycleCount}</p>
           </div>
           <div className="border rounded-lg p-3 bg-muted/30">
@@ -196,14 +239,22 @@ function ScannerConsole() {
           </div>
         </div>
 
-        {/* Grid scan progress */}
-        {status.grid.scanning && status.grid.progress && (
-          <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-950/30">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-sm font-medium">
-                {status.grid.progress.startsWith('DE') ? '🇩🇪' : '🇦🇹'} Grid-Scan läuft: {status.grid.progress}
-              </span>
+        {/* Grid scan progress with ETA */}
+        {isScanning && status.grid.progress && (
+          <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-950/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                <span className="text-sm font-medium">
+                  {status.grid.progress.startsWith('DE') ? '🇩🇪' : '🇦🇹'} Grid-Scan: {status.grid.progress}
+                </span>
+              </div>
+              {status.timing.estimatedEndAt && (
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {fmtEta(status.timing.estimatedEndAt)}
+                </span>
+              )}
             </div>
             {(() => {
               const match = status.grid.progress.match(/(\d+)\/(\d+)/);
@@ -216,16 +267,91 @@ function ScannerConsole() {
                 </div>
               );
             })()}
+            {/* Current point */}
+            {status.currentPoint && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <MapPin className="h-3 w-3" />
+                Aktuell: {status.currentPoint.lat.toFixed(2)}°N, {status.currentPoint.lng.toFixed(2)}°E
+              </div>
+            )}
           </div>
         )}
 
-        {/* Grid scan info */}
+        {/* Timing stats */}
+        {(status.timing.lastCycleDurationSec || status.timing.scanStartedAt || status.timing.avgCallDurationSec) && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {status.timing.lastCycleDurationSec && (
+              <div className="border rounded-lg p-3 bg-muted/30">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> Letzter Zyklus</p>
+                <p className="text-sm font-bold">{fmtDuration(status.timing.lastCycleDurationSec)}</p>
+              </div>
+            )}
+            {status.timing.scanStartedAt && (
+              <div className="border rounded-lg p-3 bg-muted/30">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Activity className="h-3 w-3" /> Scan läuft seit</p>
+                <p className="text-sm font-bold">{fmtRelative(status.timing.scanStartedAt)}</p>
+              </div>
+            )}
+            {status.timing.avgCallDurationSec && (
+              <div className="border rounded-lg p-3 bg-muted/30">
+                <p className="text-xs text-muted-foreground">Ø API-Call</p>
+                <p className="text-sm font-bold">{status.timing.avgCallDurationSec} Sek.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Cache age info */}
         {status.grid.lastFullScanAt && (
           <div className="border rounded-lg p-3 bg-green-50 dark:bg-green-950/20">
-            <p className="text-xs text-muted-foreground">Letzter vollständiger Zyklus</p>
-            <p className="text-sm font-medium">
-              {fmtTime(status.grid.lastFullScanAt)} — {status.grid.totalStationsCached.toLocaleString('de-DE')} Stationen gecacht
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Letzter vollständiger Zyklus</p>
+                <p className="text-sm font-medium">
+                  {fmtTime(status.grid.lastFullScanAt)} — {status.grid.totalStationsCached.toLocaleString('de-DE')} Stationen
+                </p>
+              </div>
+              {status.cache.oldestScan && status.cache.newestScan && (
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Cache-Alter</p>
+                  <p className="text-xs font-medium">
+                    {fmtRelative(status.cache.oldestScan)} — {fmtRelative(status.cache.newestScan)}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Scan Log */}
+        {status.log && status.log.length > 0 && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowLog(!showLog)}
+              className="flex items-center gap-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 hover:text-foreground transition-colors"
+            >
+              <Activity className="h-3 w-3" />
+              Scan-Log ({status.log.length})
+              <span className="text-[10px] ml-1">{showLog ? '▲' : '▼'}</span>
+            </button>
+            {showLog && (
+              <div className="border rounded-lg bg-muted/20 max-h-60 overflow-y-auto">
+                <div className="divide-y divide-border/50">
+                  {status.log.slice().reverse().map((entry, i) => (
+                    <div key={i} className="px-3 py-1.5 flex items-start gap-2">
+                      <div className={`h-1.5 w-1.5 rounded-full mt-1.5 flex-shrink-0 ${logTypeDots[entry.type] || 'bg-gray-400'}`} />
+                      <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0 mt-0.5">
+                        {new Date(entry.time).toLocaleTimeString('de-DE')}
+                      </span>
+                      <span className={`text-xs break-all ${logTypeColors[entry.type] || ''}`}>
+                        {entry.message}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -242,6 +368,24 @@ function ScannerConsole() {
             </div>
           </div>
         )}
+
+        {/* Delete Cache Button */}
+        <Separator />
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Cache leeren</p>
+            <p className="text-xs text-muted-foreground">Löscht alle gecachten Stationen aus Speicher und Datenbank.</p>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => { if (confirm('Cache wirklich leeren? Alle gecachten Tankstellen werden gelöscht.')) handleAction('clearCache'); }}
+            disabled={clearing}
+          >
+            <Trash2 className="h-4 w-4" />
+            {clearing ? 'Löscht...' : 'Cache leeren'}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

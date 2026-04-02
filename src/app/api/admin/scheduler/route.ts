@@ -29,8 +29,10 @@ export async function POST(request: NextRequest) {
     scheduler.stop();
   } else if (action === 'restart') {
     scheduler.restart();
+  } else if (action === 'clearCache') {
+    await scheduler.clearCache();
   } else {
-    return NextResponse.json({ error: 'Ungültige Aktion. Erlaubt: start, stop, restart' }, { status: 400 });
+    return NextResponse.json({ error: 'Ungültige Aktion. Erlaubt: start, stop, restart, clearCache' }, { status: 400 });
   }
 
   return NextResponse.json({ ok: true, status: scheduler.getStatus() });
