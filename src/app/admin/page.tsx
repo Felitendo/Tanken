@@ -63,7 +63,6 @@ interface SchedulerStatus {
   cycleCount: number;
   scanStartedAt: string | null;
   lastCycleDurationSec: number | null;
-  deKeyCount: number;
   cache: {
     gridCells: number;
     totalStations: number;
@@ -405,7 +404,7 @@ function ScannerConsole() {
 
       {/* Per-country cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <CountryScannerCard cs={status.de} flag="🇩🇪" label="Deutschland" api={`Tankerkönig (${status.deKeyCount > 1 ? `${status.deKeyCount}× parallel, ` : ''}6s Delay)`} />
+        <CountryScannerCard cs={status.de} flag="🇩🇪" label="Deutschland" api="Tankerkönig (6s Delay)" />
         <CountryScannerCard cs={status.at} flag="🇦🇹" label="Österreich" api="E-Control (5× parallel)" />
       </div>
     </div>

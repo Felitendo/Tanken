@@ -1,6 +1,5 @@
 {
   "api_key": "YOUR_TANKERKOENIG_API_KEY",
-  "api_keys": [],
   "ors_api_key": "",
   "session_secret": "CHANGE_ME_LONG_RANDOM_SECRET",
   "fuel_type": "diesel",

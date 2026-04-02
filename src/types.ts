@@ -39,7 +39,6 @@ export interface ScanLocation {
 
 export interface RepoConfig {
   api_key: string;
-  api_keys?: string[];
   ors_api_key?: string;
   fuel_type: FuelType;
   radius_km: number;

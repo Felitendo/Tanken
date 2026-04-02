@@ -103,19 +103,12 @@ function normalizeSmtpConfig(value: Partial<RepoSmtpConfig> | undefined, fallbac
   };
 }
 
-function normalizeApiKeys(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const keys = value.map(k => String(k ?? '').trim()).filter(k => k.length > 0);
-  return keys.length > 0 ? keys : undefined;
-}
-
 export function normalizeRepoConfig(value: Partial<RepoConfig>, fallback: RepoConfig = DEFAULT_REPO_CONFIG): RepoConfig {
   return {
     ...DEFAULT_REPO_CONFIG,
     ...fallback,
     ...value,
     api_key: String(value.api_key ?? fallback.api_key ?? DEFAULT_REPO_CONFIG.api_key),
-    api_keys: normalizeApiKeys(value.api_keys ?? fallback.api_keys),
     ors_api_key: String(value.ors_api_key ?? fallback.ors_api_key ?? ''),
     fuel_type: normalizeFuelType(value.fuel_type ?? fallback.fuel_type ?? DEFAULT_REPO_CONFIG.fuel_type),
     radius_km: Math.max(1, Math.min(25, Math.round(normalizeNumber(value.radius_km, fallback.radius_km ?? DEFAULT_REPO_CONFIG.radius_km)))),

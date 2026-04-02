@@ -35,7 +35,6 @@ export interface SchedulerStatus {
   cycleCount: number;
   scanStartedAt: string | null;
   lastCycleDurationSec: number | null;
-  deKeyCount: number;
   cache: CacheStats;
   de: CountryScanStatus;
   at: CountryScanStatus;
@@ -181,18 +180,11 @@ class ScanScheduler {
       if (loc.timestamp > newestTs) newestTs = loc.timestamp;
     }
 
-    const config = loadRepoConfig();
-    const envKey = process.env.TANKERKOENIG_API_KEY || '';
-    const keyCount = config.api_keys?.length
-      ? new Set(config.api_keys).size
-      : [config.api_key || envKey].filter(k => k.length > 0).length;
-
     return {
       running: this.timer !== null,
       cycleCount: this._cycleCount,
       scanStartedAt: this._scanStartedAt?.toISOString() ?? null,
       lastCycleDurationSec: this._lastCycleDurationSec,
-      deKeyCount: keyCount,
       cache: {
         gridCells: cachedLocations.length,
         totalStations,
@@ -208,11 +200,7 @@ class ScanScheduler {
 
   private async startGridScan(): Promise<void> {
     const config = loadRepoConfig();
-    const envKey = process.env.TANKERKOENIG_API_KEY || '';
-    // Build unique list of API keys: prefer api_keys[], fall back to api_key / env
-    const allKeys = config.api_keys?.length
-      ? [...new Set(config.api_keys)]
-      : [config.api_key || envKey].filter(k => k.length > 0);
+    const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
     const fuelType = config.fuel_type || 'diesel';
 
     while (this.timer) {
@@ -222,8 +210,8 @@ class ScanScheduler {
 
       // Run DE and AT in parallel
       const tasks: Promise<void>[] = [];
-      if (allKeys.length > 0) {
-        tasks.push(this.runDeGridCycle(allKeys, fuelType));
+      if (apiKey) {
+        tasks.push(this.runDeGridCycle(apiKey, fuelType));
       } else {
         this.de.addLog('Kein API-Key — übersprungen', 'warn');
       }
@@ -249,66 +237,51 @@ class ScanScheduler {
     }
   }
 
-  // ─── Germany (parallel workers, one per API key) ──────────────
+  // ─── Germany (sequential, rate-limited) ───────────────────────
 
-  private async runDeGridCycle(apiKeys: string[], fuelType: string): Promise<void> {
+  private async runDeGridCycle(apiKey: string, fuelType: string): Promise<void> {
     const grid = generateGermanyGrid();
     const cs = this.de;
     cs.scanning = true;
     cs.resetCycle();
     cs.callDurations = [];
     cs.gridPoints = grid.length;
-    const keyCount = apiKeys.length;
-    cs.addLog(`Scan gestartet: ${grid.length} Punkte, ${keyCount} Key${keyCount > 1 ? 's' : ''} (${DE_DELAY_MS / 1000}s Delay)`, 'info');
-    console.log(`[Grid-DE] Starting: ${grid.length} points, ${keyCount} keys, fuel: ${fuelType}`);
+    cs.addLog(`Scan gestartet: ${grid.length} Punkte (${DE_DELAY_MS / 1000}s Delay)`, 'info');
+    console.log(`[Grid-DE] Starting: ${grid.length} points, fuel: ${fuelType}`);
 
     const startTime = Date.now();
-    let processed = 0;
-
-    // Split grid into chunks, one per API key
-    const chunks: ReturnType<typeof generateGermanyGrid>[] = Array.from({ length: keyCount }, () => []);
-    for (let i = 0; i < grid.length; i++) {
-      chunks[i % keyCount].push(grid[i]);
-    }
 
     try {
-      await Promise.all(chunks.map((chunk, workerIdx) =>
-        (async () => {
-          const apiKey = apiKeys[workerIdx];
-          for (let i = 0; i < chunk.length; i++) {
-            if (!this.timer) break;
-            const point = chunk[i];
-            processed++;
-            cs.progress = `${processed}/${grid.length}`;
-            cs.currentPoint = { lat: point.lat, lng: point.lng };
-            const remaining = Math.ceil((chunk.length - i - 1) * DE_DELAY_MS / 1000);
-            cs.estimatedEndAt = new Date(Date.now() + remaining * 1000);
+      for (let i = 0; i < grid.length; i++) {
+        if (!this.timer) break;
+        const point = grid[i];
+        cs.progress = `${i + 1}/${grid.length}`;
+        cs.currentPoint = { lat: point.lat, lng: point.lng };
+        cs.estimatedEndAt = new Date(Date.now() + (grid.length - i - 1) * DE_DELAY_MS);
 
-            try {
-              const t0 = Date.now();
-              const stations = await fetchStationsLive({ apiKey, lat: point.lat, lng: point.lng, radiusKm: 25, fuelType });
-              cs.callDurations.push(Date.now() - t0);
+        try {
+          const t0 = Date.now();
+          const stations = await fetchStationsLive({ apiKey, lat: point.lat, lng: point.lng, radiusKm: 25, fuelType });
+          cs.callDurations.push(Date.now() - t0);
 
-              if (stations.length > 0) {
-                setCachedStations(point.id, { stations, lat: point.lat, lng: point.lng, radiusKm: 25, fuelType });
-                cs.addStations(stations);
-              }
-            } catch (err) {
-              const msg = `${point.id}: ${err instanceof Error ? err.message : String(err)}`;
-              console.error(`[Grid-DE:${workerIdx}] ${msg}`);
-              cs.addError(msg);
-              cs.addLog(`Fehler ${point.lat},${point.lng}: ${err instanceof Error ? err.message : String(err)}`, 'error');
-            }
-
-            if (i < chunk.length - 1 && this.timer) await sleep(DE_DELAY_MS);
+          if (stations.length > 0) {
+            setCachedStations(point.id, { stations, lat: point.lat, lng: point.lng, radiusKm: 25, fuelType });
+            cs.addStations(stations);
           }
-        })()
-      ));
+        } catch (err) {
+          const msg = `${point.id}: ${err instanceof Error ? err.message : String(err)}`;
+          console.error(`[Grid-DE] ${msg}`);
+          cs.addError(msg);
+          cs.addLog(`Fehler ${point.lat},${point.lng}: ${err instanceof Error ? err.message : String(err)}`, 'error');
+        }
+
+        if (i < grid.length - 1 && this.timer) await sleep(DE_DELAY_MS);
+      }
 
       const dur = (Date.now() - startTime) / 1000;
       cs.lastDurationSec = Math.round(dur);
       cs.lastCompletedAt = new Date();
-      cs.addLog(`Fertig: ${cs.stationsScanned.toLocaleString('de-DE')} Stationen in ${fmtDuration(dur)} (${keyCount} Keys)`, 'success');
+      cs.addLog(`Fertig: ${cs.stationsScanned.toLocaleString('de-DE')} Stationen in ${fmtDuration(dur)}`, 'success');
       console.log(`[Grid-DE] Complete: ${cs.stationsScanned} stations`);
     } finally {
       cs.reset();
