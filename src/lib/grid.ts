@@ -10,18 +10,22 @@ export interface GridPoint {
 }
 
 // ─── Germany ────────────────────────────────────────────────────────
-// ~40km spacing with 25km radius circles for full Tankerkönig coverage
+// Hex grid: offset every other row by half the lng step so the worst-case
+// distance to the nearest grid centre drops from ~28km (rectangular) to ~23km,
+// safely inside the 25km Tankerkönig radius — no coverage gaps.
 const DE_SOUTH = 47.27;
 const DE_NORTH = 55.06;
 const DE_WEST = 5.87;
 const DE_EAST = 15.04;
-const DE_LAT_STEP = 0.36;  // ~40km
+const DE_LAT_STEP = 0.335; // ~37km  (hex row: worst-case centroid→vertex ≈ 24.8km < 25km)
 const DE_LNG_STEP = 0.572; // ~40km at ~51°N
 
 export function generateGermanyGrid(): GridPoint[] {
   const points: GridPoint[] = [];
+  let rowIdx = 0;
   for (let lat = DE_SOUTH; lat <= DE_NORTH; lat += DE_LAT_STEP) {
-    for (let lng = DE_WEST; lng <= DE_EAST; lng += DE_LNG_STEP) {
+    const lngOffset = rowIdx % 2 === 1 ? DE_LNG_STEP / 2 : 0;
+    for (let lng = DE_WEST + lngOffset; lng <= DE_EAST; lng += DE_LNG_STEP) {
       const rlat = Math.round(lat * 100) / 100;
       const rlng = Math.round(lng * 100) / 100;
       points.push({
@@ -31,6 +35,7 @@ export function generateGermanyGrid(): GridPoint[] {
         country: 'DE',
       });
     }
+    rowIdx++;
   }
   return points;
 }

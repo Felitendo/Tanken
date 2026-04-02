@@ -167,9 +167,9 @@ class ScanScheduler {
           this.addError(msg);
         }
 
-        // Wait 12 seconds between API calls to avoid rate limiting
+        // Wait 10 seconds between API calls to stay within Tankerkönig rate limits
         if (i < grid.length - 1 && this.timer) {
-          await sleep(12_000);
+          await sleep(10_000);
         }
       }
 

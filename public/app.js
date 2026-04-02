@@ -775,11 +775,20 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     setupMapSearch();
 
     // Reload stations from cache when user pans/zooms the map
+    const MIN_ZOOM_FOR_STATIONS = 10;
     let moveEndTimer = null;
     state.map.on('moveend', () => {
       clearTimeout(moveEndTimer);
       moveEndTimer = setTimeout(async () => {
         if (!state.map) return;
+        // Don't show stations when zoomed out too far
+        if (state.map.getZoom() < MIN_ZOOM_FOR_STATIONS) {
+          if (state.clusterGroup) { state.map.removeLayer(state.clusterGroup); state.clusterGroup = null; }
+          state.markers.forEach(m => state.map.removeLayer(m));
+          state.markers = [];
+          state._lastBounds = null;
+          return;
+        }
         const bounds = state.map.getBounds();
         const south = bounds.getSouth();
         const west = bounds.getWest();
