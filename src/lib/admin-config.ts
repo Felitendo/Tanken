@@ -4,7 +4,7 @@ import { RepoConfig } from '@/types';
 import { loadRepoConfig, normalizeRepoConfig } from '@/config';
 
 export const adminConfigSchema = z.object({
-  apiKey: z.string().default(''),
+  apiKeys: z.array(z.string()).default([]),
   orsApiKey: z.string().default(''),
   fuelType: z.enum(['diesel', 'e5', 'e10']).default('diesel'),
   radiusKm: z.coerce.number().min(1).max(25).default(10),
@@ -40,8 +40,12 @@ function createSessionSecret() {
 }
 
 export function toAdminConfig(config: RepoConfig): AdminConfigInput {
+  // Build key list: prefer api_keys[], fall back to single api_key
+  const keys = config.api_keys?.length
+    ? config.api_keys
+    : config.api_key ? [config.api_key] : [];
   return {
-    apiKey: config.api_key,
+    apiKeys: keys,
     orsApiKey: config.ors_api_key || '',
     fuelType: config.fuel_type,
     radiusKm: config.radius_km,
@@ -72,9 +76,11 @@ export function toAdminConfig(config: RepoConfig): AdminConfigInput {
 }
 
 export function fromAdminConfig(input: AdminConfigInput, current: RepoConfig = loadRepoConfig()): RepoConfig {
+  const cleanKeys = input.apiKeys.map(k => k.trim()).filter(k => k.length > 0);
   return normalizeRepoConfig(
     {
-      api_key: input.apiKey,
+      api_key: cleanKeys[0] || '',
+      api_keys: cleanKeys.length > 1 ? cleanKeys : undefined,
       ors_api_key: input.orsApiKey,
       fuel_type: input.fuelType,
       radius_km: input.radiusKm,

@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface AdminConfig {
-  apiKey: string;
+  apiKeys: string[];
   orsApiKey: string;
   fuelType: string;
   radiusKm: number;
@@ -77,7 +77,7 @@ interface SchedulerStatus {
 type FeedbackType = 'success' | 'error' | 'info';
 
 const defaultConfig: AdminConfig = {
-  apiKey: '',
+  apiKeys: [''],
   orsApiKey: '',
   fuelType: 'diesel',
   radiusKm: 10,
@@ -439,19 +439,52 @@ function ConfigFields({
           <Settings className="h-4 w-4" />
           App-Konfiguration
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="apiKey">Tankerkönig API Key</Label>
-            <Input
-              id="apiKey"
-              value={config.apiKey}
-              onChange={(e) => onChange({ apiKey: e.target.value })}
-              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-            />
-            <p className="text-xs text-muted-foreground">
-              Kostenlos registrieren unter <a href="https://creativecommons.tankerkoenig.de" target="_blank" rel="noopener noreferrer" className="underline">creativecommons.tankerkoenig.de</a>
-            </p>
+            <Label>Tankerkönig API Keys</Label>
+            {(config.apiKeys.length > 0 ? config.apiKeys : ['']).map((key, idx) => (
+              <div key={idx} className="flex gap-2">
+                <Input
+                  value={key}
+                  onChange={(e) => {
+                    const next = [...config.apiKeys];
+                    next[idx] = e.target.value;
+                    onChange({ apiKeys: next });
+                  }}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                />
+                {config.apiKeys.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => {
+                      const next = config.apiKeys.filter((_, i) => i !== idx);
+                      onChange({ apiKeys: next });
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onChange({ apiKeys: [...config.apiKeys, ''] })}
+              >
+                + Key hinzufügen
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Mehrere Keys = parallele DE-Scans. Kostenlos unter <a href="https://creativecommons.tankerkoenig.de" target="_blank" rel="noopener noreferrer" className="underline">creativecommons.tankerkoenig.de</a>
+              </p>
+            </div>
           </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="orsApiKey">OpenRouteService API Key <span className="text-muted-foreground font-normal">(optional)</span></Label>
             <Input
@@ -538,9 +571,9 @@ function ConfigFields({
           </div>
         </div>
         {onTestApiKey && (
-          <Button type="button" variant="outline" size="sm" onClick={onTestApiKey} disabled={testingApiKey || !config.apiKey}>
+          <Button type="button" variant="outline" size="sm" onClick={onTestApiKey} disabled={testingApiKey || !config.apiKeys.some(k => k.trim())}>
             <KeyRound className="h-4 w-4" />
-            {testingApiKey ? 'Teste...' : 'API-Key testen'}
+            {testingApiKey ? 'Teste...' : 'API-Keys testen'}
           </Button>
         )}
       </div>
@@ -845,14 +878,35 @@ export default function AdminPage() {
   const handleTestApiKey = async () => {
     setTestingApiKey(true);
     setFeedback(null);
+    const keys = config.apiKeys.filter(k => k.trim());
+    if (!keys.length) {
+      showFeedback('Keine API-Keys eingetragen.', 'error');
+      setTestingApiKey(false);
+      return;
+    }
     try {
-      const result = await api<{ ok: boolean; stations?: number }>('/api/admin/apikey-test', {
-        method: 'POST',
-        body: JSON.stringify({ apiKey: config.apiKey }),
-      });
-      showFeedback(`API-Key gültig. ${result.stations ?? 0} Stationen gefunden.`, 'success');
-    } catch (err) {
-      showFeedback((err as Error).message || 'API-Key Test fehlgeschlagen.', 'error');
+      const results = await Promise.all(
+        keys.map(async (key, idx) => {
+          try {
+            const r = await api<{ ok: boolean; stations?: number }>('/api/admin/apikey-test', {
+              method: 'POST',
+              body: JSON.stringify({ apiKey: key }),
+            });
+            return { idx: idx + 1, ok: true, stations: r.stations ?? 0 };
+          } catch (err) {
+            return { idx: idx + 1, ok: false, error: (err as Error).message };
+          }
+        })
+      );
+      const ok = results.filter(r => r.ok);
+      const fail = results.filter(r => !r.ok);
+      if (fail.length === 0) {
+        showFeedback(`Alle ${ok.length} Keys gültig.`, 'success');
+      } else if (ok.length === 0) {
+        showFeedback(`Alle ${fail.length} Keys ungültig.`, 'error');
+      } else {
+        showFeedback(`${ok.length} Key${ok.length > 1 ? 's' : ''} gültig, ${fail.length} ungültig (${fail.map(r => `#${r.idx}`).join(', ')}).`, 'error');
+      }
     } finally {
       setTestingApiKey(false);
     }
