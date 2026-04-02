@@ -1,21 +1,26 @@
 import { loadRepoConfig } from '@/config';
 import { fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
 import { setCachedStations, getAllCachedLocations, clearAllCache } from '@/lib/station-cache';
-import { generateGermanyGrid, generateAustriaGrid, AT_GRID_POINT_COUNT } from '@/lib/grid';
+import { generateGermanyGrid, generateAustriaGrid } from '@/lib/grid';
 
-export interface GridScanStatus {
-  scanning: boolean;
-  progress: string | null;
-  lastFullScanAt: string | null;
-  totalStationsCached: number;
-  cycleCount: number;
+export interface ScanLogEntry {
+  time: string;
+  message: string;
+  type: 'info' | 'success' | 'error' | 'warn';
 }
 
-export interface ScanTiming {
-  scanStartedAt: string | null;
+export interface CountryScanStatus {
+  scanning: boolean;
+  progress: string | null;
+  currentPoint: { lat: number; lng: number } | null;
+  stationsScanned: number;
+  gridPoints: number;
   estimatedEndAt: string | null;
-  lastCycleDurationSec: number | null;
-  avgCallDurationSec: number | null;
+  lastCompletedAt: string | null;
+  lastDurationSec: number | null;
+  avgCallSec: number | null;
+  errors: string[];
+  log: ScanLogEntry[];
 }
 
 export interface CacheStats {
@@ -25,28 +30,19 @@ export interface CacheStats {
   newestScan: string | null;
 }
 
-export interface ScanLogEntry {
-  time: string;
-  message: string;
-  type: 'info' | 'success' | 'error' | 'warn';
-}
-
 export interface SchedulerStatus {
   running: boolean;
-  scanning: boolean;
-  scanProgress: string | null;
-  errors: string[];
-  grid: GridScanStatus;
+  cycleCount: number;
+  scanStartedAt: string | null;
+  lastCycleDurationSec: number | null;
   cache: CacheStats;
-  timing: ScanTiming;
-  log: ScanLogEntry[];
-  currentPoint: { lat: number; lng: number; country: string } | null;
+  de: CountryScanStatus;
+  at: CountryScanStatus;
 }
 
 const MAX_ERRORS = 20;
-const MAX_LOG = 50;
+const MAX_LOG = 30;
 
-// ─── Timing constants ───────────────────────────────────────────────
 /** Delay between Tankerkönig calls (DE). 6s = 10 req/min, their stated limit. */
 const DE_DELAY_MS = 6_000;
 /** Concurrent E-Control requests (AT). No documented rate limit. */
@@ -58,117 +54,136 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function fmtDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = Math.round(totalSeconds % 60);
+  if (h > 0) return `${h} Std. ${m} Min.`;
+  if (m > 0) return `${m} Min. ${s} Sek.`;
+  return `${s} Sek.`;
+}
+
+// ─── Per-country scan state ─────────────────────────────────────────
+
+class CountryScan {
+  scanning = false;
+  progress: string | null = null;
+  currentPoint: { lat: number; lng: number } | null = null;
+  stationsScanned = 0;
+  gridPoints = 0;
+  estimatedEndAt: Date | null = null;
+  lastCompletedAt: Date | null = null;
+  lastDurationSec: number | null = null;
+  callDurations: number[] = [];
+  errors: string[] = [];
+  log: ScanLogEntry[] = [];
+
+  addLog(message: string, type: ScanLogEntry['type'] = 'info'): void {
+    this.log.push({ time: new Date().toISOString(), message, type });
+    if (this.log.length > MAX_LOG) this.log = this.log.slice(-MAX_LOG);
+  }
+
+  addError(msg: string): void {
+    this.errors.push(`${new Date().toISOString()} ${msg}`);
+    if (this.errors.length > MAX_ERRORS) this.errors = this.errors.slice(-MAX_ERRORS);
+  }
+
+  reset(): void {
+    this.scanning = false;
+    this.progress = null;
+    this.currentPoint = null;
+    this.estimatedEndAt = null;
+  }
+
+  getStatus(): CountryScanStatus {
+    const avg = this.callDurations.length > 0
+      ? this.callDurations.reduce((a, b) => a + b, 0) / this.callDurations.length / 1000
+      : null;
+    return {
+      scanning: this.scanning,
+      progress: this.progress,
+      currentPoint: this.currentPoint,
+      stationsScanned: this.stationsScanned,
+      gridPoints: this.gridPoints,
+      estimatedEndAt: this.estimatedEndAt?.toISOString() ?? null,
+      lastCompletedAt: this.lastCompletedAt?.toISOString() ?? null,
+      lastDurationSec: this.lastDurationSec,
+      avgCallSec: avg ? Math.round(avg * 10) / 10 : null,
+      errors: [...this.errors],
+      log: [...this.log],
+    };
+  }
+}
+
+// ─── Scheduler ──────────────────────────────────────────────────────
+
 class ScanScheduler {
   private timer: ReturnType<typeof setInterval> | null = null;
-  private _gridScanning = false;
-  private _gridProgress: string | null = null;
-  private _gridLastFullScanAt: Date | null = null;
-  private _gridTotalStations = 0;
-  private _gridCycleCount = 0;
   private _gridTimer: ReturnType<typeof setTimeout> | null = null;
-  private recentErrors: string[] = [];
-
-  // Timing
+  private _cycleCount = 0;
   private _scanStartedAt: Date | null = null;
-  private _estimatedEndAt: Date | null = null;
   private _lastCycleDurationSec: number | null = null;
-  private _callDurations: number[] = [];
-  private _currentPoint: { lat: number; lng: number; country: string } | null = null;
 
-  // Log
-  private _log: ScanLogEntry[] = [];
+  readonly de = new CountryScan();
+  readonly at = new CountryScan();
 
   start(): void {
     if (this.timer) return;
-    this.addLog('Scheduler gestartet', 'info');
+    this.de.addLog('Scheduler gestartet', 'info');
+    this.at.addLog('Scheduler gestartet', 'info');
     console.log('[Scheduler] Starting grid scan scheduler');
     this.timer = setInterval(() => {}, 60_000);
     this._gridTimer = setTimeout(() => this.startGridScan(), 10_000);
   }
 
   stop(): void {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
-    if (this._gridTimer) {
-      clearTimeout(this._gridTimer);
-      this._gridTimer = null;
-    }
-    this._gridScanning = false;
-    this._gridProgress = null;
-    this._currentPoint = null;
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    if (this._gridTimer) { clearTimeout(this._gridTimer); this._gridTimer = null; }
+    this.de.reset();
+    this.at.reset();
     this._scanStartedAt = null;
-    this._estimatedEndAt = null;
-    this.addLog('Scheduler gestoppt', 'info');
+    this.de.addLog('Scheduler gestoppt', 'info');
+    this.at.addLog('Scheduler gestoppt', 'info');
     console.log('[Scheduler] Stopped');
   }
 
-  restart(): void {
-    this.stop();
-    this.start();
-  }
-
-  isRunning(): boolean {
-    return this.timer !== null;
-  }
+  restart(): void { this.stop(); this.start(); }
+  isRunning(): boolean { return this.timer !== null; }
 
   async clearCache(): Promise<void> {
     await clearAllCache();
-    this._gridTotalStations = 0;
-    this.addLog('Cache geleert (Speicher + Datenbank)', 'warn');
+    this.de.stationsScanned = 0;
+    this.at.stationsScanned = 0;
+    this.de.addLog('Cache geleert', 'warn');
+    this.at.addLog('Cache geleert', 'warn');
   }
 
   getStatus(): SchedulerStatus {
     const cachedLocations = getAllCachedLocations();
-    let totalStations = 0;
-    let oldestTs = Infinity;
-    let newestTs = 0;
+    let totalStations = 0, oldestTs = Infinity, newestTs = 0;
     for (const loc of cachedLocations) {
       totalStations += loc.stationCount;
       if (loc.timestamp < oldestTs) oldestTs = loc.timestamp;
       if (loc.timestamp > newestTs) newestTs = loc.timestamp;
     }
 
-    const avgCall = this._callDurations.length > 0
-      ? this._callDurations.reduce((a, b) => a + b, 0) / this._callDurations.length / 1000
-      : null;
-
     return {
       running: this.timer !== null,
-      scanning: this._gridScanning,
-      scanProgress: this._gridProgress,
-      errors: [...this.recentErrors],
-      grid: {
-        scanning: this._gridScanning,
-        progress: this._gridProgress,
-        lastFullScanAt: this._gridLastFullScanAt?.toISOString() ?? null,
-        totalStationsCached: this._gridTotalStations,
-        cycleCount: this._gridCycleCount,
-      },
+      cycleCount: this._cycleCount,
+      scanStartedAt: this._scanStartedAt?.toISOString() ?? null,
+      lastCycleDurationSec: this._lastCycleDurationSec,
       cache: {
         gridCells: cachedLocations.length,
         totalStations,
         oldestScan: oldestTs === Infinity ? null : new Date(oldestTs).toISOString(),
         newestScan: newestTs === 0 ? null : new Date(newestTs).toISOString(),
       },
-      timing: {
-        scanStartedAt: this._scanStartedAt?.toISOString() ?? null,
-        estimatedEndAt: this._estimatedEndAt?.toISOString() ?? null,
-        lastCycleDurationSec: this._lastCycleDurationSec,
-        avgCallDurationSec: avgCall ? Math.round(avgCall * 10) / 10 : null,
-      },
-      log: [...this._log],
-      currentPoint: this._currentPoint,
+      de: this.de.getStatus(),
+      at: this.at.getStatus(),
     };
   }
 
-  private addLog(message: string, type: ScanLogEntry['type'] = 'info'): void {
-    this._log.push({ time: new Date().toISOString(), message, type });
-    if (this._log.length > MAX_LOG) {
-      this._log = this._log.slice(-MAX_LOG);
-    }
-  }
+  // ─── Main loop ──────────────────────────────────────────────────
 
   private async startGridScan(): Promise<void> {
     const config = loadRepoConfig();
@@ -176,191 +191,151 @@ class ScanScheduler {
     const fuelType = config.fuel_type || 'diesel';
 
     while (this.timer) {
-      this._gridTotalStations = 0;
       const cycleStart = Date.now();
       this._scanStartedAt = new Date();
-      this._callDurations = [];
-      this.addLog(`Scan-Zyklus #${this._gridCycleCount + 1} gestartet (Kraftstoff: ${fuelType})`, 'info');
+      this._cycleCount++;
 
+      // Run DE and AT in parallel
+      const tasks: Promise<void>[] = [];
       if (apiKey) {
-        await this.runDeGridCycle(apiKey, fuelType);
+        tasks.push(this.runDeGridCycle(apiKey, fuelType));
       } else {
-        this.addLog('Kein Tankerkönig API-Key — Deutschland-Scan übersprungen', 'warn');
+        this.de.addLog('Kein API-Key — übersprungen', 'warn');
       }
+      tasks.push(this.runAtGridCycle(fuelType));
 
-      if (this.timer) {
-        await this.runAtGridCycle(fuelType);
-      }
+      await Promise.all(tasks);
 
       const cycleDuration = (Date.now() - cycleStart) / 1000;
       this._lastCycleDurationSec = Math.round(cycleDuration);
-      this._gridLastFullScanAt = new Date();
-      this._gridCycleCount++;
       this._scanStartedAt = null;
-      this._estimatedEndAt = null;
-      this._currentPoint = null;
 
-      this.addLog(
-        `Zyklus #${this._gridCycleCount} abgeschlossen: ${this._gridTotalStations.toLocaleString('de-DE')} Stationen in ${this.fmtDuration(cycleDuration)}`,
-        'success'
-      );
-      console.log(`[Grid] Full scan cycle complete: ${this._gridTotalStations} total station entries`);
+      const total = this.de.stationsScanned + this.at.stationsScanned;
+      const msg = `Zyklus #${this._cycleCount} fertig: ${total.toLocaleString('de-DE')} Stationen in ${fmtDuration(cycleDuration)}`;
+      this.de.addLog(msg, 'success');
+      this.at.addLog(msg, 'success');
+      console.log(`[Grid] ${msg}`);
 
       if (this.timer) {
-        this.addLog('Warte 5 Minuten bis zum nächsten Zyklus...', 'info');
+        this.de.addLog('Warte 5 Min. bis zum nächsten Zyklus...', 'info');
+        this.at.addLog('Warte 5 Min. bis zum nächsten Zyklus...', 'info');
         await sleep(5 * 60_000);
       }
     }
   }
 
+  // ─── Germany (sequential, rate-limited) ───────────────────────
+
   private async runDeGridCycle(apiKey: string, fuelType: string): Promise<void> {
     const grid = generateGermanyGrid();
-    this._gridScanning = true;
-    this.addLog(`Deutschland-Scan: ${grid.length} Grid-Punkte (${DE_DELAY_MS / 1000}s Delay)`, 'info');
-    console.log(`[Grid-DE] Starting Germany scan: ${grid.length} points, fuel type: ${fuelType}`);
+    const cs = this.de;
+    cs.scanning = true;
+    cs.stationsScanned = 0;
+    cs.callDurations = [];
+    cs.gridPoints = grid.length;
+    cs.addLog(`Scan gestartet: ${grid.length} Punkte (${DE_DELAY_MS / 1000}s Delay)`, 'info');
+    console.log(`[Grid-DE] Starting: ${grid.length} points, fuel: ${fuelType}`);
 
-    let scannedStations = 0;
+    const startTime = Date.now();
 
     try {
       for (let i = 0; i < grid.length; i++) {
         if (!this.timer) break;
         const point = grid[i];
-        this._gridProgress = `DE ${i + 1}/${grid.length}`;
-        this._currentPoint = { lat: point.lat, lng: point.lng, country: 'DE' };
-
-        // ETA: remaining DE points at DE_DELAY_MS + AT phase estimate
-        const remainingDe = grid.length - i - 1;
-        const atBatches = Math.ceil(AT_GRID_POINT_COUNT / AT_CONCURRENCY);
-        const remainingMs = remainingDe * DE_DELAY_MS + atBatches * AT_BATCH_DELAY_MS;
-        this._estimatedEndAt = new Date(Date.now() + remainingMs);
+        cs.progress = `${i + 1}/${grid.length}`;
+        cs.currentPoint = { lat: point.lat, lng: point.lng };
+        cs.estimatedEndAt = new Date(Date.now() + (grid.length - i - 1) * DE_DELAY_MS);
 
         try {
-          const callStart = Date.now();
-          const stations = await fetchStationsLive({
-            apiKey,
-            lat: point.lat,
-            lng: point.lng,
-            radiusKm: 25,
-            fuelType,
-          });
-          this._callDurations.push(Date.now() - callStart);
+          const t0 = Date.now();
+          const stations = await fetchStationsLive({ apiKey, lat: point.lat, lng: point.lng, radiusKm: 25, fuelType });
+          cs.callDurations.push(Date.now() - t0);
 
           if (stations.length > 0) {
-            setCachedStations(point.id, {
-              stations,
-              lat: point.lat,
-              lng: point.lng,
-              radiusKm: 25,
-              fuelType,
-            });
-            this._gridTotalStations += stations.length;
-            scannedStations += stations.length;
+            setCachedStations(point.id, { stations, lat: point.lat, lng: point.lng, radiusKm: 25, fuelType });
+            cs.stationsScanned += stations.length;
           }
         } catch (err) {
-          const msg = `[Grid-DE] ${point.id}: ${err instanceof Error ? err.message : String(err)}`;
-          console.error(msg);
-          this.addError(msg);
-          this.addLog(`Fehler bei ${point.lat},${point.lng}: ${err instanceof Error ? err.message : String(err)}`, 'error');
+          const msg = `${point.id}: ${err instanceof Error ? err.message : String(err)}`;
+          console.error(`[Grid-DE] ${msg}`);
+          cs.addError(msg);
+          cs.addLog(`Fehler ${point.lat},${point.lng}: ${err instanceof Error ? err.message : String(err)}`, 'error');
         }
 
-        if (i < grid.length - 1 && this.timer) {
-          await sleep(DE_DELAY_MS);
-        }
+        if (i < grid.length - 1 && this.timer) await sleep(DE_DELAY_MS);
       }
 
-      this.addLog(`Deutschland fertig: ${scannedStations.toLocaleString('de-DE')} Stationen von ${grid.length} Punkten`, 'success');
-      console.log(`[Grid-DE] Germany scan complete`);
+      const dur = (Date.now() - startTime) / 1000;
+      cs.lastDurationSec = Math.round(dur);
+      cs.lastCompletedAt = new Date();
+      cs.addLog(`Fertig: ${cs.stationsScanned.toLocaleString('de-DE')} Stationen in ${fmtDuration(dur)}`, 'success');
+      console.log(`[Grid-DE] Complete: ${cs.stationsScanned} stations`);
     } finally {
-      this._gridScanning = false;
-      this._gridProgress = null;
+      cs.reset();
     }
   }
 
+  // ─── Austria (batched parallel) ───────────────────────────────
+
   private async runAtGridCycle(fuelType: string): Promise<void> {
     const grid = generateAustriaGrid();
-    this._gridScanning = true;
+    const cs = this.at;
+    cs.scanning = true;
+    cs.stationsScanned = 0;
+    cs.callDurations = [];
+    cs.gridPoints = grid.length;
     const totalBatches = Math.ceil(grid.length / AT_CONCURRENCY);
-    this.addLog(`Österreich-Scan: ${grid.length} Grid-Punkte (${AT_CONCURRENCY}× parallel)`, 'info');
-    console.log(`[Grid-AT] Starting Austria scan: ${grid.length} points in ${totalBatches} batches, fuel type: ${fuelType}`);
+    cs.addLog(`Scan gestartet: ${grid.length} Punkte (${AT_CONCURRENCY}× parallel)`, 'info');
+    console.log(`[Grid-AT] Starting: ${grid.length} points in ${totalBatches} batches, fuel: ${fuelType}`);
 
-    let scannedStations = 0;
+    const startTime = Date.now();
     let processed = 0;
 
     try {
       for (let b = 0; b < totalBatches; b++) {
         if (!this.timer) break;
-        const batchStart = b * AT_CONCURRENCY;
-        const batch = grid.slice(batchStart, batchStart + AT_CONCURRENCY);
+        const batch = grid.slice(b * AT_CONCURRENCY, (b + 1) * AT_CONCURRENCY);
         processed += batch.length;
-        this._gridProgress = `AT ${processed}/${grid.length}`;
-        this._currentPoint = { lat: batch[0].lat, lng: batch[0].lng, country: 'AT' };
+        cs.progress = `${processed}/${grid.length}`;
+        cs.currentPoint = { lat: batch[0].lat, lng: batch[0].lng };
+        cs.estimatedEndAt = new Date(Date.now() + (totalBatches - b - 1) * AT_BATCH_DELAY_MS);
 
-        // ETA: remaining batches
-        const remainingBatches = totalBatches - b - 1;
-        this._estimatedEndAt = new Date(Date.now() + remainingBatches * AT_BATCH_DELAY_MS);
-
-        // Fire all requests in this batch concurrently
         const results = await Promise.allSettled(
           batch.map(async (point) => {
-            const callStart = Date.now();
-            const stations = await fetchStationsEControl({
-              lat: point.lat,
-              lng: point.lng,
-              fuelType,
-            });
-            this._callDurations.push(Date.now() - callStart);
+            const t0 = Date.now();
+            const stations = await fetchStationsEControl({ lat: point.lat, lng: point.lng, fuelType });
+            cs.callDurations.push(Date.now() - t0);
             return { point, stations };
           })
         );
 
-        for (const result of results) {
-          if (result.status === 'fulfilled') {
-            const { point, stations } = result.value;
-            if (stations.length > 0) {
-              setCachedStations(point.id, {
-                stations,
-                lat: point.lat,
-                lng: point.lng,
-                radiusKm: 5,
-                fuelType,
-              });
-              this._gridTotalStations += stations.length;
-              scannedStations += stations.length;
-            }
-          } else {
-            const msg = `[Grid-AT] batch ${b}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`;
-            console.error(msg);
-            this.addError(msg);
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value.stations.length > 0) {
+            const { point, stations } = r.value;
+            setCachedStations(point.id, { stations, lat: point.lat, lng: point.lng, radiusKm: 5, fuelType });
+            cs.stationsScanned += stations.length;
+          } else if (r.status === 'rejected') {
+            const msg = `batch ${b}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`;
+            console.error(`[Grid-AT] ${msg}`);
+            cs.addError(msg);
           }
         }
 
-        if (b < totalBatches - 1 && this.timer) {
-          await sleep(AT_BATCH_DELAY_MS);
-        }
+        if (b < totalBatches - 1 && this.timer) await sleep(AT_BATCH_DELAY_MS);
       }
 
-      this.addLog(`Österreich fertig: ${scannedStations.toLocaleString('de-DE')} Stationen von ${grid.length} Punkten`, 'success');
-      console.log(`[Grid-AT] Austria scan complete`);
+      const dur = (Date.now() - startTime) / 1000;
+      cs.lastDurationSec = Math.round(dur);
+      cs.lastCompletedAt = new Date();
+      cs.addLog(`Fertig: ${cs.stationsScanned.toLocaleString('de-DE')} Stationen in ${fmtDuration(dur)}`, 'success');
+      console.log(`[Grid-AT] Complete: ${cs.stationsScanned} stations`);
     } finally {
-      this._gridScanning = false;
-      this._gridProgress = null;
+      cs.reset();
     }
-  }
-
-  private fmtDuration(totalSeconds: number): string {
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = Math.round(totalSeconds % 60);
-    if (h > 0) return `${h} Std. ${m} Min.`;
-    if (m > 0) return `${m} Min. ${s} Sek.`;
-    return `${s} Sek.`;
   }
 
   private addError(msg: string): void {
-    this.recentErrors.push(`${new Date().toISOString()} ${msg}`);
-    if (this.recentErrors.length > MAX_ERRORS) {
-      this.recentErrors = this.recentErrors.slice(-MAX_ERRORS);
-    }
+    this.de.addError(msg);
   }
 }
 
