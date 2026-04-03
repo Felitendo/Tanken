@@ -43,8 +43,8 @@ export interface SchedulerStatus {
 const MAX_ERRORS = 20;
 const MAX_LOG = 30;
 
-/** Delay between Tankerkönig calls (DE). 6s = 10 req/min, their stated limit. */
-const DE_DELAY_MS = 6_000;
+/** Delay between Tankerkönig calls (DE). 10s = 6 req/min to avoid 503 rate limits. */
+const DE_DELAY_MS = 10_000;
 /** Concurrent E-Control requests (AT). No documented rate limit. */
 const AT_CONCURRENCY = 5;
 /** Small pause between AT batches to avoid hammering. */
