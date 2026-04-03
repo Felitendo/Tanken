@@ -84,16 +84,20 @@ export async function GET(request: NextRequest) {
   } else if (runtimeConfig.apiKey && canMakeLiveCall()) {
     // Tankerkönig API (Germany)
     recordLiveCall();
-    const stations = await fetchStationsLive({
-      apiKey: runtimeConfig.apiKey,
-      lat,
-      lng,
-      radiusKm: rad,
-      fuelType: fuel,
-    });
-    if (stations.length > 0) {
-      const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, stations);
-      return NextResponse.json(enriched, { headers: { 'X-Cache': 'live' } });
+    try {
+      const stations = await fetchStationsLive({
+        apiKey: runtimeConfig.apiKey,
+        lat,
+        lng,
+        radiusKm: rad,
+        fuelType: fuel,
+      });
+      if (stations.length > 0) {
+        const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, stations);
+        return NextResponse.json(enriched, { headers: { 'X-Cache': 'live' } });
+      }
+    } catch {
+      // Fall through to cached data
     }
   }
 
