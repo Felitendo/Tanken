@@ -29,10 +29,7 @@ export async function fetchStationsLive(params: {
 }): Promise<CachedStation[]> {
   const { apiKey, lat, lng, radiusKm, fuelType } = params;
   const url = `https://creativecommons.tankerkoenig.de/json/list.php?lat=${lat}&lng=${lng}&rad=${radiusKm}&sort=price&type=${fuelType}&apikey=${apiKey}`;
-  const { data, status } = await fetchJson<{ ok?: boolean; message?: string; stations?: Record<string, unknown>[] }>(url);
-  if (status !== 200) {
-    throw new Error(`HTTP ${status}: ${data.message || 'Unbekannter Fehler'}`);
-  }
+  const { data } = await fetchJson<{ ok?: boolean; message?: string; stations?: Record<string, unknown>[] }>(url);
   if (!data.ok) {
     throw new Error(data.message || 'API-Fehler (ok=false)');
   }
