@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings, UserPlus, Trash2, MapPin, Clock, Activity } from 'lucide-react';
+import { Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings, UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, RotateCcw, Play, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -98,7 +98,6 @@ async function api<T = unknown>(url: string, options?: RequestInit): Promise<T> 
 }
 
 
-
 // ─── Shared formatters ──────────────────────────────────────────────
 
 const fmtTime = (iso: string) => {
@@ -129,21 +128,53 @@ const fmtEta = (iso: string) => {
   try {
     const diff = new Date(iso).getTime() - Date.now();
     if (diff <= 0) return 'gleich fertig';
-    return `noch ~${fmtDuration(diff / 1000)}`;
+    return `~${fmtDuration(diff / 1000)}`;
   } catch { return iso; }
 };
 
-const logTypeColors: Record<string, string> = {
-  info: 'text-blue-600 dark:text-blue-400',
-  success: 'text-green-600 dark:text-green-400',
-  error: 'text-red-600 dark:text-red-400',
-  warn: 'text-amber-600 dark:text-amber-400',
-};
+// ─── Tiny reusable pieces ───────────────────────────────────────────
+
+function StatCell({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-semibold tabular-nums">{value}</p>
+      {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function StatusDot({ active, className }: { active: boolean; className?: string }) {
+  return (
+    <span className={`inline-block h-2 w-2 rounded-full ${active ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground/30'} ${className ?? ''}`} />
+  );
+}
+
+function Badge({ children, variant = 'default' }: { children: React.ReactNode; variant?: 'default' | 'success' | 'warning' | 'destructive' }) {
+  const colors = {
+    default: 'bg-secondary text-secondary-foreground',
+    success: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    warning: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    destructive: 'bg-destructive/10 text-destructive',
+  };
+  return (
+    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${colors[variant]}`}>
+      {children}
+    </span>
+  );
+}
+
 const logTypeDots: Record<string, string> = {
   info: 'bg-blue-500',
-  success: 'bg-green-500',
+  success: 'bg-emerald-500',
   error: 'bg-red-500',
   warn: 'bg-amber-500',
+};
+const logTypeText: Record<string, string> = {
+  info: 'text-muted-foreground',
+  success: 'text-emerald-600 dark:text-emerald-400',
+  error: 'text-red-600 dark:text-red-400',
+  warn: 'text-amber-600 dark:text-amber-400',
 };
 
 // ─── Country Scanner Card ───────────────────────────────────────────
@@ -165,30 +196,40 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">{flag}</span>
-          <div className="flex-1">
-            <CardTitle className="text-lg">{label}</CardTitle>
-            <CardDescription>
-              {cs.scanning
-                ? `Scannt... ${cs.progress || ''}`
-                : cs.lastCompletedAt
-                  ? `Letzter Scan: ${fmtRelative(cs.lastCompletedAt)}`
-                  : 'Noch nicht gescannt'}
-              {' — '}{apiLabel}
-            </CardDescription>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl leading-none">{flag}</span>
+            <div>
+              <CardTitle className="text-base">{label}</CardTitle>
+              <CardDescription className="text-xs">{apiLabel}</CardDescription>
+            </div>
           </div>
-          {cs.scanning && (
-            <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />
+          {cs.scanning ? (
+            <Badge variant="success">Scannt {cs.progress}</Badge>
+          ) : cs.lastCompletedAt ? (
+            <Badge>{fmtRelative(cs.lastCompletedAt)}</Badge>
+          ) : (
+            <Badge variant="warning">Warte</Badge>
           )}
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
         {/* Progress bar */}
         {cs.scanning && cs.progress && (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
+            <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{cs.progress}</span>
+              {cs.currentPoint && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="h-3 w-3" />
+                  {cs.currentPoint.lat.toFixed(2)}°N, {cs.currentPoint.lng.toFixed(2)}°E
+                </span>
+              )}
               {cs.estimatedEndAt && (
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
@@ -196,65 +237,42 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
                 </span>
               )}
             </div>
-            <div className="w-full bg-muted rounded-full h-2">
-              <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-            </div>
-            {cs.currentPoint && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <MapPin className="h-3 w-3" />
-                {cs.currentPoint.lat.toFixed(2)}°N, {cs.currentPoint.lng.toFixed(2)}°E
-              </div>
-            )}
           </div>
         )}
 
-        {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <div className="border rounded-lg p-2 bg-muted/30">
-            <p className="text-[10px] text-muted-foreground">Grid-Punkte</p>
-            <p className="text-sm font-bold">{cs.gridPoints || '—'}</p>
-          </div>
-          <div className="border rounded-lg p-2 bg-muted/30">
-            <p className="text-[10px] text-muted-foreground">Stationen</p>
-            <p className="text-sm font-bold">{cs.stationsScanned ? cs.stationsScanned.toLocaleString('de-DE') : '—'}</p>
-          </div>
-          <div className="border rounded-lg p-2 bg-muted/30">
-            <p className="text-[10px] text-muted-foreground">Letzter Scan</p>
-            <p className="text-sm font-bold">{cs.lastDurationSec ? fmtDuration(cs.lastDurationSec) : '—'}</p>
-          </div>
-          <div className="border rounded-lg p-2 bg-muted/30">
-            <p className="text-[10px] text-muted-foreground">Ø API-Call</p>
-            <p className="text-sm font-bold">{cs.avgCallSec ? `${cs.avgCallSec}s` : '—'}</p>
-          </div>
+        {/* Stats grid */}
+        <div className="grid grid-cols-4 gap-4">
+          <StatCell label="Grid" value={cs.gridPoints ? cs.gridPoints.toLocaleString('de-DE') : '—'} />
+          <StatCell label="Stationen" value={cs.stationsScanned ? cs.stationsScanned.toLocaleString('de-DE') : '—'} />
+          <StatCell label="Dauer" value={cs.lastDurationSec ? fmtDuration(cs.lastDurationSec) : '—'} />
+          <StatCell label="Ø Call" value={cs.avgCallSec ? `${cs.avgCallSec}s` : '—'} />
         </div>
 
-        {/* Log */}
+        {/* Log toggle */}
         {cs.log.length > 0 && (
           <div>
             <button
               type="button"
               onClick={() => setShowLog(!showLog)}
-              className="flex items-center gap-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               <Activity className="h-3 w-3" />
               Log ({cs.log.length})
-              <span className="text-[10px] ml-1">{showLog ? '▲' : '▼'}</span>
+              <ChevronDown className={`h-3 w-3 transition-transform ${showLog ? 'rotate-180' : ''}`} />
             </button>
             {showLog && (
-              <div className="border rounded-lg bg-muted/20 max-h-48 overflow-y-auto">
-                <div className="divide-y divide-border/50">
-                  {cs.log.slice().reverse().map((entry, i) => (
-                    <div key={i} className="px-3 py-1.5 flex items-start gap-2">
-                      <div className={`h-1.5 w-1.5 rounded-full mt-1.5 flex-shrink-0 ${logTypeDots[entry.type] || 'bg-gray-400'}`} />
-                      <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0 mt-0.5">
-                        {new Date(entry.time).toLocaleTimeString('de-DE')}
-                      </span>
-                      <span className={`text-xs break-all ${logTypeColors[entry.type] || ''}`}>
-                        {entry.message}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              <div className="mt-2 rounded-lg border bg-muted/30 max-h-44 overflow-y-auto">
+                {cs.log.slice().reverse().map((entry, i) => (
+                  <div key={i} className="flex items-start gap-2 px-3 py-1.5 border-b border-border/40 last:border-0">
+                    <div className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${logTypeDots[entry.type] || 'bg-muted-foreground'}`} />
+                    <span className="text-[10px] text-muted-foreground font-mono shrink-0 pt-px">
+                      {new Date(entry.time).toLocaleTimeString('de-DE')}
+                    </span>
+                    <span className={`text-xs break-all ${logTypeText[entry.type] || ''}`}>
+                      {entry.message}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -262,15 +280,13 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
 
         {/* Errors */}
         {cs.errors.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold text-destructive uppercase tracking-wider mb-1.5">Fehler ({cs.errors.length})</p>
-            <div className="border border-destructive/20 rounded-lg bg-destructive/5 max-h-32 overflow-y-auto">
-              <div className="divide-y divide-destructive/10">
-                {cs.errors.slice().reverse().map((err, i) => (
-                  <p key={i} className="px-3 py-1.5 text-xs text-muted-foreground font-mono break-all">{err}</p>
-                ))}
-              </div>
+          <div className="rounded-lg border border-destructive/20 bg-destructive/5 max-h-28 overflow-y-auto">
+            <div className="px-3 py-1.5 border-b border-destructive/10">
+              <p className="text-xs font-medium text-destructive">Fehler ({cs.errors.length})</p>
             </div>
+            {cs.errors.slice().reverse().map((err, i) => (
+              <p key={i} className="px-3 py-1 text-[11px] text-muted-foreground font-mono break-all border-b border-destructive/5 last:border-0">{err}</p>
+            ))}
           </div>
         )}
       </CardContent>
@@ -278,7 +294,7 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
   );
 }
 
-// ─── Main Scanner Console ───────────────────────────────────────────
+// ─── Scanner Console ────────────────────────────────────────────────
 
 function ScannerConsole() {
   const [status, setStatus] = useState<SchedulerStatus | null>(null);
@@ -313,7 +329,7 @@ function ScannerConsole() {
   if (!status) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
+        <CardContent className="py-12 text-center text-muted-foreground">
           <div className="animate-pulse">Scanner-Status wird geladen...</div>
         </CardContent>
       </Card>
@@ -324,32 +340,37 @@ function ScannerConsole() {
 
   return (
     <div className="space-y-4">
-      {/* Global scanner controls */}
+      {/* Scanner header card */}
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${status.running ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
-                <Radio className="h-5 w-5" />
+              <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${status.running ? 'bg-emerald-500/10' : 'bg-muted'}`}>
+                <Radio className={`h-4 w-4 ${status.running ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
               </div>
               <div>
-                <CardTitle className="text-xl">Scanner</CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg">Scanner</CardTitle>
+                  <StatusDot active={status.running} />
+                </div>
                 <CardDescription>
                   {status.running
-                    ? isScanning
-                      ? 'DE + AT scannen parallel...'
-                      : 'Aktiv — wartet auf nächsten Zyklus'
+                    ? isScanning ? 'Scannt DE + AT parallel' : 'Wartet auf nächsten Zyklus'
                     : 'Gestoppt'}
                 </CardDescription>
               </div>
             </div>
             <div className="flex gap-1.5">
-              <Button variant="outline" size="sm" onClick={() => handleAction(status.running ? 'stop' : 'start')}>
-                {status.running ? 'Stoppen' : 'Starten'}
+              <Button
+                variant={status.running ? 'outline' : 'default'}
+                size="sm"
+                onClick={() => handleAction(status.running ? 'stop' : 'start')}
+              >
+                {status.running ? <><Square className="h-3.5 w-3.5" /> Stoppen</> : <><Play className="h-3.5 w-3.5" /> Starten</>}
               </Button>
               {status.running && (
                 <Button variant="outline" size="sm" onClick={() => handleAction('restart')}>
-                  Neustart
+                  <RotateCcw className="h-3.5 w-3.5" />
                 </Button>
               )}
             </div>
@@ -357,45 +378,30 @@ function ScannerConsole() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Global stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="border rounded-lg p-3 bg-muted/30">
-              <p className="text-xs text-muted-foreground">Grid-Zellen</p>
-              <p className="text-lg font-bold">{status.cache.gridCells}</p>
-            </div>
-            <div className="border rounded-lg p-3 bg-muted/30">
-              <p className="text-xs text-muted-foreground">Tankstellen gesamt</p>
-              <p className="text-lg font-bold">{status.cache.totalStations.toLocaleString('de-DE')}</p>
-            </div>
-            <div className="border rounded-lg p-3 bg-muted/30">
-              <p className="text-xs text-muted-foreground">Scan-Zyklen</p>
-              <p className="text-lg font-bold">{status.cycleCount}</p>
-            </div>
-            <div className="border rounded-lg p-3 bg-muted/30">
-              <p className="text-xs text-muted-foreground">Letzter Zyklus</p>
-              <p className="text-sm font-medium">
-                {status.lastCycleDurationSec ? fmtDuration(status.lastCycleDurationSec) : '—'}
-              </p>
-            </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+            <StatCell label="Grid-Zellen" value={status.cache.gridCells.toLocaleString('de-DE')} />
+            <StatCell label="Tankstellen" value={status.cache.totalStations.toLocaleString('de-DE')} sub="eindeutig" />
+            <StatCell label="Zyklen" value={String(status.cycleCount)} />
+            <StatCell label="Letzter Zyklus" value={status.lastCycleDurationSec ? fmtDuration(status.lastCycleDurationSec) : '—'} />
           </div>
 
-          {/* Cache age + clear */}
+          <Separator />
+
+          {/* Cache info + clear */}
           <div className="flex items-center justify-between">
-            <div>
-              {status.cache.oldestScan && status.cache.newestScan ? (
-                <p className="text-xs text-muted-foreground">
-                  Cache: {fmtRelative(status.cache.oldestScan)} — {fmtRelative(status.cache.newestScan)}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">Cache leer</p>
-              )}
-            </div>
+            <p className="text-xs text-muted-foreground">
+              {status.cache.oldestScan && status.cache.newestScan
+                ? `Cache: ${fmtRelative(status.cache.oldestScan)} — ${fmtRelative(status.cache.newestScan)}`
+                : 'Cache leer'}
+            </p>
             <Button
-              variant="destructive"
+              variant="outline"
               size="sm"
+              className="text-destructive hover:text-destructive"
               onClick={() => { if (confirm('Cache wirklich leeren? Alle gecachten Tankstellen werden gelöscht.')) handleAction('clearCache'); }}
               disabled={clearing}
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-3.5 w-3.5" />
               {clearing ? 'Löscht...' : 'Cache leeren'}
             </Button>
           </div>
@@ -405,11 +411,27 @@ function ScannerConsole() {
       {/* Per-country cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <CountryScannerCard cs={status.de} flag="🇩🇪" label="Deutschland" api="Tankerkönig (6s Delay)" />
-        <CountryScannerCard cs={status.at} flag="🇦🇹" label="Österreich" api="E-Control (5× parallel)" />
+        <CountryScannerCard cs={status.at} flag="🇦🇹" label="Österreich" api="E-Control (5x parallel)" />
       </div>
     </div>
   );
 }
+
+// ─── Section wrapper ────────────────────────────────────────────────
+
+function ConfigSection({ icon: Icon, title, children }: { icon: React.ElementType; title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── Config Fields ──────────────────────────────────────────────────
 
 function ConfigFields({
   config,
@@ -431,13 +453,9 @@ function ConfigFields({
   onTestEmailRecipientChange?: (value: string) => void;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* App Configuration */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-          <Settings className="h-4 w-4" />
-          App-Konfiguration
-        </div>
+      <ConfigSection icon={Settings} title="App-Konfiguration">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="apiKey">Tankerkönig API Key</Label>
@@ -448,11 +466,11 @@ function ConfigFields({
               placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
             />
             <p className="text-xs text-muted-foreground">
-              Kostenlos registrieren unter <a href="https://creativecommons.tankerkoenig.de" target="_blank" rel="noopener noreferrer" className="underline">creativecommons.tankerkoenig.de</a>
+              Kostenlos unter <a href="https://creativecommons.tankerkoenig.de" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">creativecommons.tankerkoenig.de</a>
             </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="orsApiKey">OpenRouteService API Key <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Label htmlFor="orsApiKey">OpenRouteService Key <span className="text-muted-foreground font-normal">(optional)</span></Label>
             <Input
               id="orsApiKey"
               value={config.orsApiKey}
@@ -460,7 +478,7 @@ function ConfigFields({
               placeholder="Für Fahrtdistanzen statt Luftlinie"
             />
             <p className="text-xs text-muted-foreground">
-              Kostenlos registrieren unter <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener noreferrer" className="underline">openrouteservice.org</a> — zeigt echte Fahrtdistanzen statt Luftlinie
+              Unter <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">openrouteservice.org</a> registrieren
             </p>
           </div>
           <div className="space-y-2">
@@ -473,11 +491,8 @@ function ConfigFields({
             />
           </div>
           <div className="space-y-2">
-            <Label>Standard-Kraftstoff</Label>
-            <Select
-              value={config.fuelType}
-              onValueChange={(v) => onChange({ fuelType: v })}
-            >
+            <Label>Kraftstoff</Label>
+            <Select value={config.fuelType} onValueChange={(v) => onChange({ fuelType: v })}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -489,105 +504,52 @@ function ConfigFields({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="radiusKm">Standard-Radius (km)</Label>
-            <Input
-              id="radiusKm"
-              type="number"
-              min={1}
-              max={25}
-              value={config.radiusKm}
-              onChange={(e) => onChange({ radiusKm: Number(e.target.value) || 10 })}
-            />
+            <Label htmlFor="radiusKm">Radius (km)</Label>
+            <Input id="radiusKm" type="number" min={1} max={25} value={config.radiusKm} onChange={(e) => onChange({ radiusKm: Number(e.target.value) || 10 })} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="refreshInterval">Aktualisierungsintervall (Min.)</Label>
-            <Input
-              id="refreshInterval"
-              type="number"
-              min={1}
-              value={config.refreshIntervalMinutes}
-              onChange={(e) => onChange({ refreshIntervalMinutes: Number(e.target.value) || 60 })}
-            />
+            <Label htmlFor="refreshInterval">Intervall (Min.)</Label>
+            <Input id="refreshInterval" type="number" min={1} value={config.refreshIntervalMinutes} onChange={(e) => onChange({ refreshIntervalMinutes: Number(e.target.value) || 60 })} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="thresholdGood">Threshold gut unter Ø (ct)</Label>
-            <Input
-              id="thresholdGood"
-              type="number"
-              value={config.thresholds.goodBelowAvgCents}
-              onChange={(e) =>
-                onChange({
-                  thresholds: { ...config.thresholds, goodBelowAvgCents: Number(e.target.value) || 3 },
-                })
-              }
-            />
+            <Label htmlFor="thresholdGood">Gut unter Ø (ct)</Label>
+            <Input id="thresholdGood" type="number" value={config.thresholds.goodBelowAvgCents} onChange={(e) => onChange({ thresholds: { ...config.thresholds, goodBelowAvgCents: Number(e.target.value) || 3 } })} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="thresholdOkay">Threshold okay unter Ø (ct)</Label>
-            <Input
-              id="thresholdOkay"
-              type="number"
-              value={config.thresholds.okayBelowAvgCents}
-              onChange={(e) =>
-                onChange({
-                  thresholds: { ...config.thresholds, okayBelowAvgCents: Number(e.target.value) || 1 },
-                })
-              }
-            />
+            <Label htmlFor="thresholdOkay">Okay unter Ø (ct)</Label>
+            <Input id="thresholdOkay" type="number" value={config.thresholds.okayBelowAvgCents} onChange={(e) => onChange({ thresholds: { ...config.thresholds, okayBelowAvgCents: Number(e.target.value) || 1 } })} />
           </div>
         </div>
         {onTestApiKey && (
           <Button type="button" variant="outline" size="sm" onClick={onTestApiKey} disabled={testingApiKey || !config.apiKey}>
-            <KeyRound className="h-4 w-4" />
+            <KeyRound className="h-3.5 w-3.5" />
             {testingApiKey ? 'Teste...' : 'API-Key testen'}
           </Button>
         )}
-      </div>
+      </ConfigSection>
 
       <Separator />
 
       {/* OIDC */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-          <Shield className="h-4 w-4" />
-          OIDC
-        </div>
+      <ConfigSection icon={Shield} title="OIDC-Authentifizierung">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2 space-y-2">
             <Label htmlFor="oidcName">Anzeigename</Label>
-            <Input
-              id="oidcName"
-              value={config.oidc.name}
-              onChange={(e) => onChange({ oidc: { ...config.oidc, name: e.target.value } })}
-              placeholder="z.B. Felo ID, Google, Authelia"
-            />
+            <Input id="oidcName" value={config.oidc.name} onChange={(e) => onChange({ oidc: { ...config.oidc, name: e.target.value } })} placeholder="z.B. Felo ID, Google, Authelia" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="oidcIssuer">Issuer URL</Label>
-            <Input
-              id="oidcIssuer"
-              type="url"
-              value={config.oidc.issuerUrl}
-              onChange={(e) => onChange({ oidc: { ...config.oidc, issuerUrl: e.target.value } })}
-            />
+            <Input id="oidcIssuer" type="url" value={config.oidc.issuerUrl} onChange={(e) => onChange({ oidc: { ...config.oidc, issuerUrl: e.target.value } })} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="oidcClientId">Client ID</Label>
-            <Input
-              id="oidcClientId"
-              value={config.oidc.clientId}
-              onChange={(e) => onChange({ oidc: { ...config.oidc, clientId: e.target.value } })}
-            />
+            <Input id="oidcClientId" value={config.oidc.clientId} onChange={(e) => onChange({ oidc: { ...config.oidc, clientId: e.target.value } })} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="oidcClientSecret">Client Secret</Label>
-            <Input
-              id="oidcClientSecret"
-              value={config.oidc.clientSecret}
-              onChange={(e) => onChange({ oidc: { ...config.oidc, clientSecret: e.target.value } })}
-            />
+            <Input id="oidcClientSecret" value={config.oidc.clientSecret} onChange={(e) => onChange({ oidc: { ...config.oidc, clientSecret: e.target.value } })} />
           </div>
-          <div className="space-y-2 sm:col-span-2">
+          <div className="space-y-2">
             <Label>Callback URL</Label>
             <div className="flex items-center gap-2">
               <Input
@@ -596,109 +558,59 @@ function ConfigFields({
                 className="font-mono text-xs bg-muted"
                 onClick={(e) => (e.target as HTMLInputElement).select()}
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/auth/oidc/callback`)}
-              >
+              <Button type="button" variant="outline" size="sm" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/auth/oidc/callback`)}>
                 Kopieren
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Diese URL als Redirect/Callback URI beim OIDC-Anbieter eintragen.</p>
+            <p className="text-xs text-muted-foreground">Als Redirect URI beim OIDC-Anbieter eintragen.</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="oidcScope">Scope</Label>
-            <Input
-              id="oidcScope"
-              value={config.oidc.scope}
-              onChange={(e) => onChange({ oidc: { ...config.oidc, scope: e.target.value } })}
-            />
+            <Input id="oidcScope" value={config.oidc.scope} onChange={(e) => onChange({ oidc: { ...config.oidc, scope: e.target.value } })} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="oidcUsernameClaim">Username Claim</Label>
-            <Input
-              id="oidcUsernameClaim"
-              value={config.oidc.usernameClaim}
-              onChange={(e) => onChange({ oidc: { ...config.oidc, usernameClaim: e.target.value } })}
-              placeholder="preferred_username"
-            />
+            <Input id="oidcUsernameClaim" value={config.oidc.usernameClaim} onChange={(e) => onChange({ oidc: { ...config.oidc, usernameClaim: e.target.value } })} placeholder="preferred_username" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="oidcPictureClaim">Picture Claim</Label>
-            <Input
-              id="oidcPictureClaim"
-              value={config.oidc.pictureClaim}
-              onChange={(e) => onChange({ oidc: { ...config.oidc, pictureClaim: e.target.value } })}
-              placeholder="picture"
-            />
+            <Input id="oidcPictureClaim" value={config.oidc.pictureClaim} onChange={(e) => onChange({ oidc: { ...config.oidc, pictureClaim: e.target.value } })} placeholder="picture" />
           </div>
         </div>
-      </div>
+      </ConfigSection>
 
       <Separator />
 
       {/* SMTP */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-          <Mail className="h-4 w-4" />
-          SMTP (E-Mail-Benachrichtigungen)
-        </div>
+      <ConfigSection icon={Mail} title="SMTP (E-Mail)">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="smtpHost">SMTP Host</Label>
-            <Input
-              id="smtpHost"
-              value={config.smtp.host}
-              onChange={(e) => onChange({ smtp: { ...config.smtp, host: e.target.value } })}
-              placeholder="smtp.example.com"
-            />
+            <Label htmlFor="smtpHost">Host</Label>
+            <Input id="smtpHost" value={config.smtp.host} onChange={(e) => onChange({ smtp: { ...config.smtp, host: e.target.value } })} placeholder="smtp.example.com" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="smtpPort">Port</Label>
-            <Input
-              id="smtpPort"
-              type="number"
-              min={1}
-              max={65535}
-              value={config.smtp.port}
-              onChange={(e) => onChange({ smtp: { ...config.smtp, port: Number(e.target.value) || 587 } })}
-            />
+            <Input id="smtpPort" type="number" min={1} max={65535} value={config.smtp.port} onChange={(e) => onChange({ smtp: { ...config.smtp, port: Number(e.target.value) || 587 } })} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="smtpUser">Benutzername</Label>
-            <Input
-              id="smtpUser"
-              value={config.smtp.user}
-              onChange={(e) => onChange({ smtp: { ...config.smtp, user: e.target.value } })}
-            />
+            <Input id="smtpUser" value={config.smtp.user} onChange={(e) => onChange({ smtp: { ...config.smtp, user: e.target.value } })} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="smtpPass">Passwort</Label>
-            <Input
-              id="smtpPass"
-              type="password"
-              value={config.smtp.pass}
-              onChange={(e) => onChange({ smtp: { ...config.smtp, pass: e.target.value } })}
-            />
+            <Input id="smtpPass" type="password" value={config.smtp.pass} onChange={(e) => onChange({ smtp: { ...config.smtp, pass: e.target.value } })} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="smtpFrom">Absender-Adresse</Label>
-            <Input
-              id="smtpFrom"
-              type="email"
-              value={config.smtp.from}
-              onChange={(e) => onChange({ smtp: { ...config.smtp, from: e.target.value } })}
-              placeholder="tanken@example.com"
-            />
+            <Label htmlFor="smtpFrom">Absender</Label>
+            <Input id="smtpFrom" type="email" value={config.smtp.from} onChange={(e) => onChange({ smtp: { ...config.smtp, from: e.target.value } })} placeholder="tanken@example.com" />
           </div>
-          <div className="flex items-end gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 cursor-pointer h-9 px-1">
               <input
                 type="checkbox"
                 checked={config.smtp.secure}
                 onChange={(e) => onChange({ smtp: { ...config.smtp, secure: e.target.checked } })}
-                className="rounded border-input"
+                className="rounded border-input h-4 w-4"
               />
               <span className="text-sm font-medium">SSL/TLS</span>
             </label>
@@ -707,25 +619,21 @@ function ConfigFields({
         {onTestEmail && (
           <div className="flex items-end gap-2">
             <div className="flex-1 space-y-1">
-              <Label htmlFor="testEmailRecipient">Empfänger für Test-E-Mail</Label>
-              <Input
-                id="testEmailRecipient"
-                type="email"
-                value={testEmailRecipient ?? ''}
-                onChange={(e) => onTestEmailRecipientChange?.(e.target.value)}
-                placeholder="deine@email.com"
-              />
+              <Label htmlFor="testEmailRecipient">Test-Empfänger</Label>
+              <Input id="testEmailRecipient" type="email" value={testEmailRecipient ?? ''} onChange={(e) => onTestEmailRecipientChange?.(e.target.value)} placeholder="deine@email.com" />
             </div>
             <Button type="button" variant="outline" size="sm" onClick={onTestEmail} disabled={testingEmail || !config.smtp.host || !config.smtp.from || !testEmailRecipient}>
-              <Mail className="h-4 w-4" />
-              {testingEmail ? 'Sende...' : 'Test-E-Mail senden'}
+              <Mail className="h-3.5 w-3.5" />
+              {testingEmail ? 'Sende...' : 'Testen'}
             </Button>
           </div>
         )}
-      </div>
+      </ConfigSection>
     </div>
   );
 }
+
+// ─── Main Admin Page ────────────────────────────────────────────────
 
 export default function AdminPage() {
   const [status, setStatus] = useState<AdminStatus | null>(null);
@@ -736,7 +644,6 @@ export default function AdminPage() {
   const [testingApiKey, setTestingApiKey] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; type: FeedbackType } | null>(null);
 
-  // Form state
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [config, setConfig] = useState<AdminConfig>(defaultConfig);
@@ -871,7 +778,7 @@ export default function AdminPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Laden...</div>
+        <div className="animate-pulse text-muted-foreground text-sm">Laden...</div>
       </div>
     );
   }
@@ -882,39 +789,35 @@ export default function AdminPage() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12 space-y-6">
         {/* Header */}
-        <div className="space-y-2">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Fuel className="h-5 w-5 text-blue-600" />
-            <span className="text-xs font-bold tracking-widest uppercase text-blue-600">Tanken</span>
+            <Fuel className="h-5 w-5 text-primary" />
+            <span className="text-xs font-bold tracking-widest uppercase text-primary">Tanken</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">
-            Admin Panel
-          </h1>
-          <p className="text-muted-foreground max-w-lg">
-            Lokalen Admin anlegen, App-Konfiguration speichern und OIDC ohne <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">.env</code> verwalten.
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Admin Panel</h1>
+          <p className="text-sm text-muted-foreground">
+            Konfiguration, Scanner und Authentifizierung verwalten.
           </p>
         </div>
 
         {/* Feedback */}
         {feedback && (
           <Alert variant={feedback.type === 'error' ? 'destructive' : feedback.type === 'success' ? 'success' : 'default'}>
-            <AlertDescription className="font-medium">{feedback.message}</AlertDescription>
+            <AlertDescription>{feedback.message}</AlertDescription>
           </Alert>
         )}
 
-        {/* Setup Panel */}
+        {/* Setup */}
         {panel === 'setup' && (
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-                  <UserPlus className="h-5 w-5" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                  <UserPlus className="h-4 w-4 text-primary" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl">Erstkonfiguration</CardTitle>
-                  <CardDescription>
-                    Lege den ersten lokalen Admin an und speichere die Startkonfiguration.
-                  </CardDescription>
+                  <CardTitle className="text-lg">Erstkonfiguration</CardTitle>
+                  <CardDescription>Admin anlegen und Startkonfiguration speichern.</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -922,35 +825,18 @@ export default function AdminPage() {
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="setup-username">Admin-Benutzername</Label>
-                    <Input
-                      id="setup-username"
-                      autoComplete="username"
-                      required
-                      minLength={3}
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                    />
+                    <Label htmlFor="setup-username">Benutzername</Label>
+                    <Input id="setup-username" autoComplete="username" required minLength={3} value={username} onChange={(e) => setUsername(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="setup-password">Admin-Passwort</Label>
-                    <Input
-                      id="setup-password"
-                      type="password"
-                      autoComplete="new-password"
-                      required
-                      minLength={8}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
+                    <Label htmlFor="setup-password">Passwort</Label>
+                    <Input id="setup-password" type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
                   </div>
                 </div>
-
                 <Separator />
-
                 <ConfigFields config={config} onChange={handleConfigChange} />
               </CardContent>
-              <CardFooter className="justify-end">
+              <CardFooter className="justify-end border-t pt-6">
                 <Button type="submit" disabled={submitting}>
                   <Save className="h-4 w-4" />
                   {submitting ? 'Speichert...' : 'Setup abschließen'}
@@ -960,47 +846,29 @@ export default function AdminPage() {
           </Card>
         )}
 
-        {/* Login Panel */}
+        {/* Login */}
         {panel === 'login' && (
-          <Card className="max-w-md mx-auto">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-                  <KeyRound className="h-5 w-5" />
-                </div>
-                <div>
-                  <CardTitle className="text-xl">Admin Login</CardTitle>
-                  <CardDescription>Login mit lokalem Admin-Account.</CardDescription>
-                </div>
+          <Card className="max-w-sm mx-auto">
+            <CardHeader className="text-center">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 mb-2">
+                <KeyRound className="h-5 w-5 text-primary" />
               </div>
+              <CardTitle className="text-lg">Admin Login</CardTitle>
+              <CardDescription>Mit lokalem Account anmelden.</CardDescription>
             </CardHeader>
             <form onSubmit={handleLogin}>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="login-username">Benutzername</Label>
-                  <Input
-                    id="login-username"
-                    autoComplete="username"
-                    required
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                  />
+                  <Input id="login-username" autoComplete="username" required value={username} onChange={(e) => setUsername(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="login-password">Passwort</Label>
-                  <Input
-                    id="login-password"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
+                  <Input id="login-password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
                 </div>
               </CardContent>
-              <CardFooter className="justify-end">
-                <Button type="submit" disabled={submitting}>
-                  <KeyRound className="h-4 w-4" />
+              <CardFooter className="border-t pt-6">
+                <Button type="submit" className="w-full" disabled={submitting}>
                   {submitting ? 'Einloggen...' : 'Einloggen'}
                 </Button>
               </CardFooter>
@@ -1008,26 +876,23 @@ export default function AdminPage() {
           </Card>
         )}
 
-        {/* Dashboard Panel */}
+        {/* Dashboard */}
         {panel === 'dashboard' && (
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-green-600">
-                    <Settings className="h-5 w-5" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10">
+                    <Settings className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <div>
-                    <CardTitle className="text-xl">Konfiguration</CardTitle>
+                    <CardTitle className="text-lg">Konfiguration</CardTitle>
                     <CardDescription>
-                      Angemeldet als{' '}
-                      <span className="font-medium text-foreground">
-                        {status?.user?.username || status?.user?.displayName || 'Admin'}
-                      </span>
+                      Angemeldet als <span className="font-medium text-foreground">{status?.user?.username || status?.user?.displayName || 'Admin'}</span>
                     </CardDescription>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleLogout}>
+                <Button variant="ghost" size="sm" onClick={handleLogout}>
                   <LogOut className="h-4 w-4" />
                   Logout
                 </Button>
@@ -1037,17 +902,17 @@ export default function AdminPage() {
               <CardContent>
                 <ConfigFields config={config} onChange={handleConfigChange} onTestApiKey={handleTestApiKey} testingApiKey={testingApiKey} onTestEmail={handleTestEmail} testingEmail={testingEmail} testEmailRecipient={testEmailRecipient} onTestEmailRecipientChange={setTestEmailRecipient} />
               </CardContent>
-              <CardFooter className="justify-end">
+              <CardFooter className="justify-end border-t pt-6">
                 <Button type="submit" disabled={submitting}>
                   <Save className="h-4 w-4" />
-                  {submitting ? 'Speichert...' : 'Konfiguration speichern'}
+                  {submitting ? 'Speichert...' : 'Speichern'}
                 </Button>
               </CardFooter>
             </form>
           </Card>
         )}
 
-        {/* Scanner Console — only visible when logged in */}
+        {/* Scanner */}
         {panel === 'dashboard' && <ScannerConsole />}
       </div>
     </div>
