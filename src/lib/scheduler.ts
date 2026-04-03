@@ -43,8 +43,8 @@ export interface SchedulerStatus {
 const MAX_ERRORS = 20;
 const MAX_LOG = 30;
 
-/** Delay between Tankerkönig calls (DE). 15s = 4 req/min to avoid 503 rate limits. */
-const DE_DELAY_MS = 15_000;
+/** Delay between Tankerkönig calls (DE). 5 Min. laut offizieller Empfehlung. */
+const DE_DELAY_MS = 5 * 60_000;
 /** Concurrent E-Control requests (AT). No documented rate limit. */
 const AT_CONCURRENCY = 5;
 /** Small pause between AT batches to avoid hammering. */
@@ -242,10 +242,18 @@ class ScanScheduler {
       this.at.addLog(msg, 'success');
       console.log(`[Grid] ${msg}`);
 
+      // Seit April 2026 dürfen Tankstellen nur noch 1× täglich um 12 Uhr Preise ändern.
+      // → Nächsten Zyklus so planen, dass er rechtzeitig nach 12 Uhr fertig ist.
       if (this.timer) {
-        this.de.addLog('Warte 5 Min. bis zum nächsten Zyklus...', 'info');
-        this.at.addLog('Warte 5 Min. bis zum nächsten Zyklus...', 'info');
-        await sleep(5 * 60_000);
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0); // Mitternacht → Start, fertig bis ~22:30
+        const waitMs = Math.max(5 * 60_000, tomorrow.getTime() - now.getTime());
+        const waitH = Math.round(waitMs / 3_600_000 * 10) / 10;
+        this.de.addLog(`Nächster Zyklus in ${waitH} Std. (1× täglich)`, 'info');
+        this.at.addLog(`Nächster Zyklus in ${waitH} Std. (1× täglich)`, 'info');
+        await sleep(waitMs);
       }
     }
   }

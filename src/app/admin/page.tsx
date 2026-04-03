@@ -410,7 +410,7 @@ function ScannerConsole() {
 
       {/* Per-country cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <CountryScannerCard cs={status.de} flag="🇩🇪" label="Deutschland" api="Tankerkönig (15s Delay)" />
+        <CountryScannerCard cs={status.de} flag="🇩🇪" label="Deutschland" api="Tankerkönig (1×/Tag, 5 Min. Delay)" />
         <CountryScannerCard cs={status.at} flag="🇦🇹" label="Österreich" api="E-Control (5x parallel)" />
       </div>
     </div>

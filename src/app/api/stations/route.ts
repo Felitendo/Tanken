@@ -4,6 +4,7 @@ import { runtimeConfig } from '@/lib/server-runtime';
 import { findCachedStations, findNearbyCachedStations, getCachedStationsByLocation, findStationsInBounds } from '@/lib/station-cache';
 import { fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
 import { canMakeLiveCall, recordLiveCall } from '@/lib/rate-limit';
+import { getScheduler } from '@/lib/scheduler';
 import { enrichWithDrivingDistances } from '@/lib/ors';
 
 export const runtime = 'nodejs';
@@ -81,8 +82,8 @@ export async function GET(request: NextRequest) {
       const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, stations);
       return NextResponse.json(enriched, { headers: { 'X-Cache': 'live-at' } });
     }
-  } else if (runtimeConfig.apiKey && canMakeLiveCall()) {
-    // Tankerkönig API (Germany)
+  } else if (runtimeConfig.apiKey && canMakeLiveCall() && !getScheduler().de.scanning) {
+    // Tankerkönig API (Germany) — skip when scanner is active to avoid 503 rate limits
     recordLiveCall();
     try {
       const stations = await fetchStationsLive({
