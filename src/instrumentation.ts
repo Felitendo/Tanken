@@ -2,7 +2,11 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { loadRepoConfig } = await import('./config');
     const { getScheduler } = await import('./lib/scheduler');
-    const { restoreCacheFromDb } = await import('./lib/station-cache');
+    const { restoreCacheFromDb, initStationCacheDb } = await import('./lib/station-cache');
+    const { database } = await import('./lib/server-runtime');
+
+    // Pass DB handle directly — require('@/lib/server-runtime') may fail at runtime
+    initStationCacheDb(database);
 
     // Restore cached stations from database so they're available immediately
     await restoreCacheFromDb();

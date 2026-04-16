@@ -427,19 +427,23 @@ export async function setLastDiscoveryTime(stationCount: number): Promise<void> 
 
 // ─── Database persistence ────────────────────────────────────────────
 
-let _db: { query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> } | null = null;
-let _dbResolved = false;
+type DbHandle = { query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
+let _db: DbHandle | null = null;
+
+/** Set DB handle explicitly. Called from instrumentation.ts to avoid path-alias issues. */
+export function initStationCacheDb(db: DbHandle): void {
+  _db = db;
+}
 
 function getDb() {
-  if (_dbResolved) return _db;
-  _dbResolved = true;
+  if (_db) return _db;
+  // Fallback: lazy require (may fail if @/ path alias doesn't resolve at runtime)
   try {
-    // Dynamic import to avoid circular dependency — server-runtime creates the db singleton
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { database } = require('@/lib/server-runtime');
     _db = database;
   } catch {
-    _db = null;
+    // Caller (instrumentation.ts) should have called initStationCacheDb() already
   }
   return _db;
 }
