@@ -244,7 +244,7 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
 
         {/* Stats grid */}
         <div className="grid grid-cols-4 gap-4">
-          <StatCell label="Grid" value={cs.gridPoints ? cs.gridPoints.toLocaleString('de-DE') : '—'} />
+          <StatCell label={cs.mode === 'price-dump' ? 'Batches' : 'Grid'} value={cs.gridPoints ? cs.gridPoints.toLocaleString('de-DE') : '—'} />
           <StatCell label="Stationen" value={cs.stationsScanned ? cs.stationsScanned.toLocaleString('de-DE') : '—'} />
           <StatCell label="Dauer" value={cs.lastDurationSec ? fmtDuration(cs.lastDurationSec) : '—'} />
           <StatCell label="Ø Call" value={cs.avgCallSec ? `${cs.avgCallSec}s` : '—'} />
@@ -412,7 +412,7 @@ function ScannerConsole() {
 
       {/* Per-country cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <CountryScannerCard cs={status.de} flag="🇩🇪" label="Deutschland" api="Tankerkönig (1×/Tag, 5 Min. Delay)" />
+        <CountryScannerCard cs={status.de} flag="🇩🇪" label="Deutschland" api={status.de.mode === 'price-dump' ? 'Tankerkönig prices.php (1s Delay)' : status.de.mode === 'discovery' ? 'Tankerkönig list.php (5 Min. Delay)' : 'Tankerkönig (1×/Tag um 12:01)'} />
         <CountryScannerCard cs={status.at} flag="🇦🇹" label="Österreich" api="E-Control (5x parallel)" />
       </div>
     </div>
