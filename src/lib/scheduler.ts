@@ -3,7 +3,6 @@ import { fetchStationsEControl, fetchPricesByIds } from '@/lib/measure';
 import {
   setCachedStations, getAllCachedLocations, countUniqueStations, getAllUniqueStations,
   persistPriceSnapshot, clearAllCache,
-  loadKnownStationIds,
   updateCachedPrices,
 } from '@/lib/station-cache';
 import { generateAustriaGrid } from '@/lib/grid';
@@ -324,19 +323,12 @@ class ScanScheduler {
     cs.resetCycle();
     cs.callDurations = [];
 
-    let ids = await loadKnownStationIds();
-
-    // Fallback: extract DE station IDs from cache if known_stations is empty
-    if (ids.length === 0) {
-      const allStations = getAllUniqueStations();
-      ids = allStations.filter(s => !s.id.startsWith('at-')).map(s => s.id);
-      if (ids.length > 0) {
-        cs.addLog(`${ids.length.toLocaleString('de-DE')} Station-IDs aus Cache extrahiert`, 'info');
-      }
-    }
+    // Extract DE station IDs from in-memory cache (restored from DB on startup)
+    const allStations = getAllUniqueStations();
+    const ids = allStations.filter(s => !s.id.startsWith('at-')).map(s => s.id);
 
     if (ids.length === 0) {
-      cs.addLog('Keine bekannten Stationen — bitte Stationen importieren oder Discovery manuell starten', 'warn');
+      cs.addLog('Keine Stationen im Cache — bitte Stationen importieren oder Cache wiederherstellen', 'warn');
       cs.reset();
       return;
     }

@@ -286,20 +286,6 @@ export function findStationsInBounds(
   };
 }
 
-// ─── Known stations (for daily price dump) ──────────────────────────
-
-/** Load all known DE station IDs for price dump. */
-export async function loadKnownStationIds(): Promise<string[]> {
-  const db = getDb();
-  if (!db) return [];
-  try {
-    const { rows } = await db.query('SELECT id FROM known_stations ORDER BY id');
-    return rows.map(r => r.id as string);
-  } catch {
-    return [];
-  }
-}
-
 /**
  * Update prices in the in-memory cache from a price dump.
  * Returns number of station-entries updated (including duplicates across grid cells).
