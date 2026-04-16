@@ -1859,7 +1859,17 @@ async function loadSheetChart(stationName, days = 1) {
             backgroundColor: 'rgba(0,0,0,0.8)',
             titleFont: { size: 12 },
             bodyFont: { size: 12 },
-            callbacks: { label: (ctx) => formatPrice(ctx.parsed.y) }
+            callbacks: {
+              title: (items) => {
+                if (!items.length) return '';
+                const d = chartData[items[0].dataIndex];
+                if (!d) return '';
+                const dt = new Date(d.timestamp);
+                if (days <= 1) return `${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')} Uhr`;
+                return `${dt.getDate()}.${dt.getMonth() + 1}. ${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}`;
+              },
+              label: (ctx) => formatPrice(ctx.parsed.y)
+            }
           }
         },
         scales: {

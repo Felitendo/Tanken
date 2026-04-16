@@ -2595,10 +2595,10 @@ html[data-theme="dark"] .pwa-popup-icon img,
     background: rgba(127, 127, 127, 0.06);
   }
 
-  /* --- Map view: full width with side panel --- */
+  /* --- Map view: full width with side panel (panel on left) --- */
   #view-map {
     display: flex;
-    flex-direction: row;
+    flex-direction: row-reverse;
     overflow: hidden;
   }
 
@@ -2672,7 +2672,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
     opacity: 1;
   }
 
-  /* --- Station panel (right sidebar on map) --- */
+  /* --- Station panel (left sidebar on map) --- */
   .desktop-station-panel {
     display: flex;
     flex-direction: column;
@@ -2680,7 +2680,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
     flex-shrink: 0;
     height: 100%;
     overflow-y: auto;
-    border-left: 1px solid var(--color-separator);
+    border-right: 1px solid var(--color-separator);
     background: var(--color-bg);
   }
 
@@ -2699,6 +2699,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
     border-radius: 0;
     flex: 1;
     background: transparent;
+    overflow: visible;
   }
 
   /* Station list item hover on desktop */
@@ -2772,10 +2773,10 @@ html[data-theme="dark"] .pwa-popup-icon img,
     display: none;
   }
 
-  /* Sheet station header spacing for desktop */
+  /* Sheet station header spacing for desktop (space for close button only) */
   .sheet-station-header {
     padding: 20px 20px 8px;
-    padding-right: 56px;
+    padding-right: 48px;
   }
 
   .sheet-station-name {
@@ -2847,16 +2848,9 @@ html[data-theme="dark"] .pwa-popup-icon img,
     opacity: 0.5;
   }
 
-  /* --- Expand button refinement --- */
+  /* --- Hide expand button on desktop (close button handles dismiss) --- */
   .sheet-expand-btn {
-    border-radius: 10px;
-    transition: background 0.2s var(--dt-ease),
-                transform 0.2s var(--dt-ease);
-  }
-
-  .sheet-expand-btn:hover {
-    background: var(--color-bg-secondary);
-    transform: scale(1.08);
+    display: none !important;
   }
 
   /* --- Hide pull-to-refresh on desktop --- */
