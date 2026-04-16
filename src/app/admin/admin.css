@@ -268,57 +268,67 @@
   transition-duration: 0.1s;
 }
 
-/* Primary action button — filled, vibrant */
+/* Primary action button — tinted, subtle */
 .admin-btn-primary {
-  background: oklch(0.55 0.24 264) !important;
-  color: white !important;
-  border: none !important;
-  box-shadow: 0 1px 3px oklch(0.55 0.24 264 / 0.3), 0 1px 2px oklch(0 0 0 / 0.06);
+  background: oklch(0.55 0.24 264 / 0.1) !important;
+  color: oklch(0.45 0.2 264) !important;
+  border: 1px solid oklch(0.55 0.24 264 / 0.15) !important;
+  box-shadow: none;
 }
 
 .admin-btn-primary:hover:not(:disabled) {
-  background: oklch(0.50 0.24 264) !important;
-  box-shadow: 0 4px 14px oklch(0.55 0.24 264 / 0.35), 0 1px 3px oklch(0 0 0 / 0.06);
+  background: oklch(0.55 0.24 264 / 0.16) !important;
+  border-color: oklch(0.55 0.24 264 / 0.25) !important;
+  box-shadow: 0 2px 8px oklch(0.55 0.24 264 / 0.08);
 }
 
-/* Danger button */
+/* Danger button — ghost with tinted text */
 .admin-btn-danger {
-  color: oklch(0.577 0.245 27.325) !important;
-  border-color: oklch(0.577 0.245 27.325 / 0.25) !important;
+  color: oklch(0.55 0.2 27) !important;
+  border-color: oklch(0.55 0.2 27 / 0.18) !important;
+  background: transparent !important;
 }
 
 .admin-btn-danger:hover:not(:disabled) {
-  background: oklch(0.577 0.245 27.325 / 0.08) !important;
-  border-color: oklch(0.577 0.245 27.325 / 0.4) !important;
-  box-shadow: 0 4px 14px oklch(0.577 0.245 27.325 / 0.12);
+  background: oklch(0.55 0.2 27 / 0.08) !important;
+  border-color: oklch(0.55 0.2 27 / 0.3) !important;
+  box-shadow: 0 2px 8px oklch(0.55 0.2 27 / 0.06);
 }
 
-/* Success/active button */
+/* Success/active button — tinted green */
 .admin-btn-success {
-  background: oklch(0.55 0.17 155) !important;
-  color: white !important;
-  border: none !important;
-  box-shadow: 0 1px 3px oklch(0.55 0.17 155 / 0.3);
+  background: oklch(0.55 0.17 155 / 0.1) !important;
+  color: oklch(0.4 0.14 155) !important;
+  border: 1px solid oklch(0.55 0.17 155 / 0.15) !important;
+  box-shadow: none;
 }
 
 .admin-btn-success:hover:not(:disabled) {
-  background: oklch(0.50 0.17 155) !important;
-  box-shadow: 0 4px 14px oklch(0.55 0.17 155 / 0.3);
+  background: oklch(0.55 0.17 155 / 0.16) !important;
+  border-color: oklch(0.55 0.17 155 / 0.25) !important;
+  box-shadow: 0 2px 8px oklch(0.55 0.17 155 / 0.08);
 }
 
 @media (prefers-color-scheme: dark) {
   .admin-btn-primary {
-    background: oklch(0.60 0.22 264) !important;
-    box-shadow: 0 1px 3px oklch(0 0 0 / 0.3);
+    background: oklch(0.55 0.24 264 / 0.18) !important;
+    color: oklch(0.7 0.15 264) !important;
+    border-color: oklch(0.55 0.24 264 / 0.22) !important;
   }
   .admin-btn-primary:hover:not(:disabled) {
-    background: oklch(0.65 0.20 264) !important;
+    background: oklch(0.55 0.24 264 / 0.25) !important;
   }
   .admin-btn-success {
-    background: oklch(0.60 0.15 155) !important;
+    background: oklch(0.55 0.17 155 / 0.18) !important;
+    color: oklch(0.65 0.14 155) !important;
+    border-color: oklch(0.55 0.17 155 / 0.22) !important;
+  }
+  .admin-btn-danger {
+    color: oklch(0.7 0.18 27) !important;
+    border-color: oklch(0.7 0.18 27 / 0.2) !important;
   }
   .admin-btn-danger:hover:not(:disabled) {
-    background: oklch(0.577 0.245 27.325 / 0.15) !important;
+    background: oklch(0.7 0.18 27 / 0.12) !important;
   }
 }
 
