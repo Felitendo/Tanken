@@ -176,6 +176,7 @@ class ScanScheduler {
 
   start(): void {
     if (this.timer) return;
+    this._importAbort = false;
     this.de.addLog('Scheduler gestartet', 'info');
     this.at.addLog('Scheduler gestartet', 'info');
     console.log('[Scheduler] Starting scan scheduler');
@@ -186,7 +187,7 @@ class ScanScheduler {
   stop(): void {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
     if (this._gridTimer) { clearTimeout(this._gridTimer); this._gridTimer = null; }
-    this._importAbort = true;
+    // Don't abort imports — they run independently. Use abortDumpImport() explicitly.
     this.de.reset();
     this.at.reset();
     this._scanStartedAt = null;
@@ -238,12 +239,16 @@ class ScanScheduler {
     const fuelType = config.fuel_type || 'diesel';
     this._importStatus = { phase: 'download', percent: 0, detail: 'Starte...', stationsImported: 0, pricesImported: 0, error: null };
     this.de.addLog('Tankerkönig-Dump Import gestartet', 'info');
+    console.log(`[Import] triggerDumpImport: _importAbort=${this._importAbort}, apiKey=${apiKey ? 'set' : 'empty'}`);
 
     importStationsFromDump({
       apiKey,
       fuelType,
       onProgress: (status) => { this._importStatus = status; },
-      shouldAbort: () => this._importAbort,
+      shouldAbort: () => {
+        if (this._importAbort) console.log('[Import] shouldAbort() → true');
+        return this._importAbort;
+      },
     }).then((count) => {
       const prices = this._importStatus.pricesImported;
       const detail = prices > 0

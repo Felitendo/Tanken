@@ -479,11 +479,10 @@ function ScannerConsole() {
               </p>
             </div>
           </div>
-          <div className="flex gap-1.5">
+          <div className="flex gap-2">
             <Button
-              variant={status.running ? 'outline' : 'default'}
               size="sm"
-              className="admin-btn"
+              className={`admin-btn ${status.running ? 'admin-btn-danger' : 'admin-btn-success'}`}
               onClick={() => handleAction(status.running ? 'stop' : 'start')}
             >
               {status.running ? <><Square className="h-3.5 w-3.5" /> Stoppen</> : <><Play className="h-3.5 w-3.5" /> Starten</>}
@@ -494,8 +493,8 @@ function ScannerConsole() {
                   <RotateCcw className="h-3.5 w-3.5" />
                 </Button>
                 {!isScanning && (
-                  <Button variant="outline" size="sm" className="admin-btn" onClick={() => handleAction('triggerNow')}>
-                    <Zap className="h-3.5 w-3.5" /> Jetzt
+                  <Button variant="outline" size="sm" className="admin-btn admin-btn-primary" onClick={() => handleAction('triggerNow')}>
+                    <Zap className="h-3.5 w-3.5" /> Jetzt scannen
                   </Button>
                 )}
               </>
@@ -524,9 +523,8 @@ function ScannerConsole() {
             </div>
             {status.import.phase !== 'idle' && status.import.phase !== 'done' && status.import.phase !== 'error' ? (
               <Button
-                variant="outline"
                 size="sm"
-                className="text-destructive hover:text-destructive admin-btn"
+                className="admin-btn admin-btn-danger"
                 onClick={() => handleAction('abortImport')}
               >
                 <Square className="h-3.5 w-3.5" />
@@ -534,9 +532,8 @@ function ScannerConsole() {
               </Button>
             ) : (
               <Button
-                variant="outline"
                 size="sm"
-                className="admin-btn"
+                className="admin-btn admin-btn-primary"
                 onClick={() => {
                   if (confirm('Tankerkönig-Dump importieren?\n\nLädt history.dump.gz (~8 GB) herunter.\nBenötigt ~16 GB freien Speicher.\nDauer: je nach Verbindung 10–60 Min.'))
                     handleAction('importDump');
@@ -580,7 +577,7 @@ function ScannerConsole() {
           <Button
             variant="ghost"
             size="sm"
-            className="text-destructive hover:text-destructive text-xs"
+            className="admin-btn admin-btn-danger text-xs"
             onClick={() => { if (confirm('Cache wirklich leeren? Alle gecachten Tankstellen werden gelöscht.')) handleAction('clearCache'); }}
             disabled={clearing}
           >
@@ -905,13 +902,13 @@ function SetupPanel({
             <Button
               type="button"
               size="sm"
-              className="admin-btn"
+              className="admin-btn admin-btn-primary"
               onClick={() => setStep(step + 1)}
             >
               Weiter <ArrowRight className="h-4 w-4" />
             </Button>
           ) : (
-            <Button type="submit" className="admin-btn" disabled={submitting}>
+            <Button type="submit" className="admin-btn admin-btn-primary" disabled={submitting}>
               <Save className="h-4 w-4" />
               {submitting ? 'Speichert...' : 'Setup abschließen'}
             </Button>
@@ -959,7 +956,7 @@ function LoginPanel({
             <Label htmlFor="login-password" className="text-sm">Passwort</Label>
             <Input id="login-password" type="password" autoComplete="current-password" required value={password} onChange={(e) => onPasswordChange(e.target.value)} className="h-11" />
           </div>
-          <Button type="submit" className="w-full h-11 admin-btn mt-2" disabled={submitting}>
+          <Button type="submit" className="w-full h-11 admin-btn admin-btn-primary mt-2" disabled={submitting}>
             {submitting ? 'Einloggen...' : 'Einloggen'}
           </Button>
         </form>
@@ -1107,7 +1104,7 @@ function DashboardPanel({
               <Button
                 type="button"
                 size="sm"
-                className="admin-btn"
+                className="admin-btn admin-btn-primary"
                 disabled={submitting}
                 onClick={onSubmit as unknown as () => void}
               >
