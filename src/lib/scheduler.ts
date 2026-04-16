@@ -1,8 +1,9 @@
 import { loadRepoConfig } from '@/config';
 import { fetchStationsLive, fetchStationsEControl, fetchPricesByIds } from '@/lib/measure';
 import {
-  setCachedStations, getAllCachedLocations, countUniqueStations, persistPriceSnapshot, clearAllCache,
-  saveKnownStations, loadKnownStationIds, countKnownStations,
+  setCachedStations, getAllCachedLocations, countUniqueStations, getAllUniqueStations,
+  persistPriceSnapshot, clearAllCache,
+  saveKnownStations, loadKnownStationIds,
   updateCachedPrices, getLastDiscoveryTime, setLastDiscoveryTime, bootstrapKnownStationsFromCache,
 } from '@/lib/station-cache';
 import { generateGermanyGrid, generateAustriaGrid } from '@/lib/grid';
@@ -314,13 +315,15 @@ class ScanScheduler {
     const hasDeCache = cached.some(c => c.locationId.startsWith('grid-'));
     if (!hasDeCache) return true;
 
-    // No known stations → need discovery
-    const knownCount = await countKnownStations();
-    if (knownCount === 0) return true;
-
-    // Check last discovery time
+    // Cache exists — check if discovery interval has passed
     const lastDiscovery = await getLastDiscoveryTime();
-    if (!lastDiscovery) return true;
+    if (!lastDiscovery) {
+      // First deploy with price-dump feature: cache exists from old full scans,
+      // but no discovery recorded yet. Treat existing cache as valid discovery.
+      this.de.addLog('Erster Start mit Preis-Update-Feature — Cache wird weiterverwendet', 'info');
+      await setLastDiscoveryTime(countUniqueStations());
+      return false;
+    }
 
     const daysSince = (Date.now() - lastDiscovery.getTime()) / (1000 * 60 * 60 * 24);
     return daysSince >= DISCOVERY_INTERVAL_DAYS;
@@ -407,7 +410,17 @@ class ScanScheduler {
     cs.resetCycle();
     cs.callDurations = [];
 
-    const ids = await loadKnownStationIds();
+    let ids = await loadKnownStationIds();
+
+    // Fallback: extract DE station IDs from cache if known_stations is empty
+    if (ids.length === 0) {
+      const allStations = getAllUniqueStations();
+      ids = allStations.filter(s => !s.id.startsWith('at-')).map(s => s.id);
+      if (ids.length > 0) {
+        cs.addLog(`${ids.length.toLocaleString('de-DE')} Station-IDs aus Cache extrahiert`, 'info');
+      }
+    }
+
     if (ids.length === 0) {
       cs.addLog('Keine bekannten Stationen — Discovery nötig', 'warn');
       cs.reset();
