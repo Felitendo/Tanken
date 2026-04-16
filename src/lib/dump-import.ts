@@ -72,6 +72,9 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
     progress('decompress', 0, 'Entpacke Dump (kann einige Minuten dauern)...');
     if (shouldAbort()) throw new Error('Abgebrochen');
 
+    // Verify the downloaded file is actually gzip (not an error page)
+    verifyGzipMagic(tempGz);
+
     await decompressFile(tempGz, tempDump);
     safeDelete(tempGz);
     console.log('[Import] Phase 2/5: Dekompress abgeschlossen');
@@ -291,6 +294,7 @@ class PgDumpReader {
       vrev = this.readByte();
     }
     this.version = makeVersion(vmaj, vmin, vrev);
+    console.log(`[Import] pg_dump Version: ${vmaj}.${vmin}.${vrev}, intSize=${this.intSize}`);
 
     this.intSize = this.readByte();
     if (this.version >= K_VERS_1_7) {
@@ -406,9 +410,9 @@ class PgDumpReader {
       if (this.compressed) {
         try {
           decompressedChunks.push(inflateSync(raw));
-        } catch {
-          // Fallback: treat block as uncompressed
-          decompressedChunks.push(raw);
+        } catch (err) {
+          console.error(`[Import] inflate fehlgeschlagen für Block (${blockLen} bytes):`, err instanceof Error ? err.message : err);
+          throw new Error(`Komprimierter Block konnte nicht dekomprimiert werden (${blockLen} bytes): ${err instanceof Error ? err.message : err}`);
         }
       } else {
         decompressedChunks.push(raw);
@@ -420,11 +424,11 @@ class PgDumpReader {
   }
 
   /**
-   * Stream table data line by line via callback.
-   * Essential for huge tables (like price history) to avoid loading everything into memory.
-   * Returns the total number of lines processed.
+   * Iterate over table data as batches of lines (generator).
+   * Yields arrays of complete lines from each decompressed block.
+   * Essential for huge tables to process incrementally without loading all into memory.
    */
-  streamTableData(offset: number, onLine: (line: string) => void): number {
+  *iterateTableLines(offset: number): Generator<string[], void, void> {
     this.pos = offset;
 
     const blockType = this.readByte();
@@ -434,7 +438,6 @@ class PgDumpReader {
       throw new Error(`Unerwarteter Block-Typ: ${blockType} (erwartet: 1 = DATA)`);
     }
 
-    let lineCount = 0;
     let remainder = '';
 
     while (true) {
@@ -446,8 +449,9 @@ class PgDumpReader {
       if (this.compressed) {
         try {
           text = inflateSync(raw).toString('utf8');
-        } catch {
-          text = raw.toString('utf8');
+        } catch (err) {
+          console.error(`[Import] inflate fehlgeschlagen für Block (${blockLen} bytes), überspringe:`, err instanceof Error ? err.message : err);
+          continue;
         }
       } else {
         text = raw.toString('utf8');
@@ -455,24 +459,22 @@ class PgDumpReader {
 
       // Process complete lines, carry over incomplete last line
       const combined = remainder + text;
-      const lines = combined.split('\n');
-      remainder = lines.pop() || ''; // last element may be incomplete
+      const parts = combined.split('\n');
+      remainder = parts.pop() || '';
 
-      for (const line of lines) {
+      const lines: string[] = [];
+      for (const line of parts) {
         if (line && line !== '\\.' && !line.startsWith('COPY ')) {
-          onLine(line);
-          lineCount++;
+          lines.push(line);
         }
       }
+      if (lines.length > 0) yield lines;
     }
 
     // Process final remainder
     if (remainder && remainder !== '\\.' && !remainder.startsWith('COPY ')) {
-      onLine(remainder);
-      lineCount++;
+      yield [remainder];
     }
-
-    return lineCount;
   }
 }
 
@@ -599,6 +601,8 @@ async function importPriceHistory(
     return 0;
   }
 
+  console.log(`[Import] Preishistorie-Spalten: ${columns.join(', ')}`);
+
   // Map fuel type to column name in the dump
   const fuelColumn = fuelType === 'e5' ? 'e5' : fuelType === 'e10' ? 'e10' : 'diesel';
   const fuelIdx = columns.indexOf(fuelColumn);
@@ -607,100 +611,89 @@ async function importPriceHistory(
   const changedIdx = columns.indexOf('changed');
 
   if (fuelIdx < 0 || stidIdx < 0) {
-    console.log(`[Import] Missing columns in history table: fuelIdx=${fuelIdx} stidIdx=${stidIdx} columns=${columns.join(',')}`);
+    console.log(`[Import] Fehlende Spalten: fuel="${fuelColumn}" idx=${fuelIdx}, stid idx=${stidIdx}`);
     return 0;
   }
 
   // Only import prices from the last 30 days
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
-  const cutoffStr = cutoff.toISOString();
+  const cutoffStr = cutoff.toISOString().slice(0, 10); // "2026-03-17" — safe date-only comparison
 
-  // Collect rows in batches for efficient DB inserts
   const BATCH_SIZE = 5000;
-  let batch: { timestamp: string; name: string; brand: string; price: number; locationId: string }[] = [];
+  let batch: unknown[] = [];
+  let batchValues: string[] = [];
+  let batchIdx = 1;
   let totalInserted = 0;
   let rowsRead = 0;
-  let lastProgress = 0;
+  let rowsMatched = 0;
+  let blocksProcessed = 0;
 
   const flushBatch = async () => {
-    if (batch.length === 0) return;
-
-    const values: string[] = [];
-    const params: unknown[] = [];
-    let idx = 1;
-    for (const row of batch) {
-      values.push(`($${idx++}::timestamptz, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
-      params.push(row.timestamp, row.locationId, row.name, row.brand, row.price);
-    }
+    if (batchValues.length === 0) return;
     await db.query(
-      `INSERT INTO station_prices (timestamp, location_id, station_name, station_brand, price) VALUES ${values.join(', ')}`,
-      params,
+      `INSERT INTO station_prices (timestamp, location_id, station_name, station_brand, price) VALUES ${batchValues.join(', ')}`,
+      batch,
     );
-    totalInserted += batch.length;
+    totalInserted += batchValues.length;
     batch = [];
+    batchValues = [];
+    batchIdx = 1;
   };
 
-  // Stream the history table line by line
-  reader.streamTableData(entry.dataOffset, (line) => {
-    rowsRead++;
-
-    const values = line.split('\t');
-    if (values.length <= Math.max(fuelIdx, stidIdx)) return;
-
-    const stid = values[stidIdx];
-    const priceStr = values[fuelIdx];
-    const station = stationMap.get(stid);
-
-    // Skip: unknown station, NULL price, or zero price
-    if (!station || priceStr === '\\N' || !priceStr) return;
-    const price = parseFloat(priceStr);
-    if (!isFinite(price) || price <= 0) return;
-
-    // Use 'changed' timestamp if available, else 'date'
-    const tsStr = changedIdx >= 0 && values[changedIdx] !== '\\N'
-      ? values[changedIdx]
-      : dateIdx >= 0 && values[dateIdx] !== '\\N'
-        ? values[dateIdx]
-        : null;
-    if (!tsStr) return;
-
-    // Only import recent prices
-    if (tsStr < cutoffStr) return;
-
-    // Compute location_id using same grid as seedCache
-    const cellLat = Math.round(station.lat / 0.2) * 0.2;
-    const cellLng = Math.round(station.lng / 0.3) * 0.3;
-    const locationId = `de-import-${cellLat.toFixed(1)}-${cellLng.toFixed(1)}`;
-
-    batch.push({
-      timestamp: tsStr,
-      name: station.name,
-      brand: station.brand,
-      price,
-      locationId,
-    });
-  });
-
-  // Flush remaining in batches (streamTableData is sync, so we flush after)
-  // Re-batch the collected rows and insert asynchronously
-  const allRows = batch;
-  batch = [];
-
-  for (let i = 0; i < allRows.length; i += BATCH_SIZE) {
+  // Stream block-by-block using generator — only one block's lines in memory at a time
+  for (const lines of reader.iterateTableLines(entry.dataOffset)) {
     if (shouldAbort()) throw new Error('Abgebrochen');
+    blocksProcessed++;
 
-    batch = allRows.slice(i, i + BATCH_SIZE);
-    await flushBatch();
+    for (const line of lines) {
+      rowsRead++;
 
-    const pct = Math.round((i + BATCH_SIZE) / allRows.length * 100);
-    if (pct > lastProgress) {
-      onProgress(Math.min(pct, 100), totalInserted);
-      lastProgress = pct;
+      const values = line.split('\t');
+      if (values.length <= Math.max(fuelIdx, stidIdx)) continue;
+
+      const stid = values[stidIdx];
+      const priceStr = values[fuelIdx];
+      const station = stationMap.get(stid);
+
+      // Skip: unknown station, NULL price, or zero price
+      if (!station || priceStr === '\\N' || !priceStr) continue;
+      const price = parseFloat(priceStr);
+      if (!isFinite(price) || price <= 0) continue;
+
+      // Use 'changed' timestamp if available, else 'date'
+      const tsStr = changedIdx >= 0 && values[changedIdx] !== '\\N'
+        ? values[changedIdx]
+        : dateIdx >= 0 && values[dateIdx] !== '\\N'
+          ? values[dateIdx]
+          : null;
+      if (!tsStr) continue;
+
+      // Only import recent prices (date-prefix comparison)
+      if (tsStr.slice(0, 10) < cutoffStr) continue;
+
+      rowsMatched++;
+
+      // Compute location_id using same grid as seedCache
+      const cellLat = Math.round(station.lat / 0.2) * 0.2;
+      const cellLng = Math.round(station.lng / 0.3) * 0.3;
+      const locationId = `de-import-${cellLat.toFixed(1)}-${cellLng.toFixed(1)}`;
+
+      batchValues.push(`($${batchIdx++}::timestamptz, $${batchIdx++}, $${batchIdx++}, $${batchIdx++}, $${batchIdx++})`);
+      batch.push(tsStr, locationId, station.name, station.brand, price);
+
+      // Flush when batch is full — keeps memory bounded
+      if (batchValues.length >= BATCH_SIZE) {
+        await flushBatch();
+        onProgress(0, totalInserted); // pct unknown during streaming
+      }
     }
   }
 
-  console.log(`[Import] Imported ${totalInserted} price entries from ${rowsRead} history rows (${fuelColumn}, last 30 days)`);
+  // Flush remaining
+  await flushBatch();
+
+  console.log(`[Import] Preishistorie: ${totalInserted} Einträge importiert aus ${rowsRead} Zeilen (${rowsMatched} matched, ${blocksProcessed} Blöcke, Kraftstoff: ${fuelColumn})`);
   return totalInserted;
 }
 
@@ -847,12 +840,43 @@ async function downloadFile(
 
 // ─── Decompress ──────────────────────────────────────────────────────
 
+/**
+ * Verify a file starts with the gzip magic bytes (1f 8b).
+ * If the server returned an error page (HTML/JSON) instead of gzip,
+ * this catches it early with a clear error message.
+ */
+function verifyGzipMagic(filePath: string): void {
+  const fd = openSync(filePath, 'r');
+  try {
+    const buf = Buffer.alloc(2);
+    readSync(fd, buf, 0, 2, 0);
+    if (buf[0] !== 0x1f || buf[1] !== 0x8b) {
+      // Try to read the start as text for a helpful error message
+      const preview = Buffer.alloc(200);
+      readSync(fd, preview, 0, 200, 0);
+      const text = preview.toString('utf8').trim();
+      throw new Error(
+        `Download ist keine gzip-Datei (Server hat vermutlich eine Fehlerseite zurückgegeben). ` +
+        `Erste Bytes: ${buf[0].toString(16)} ${buf[1].toString(16)}. Inhalt: ${text.slice(0, 150)}`
+      );
+    }
+  } finally {
+    closeSync(fd);
+  }
+}
+
 async function decompressFile(gzPath: string, outPath: string): Promise<void> {
+  const fileSize = statSync(gzPath).size;
+  console.log(`[Import] Dekomprimiere ${Math.round(fileSize / 1_048_576)} MB gzip-Datei...`);
+
   await pipeline(
     createReadStream(gzPath),
     createGunzip(),
     createWriteStream(outPath),
   );
+
+  const outSize = statSync(outPath).size;
+  console.log(`[Import] Dekomprimiert: ${Math.round(outSize / 1_048_576)} MB`);
 }
 
 // ─── Cache seeding ───────────────────────────────────────────────────
