@@ -169,7 +169,7 @@ class ScanScheduler {
   private _waitingCancel: (() => void) | null = null;
 
   private _importAbort = false;
-  private _importStatus: ImportStatus = { phase: 'idle', percent: 0, detail: '', stationsImported: 0, error: null };
+  private _importStatus: ImportStatus = { phase: 'idle', percent: 0, detail: '', stationsImported: 0, pricesImported: 0, error: null };
 
   readonly de = new CountryScan();
   readonly at = new CountryScan();
@@ -230,13 +230,13 @@ class ScanScheduler {
     const config = loadRepoConfig();
     const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
     if (!apiKey) {
-      this._importStatus = { phase: 'error', percent: 0, detail: 'Kein API-Key konfiguriert', stationsImported: 0, error: 'Kein API-Key' };
+      this._importStatus = { phase: 'error', percent: 0, detail: 'Kein API-Key konfiguriert', stationsImported: 0, pricesImported: 0, error: 'Kein API-Key' };
       return false;
     }
 
     this._importAbort = false;
     const fuelType = config.fuel_type || 'diesel';
-    this._importStatus = { phase: 'download', percent: 0, detail: 'Starte...', stationsImported: 0, error: null };
+    this._importStatus = { phase: 'download', percent: 0, detail: 'Starte...', stationsImported: 0, pricesImported: 0, error: null };
     this.de.addLog('Tankerkönig-Dump Import gestartet', 'info');
 
     importStationsFromDump({
@@ -245,14 +245,22 @@ class ScanScheduler {
       onProgress: (status) => { this._importStatus = status; },
       shouldAbort: () => this._importAbort,
     }).then((count) => {
-      this._importStatus = { phase: 'done', percent: 100, detail: `${count.toLocaleString('de-DE')} Stationen importiert`, stationsImported: count, error: null };
-      this.de.addLog(`Dump-Import fertig: ${count.toLocaleString('de-DE')} Stationen`, 'success');
-      console.log(`[Import] Complete: ${count} stations imported`);
+      const prices = this._importStatus.pricesImported;
+      const detail = prices > 0
+        ? `${count.toLocaleString('de-DE')} Stationen + ${prices.toLocaleString('de-DE')} Preise importiert`
+        : `${count.toLocaleString('de-DE')} Stationen importiert`;
+      this._importStatus = { phase: 'done', percent: 100, detail, stationsImported: count, pricesImported: prices, error: null };
+      this.de.addLog(`Dump-Import fertig: ${detail}`, 'success');
+      console.log(`[Import] Complete: ${count} stations, ${prices} prices imported`);
     }).catch((err) => {
       const msg = err instanceof Error ? err.message : String(err);
-      this._importStatus = { phase: 'error', percent: 0, detail: msg, stationsImported: 0, error: msg };
-      this.de.addLog(`Dump-Import Fehler: ${msg}`, 'error');
-      console.error(`[Import] Error:`, msg);
+      const stack = err instanceof Error ? err.stack : undefined;
+      const lastPhase = this._importStatus.phase;
+      const detail = `Fehler in Phase "${lastPhase}": ${msg}`;
+      this._importStatus = { phase: 'error', percent: 0, detail, stationsImported: 0, pricesImported: 0, error: detail };
+      this.de.addLog(`Dump-Import Fehler (${lastPhase}): ${msg}`, 'error');
+      console.error(`[Import] Error in phase "${lastPhase}":`, msg);
+      if (stack) console.error(`[Import] Stack:`, stack);
     });
 
     return true;

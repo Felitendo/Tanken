@@ -1,12 +1,12 @@
 /**
- * Import German gas stations from the official Tankerkönig PostgreSQL dump.
+ * Import German gas stations and price history from the official Tankerkönig PostgreSQL dump.
  *
  * Flow:
  * 1. Download `history.dump.gz` (~8 GB) from creativecommons.tankerkoenig.de
  * 2. Decompress the gzip layer
  * 3. Parse the PostgreSQL custom dump format in pure TypeScript (no pg_restore needed)
- * 4. Extract the `gas_station` table COPY data
- * 5. Seed the station cache so daily price dumps can run
+ * 4. Extract the `gas_station` table COPY data → seed station cache
+ * 5. Stream `gas_station_information_history` table → import price history
  *
  * Requirements:
  * - Enough disk space for the download + decompressed dump (~16 GB peak)
@@ -23,10 +23,11 @@ import { setCachedStations, type CachedStation } from '@/lib/station-cache';
 const DUMP_URL = 'https://creativecommons.tankerkoenig.de/history/history.dump.gz';
 
 export interface ImportStatus {
-  phase: 'idle' | 'download' | 'decompress' | 'extract' | 'seed' | 'done' | 'error';
+  phase: 'idle' | 'download' | 'decompress' | 'extract' | 'seed' | 'prices' | 'done' | 'error';
   percent: number;
   detail: string;
   stationsImported: number;
+  pricesImported: number;
   error: string | null;
 }
 
@@ -43,12 +44,16 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
   const tempGz = join(tmpdir(), `tanken-${Date.now()}.gz`);
   const tempDump = join(tmpdir(), `tanken-${Date.now()}.dump`);
 
+  let stationsImported = 0;
+  let pricesImported = 0;
+
   const progress = (phase: ImportStatus['phase'], percent: number, detail: string) => {
-    onProgress({ phase, percent, detail, stationsImported: 0, error: null });
+    onProgress({ phase, percent, detail, stationsImported, pricesImported, error: null });
   };
 
   try {
     // ─── 1. Download ─────────────────────────────────────────────
+    console.log(`[Import] Phase 1/5: Download starten → ${tempGz}`);
     progress('download', 0, 'Starte Download...');
     if (shouldAbort()) throw new Error('Abgebrochen');
 
@@ -60,28 +65,40 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
       },
       shouldAbort,
     );
+    console.log('[Import] Phase 1/5: Download abgeschlossen');
 
     // ─── 2. Decompress gzip outer layer ──────────────────────────
+    console.log(`[Import] Phase 2/5: Dekompress ${tempGz} → ${tempDump}`);
     progress('decompress', 0, 'Entpacke Dump (kann einige Minuten dauern)...');
     if (shouldAbort()) throw new Error('Abgebrochen');
 
     await decompressFile(tempGz, tempDump);
     safeDelete(tempGz);
+    console.log('[Import] Phase 2/5: Dekompress abgeschlossen');
 
     // ─── 3. Extract station table from PostgreSQL custom dump ────
+    console.log('[Import] Phase 3/5: pg_dump parsen');
     progress('extract', 0, 'Lese Dump-Verzeichnis...');
     if (shouldAbort()) throw new Error('Abgebrochen');
 
     const reader = new PgDumpReader(tempDump);
     try {
       reader.parseHeader();
+      console.log('[Import] Dump-Header gelesen');
 
       const tocEntries = reader.parseToc();
+      console.log(`[Import] TOC: ${tocEntries.length} Einträge gefunden`);
+      // Log all TABLE DATA entries for debugging
+      for (const e of tocEntries) {
+        if (e.desc === 'TABLE DATA') {
+          console.log(`[Import]   TABLE DATA: "${e.tag}" offset=${e.dataOffset} copyStmt=${e.copyStmt ? 'ja' : 'nein'}`);
+        }
+      }
       progress('extract', 10, `${tocEntries.length} Einträge im Dump, suche Stationen...`);
 
       // Find the gas_station TABLE DATA entry
       let stationEntry = tocEntries.find(
-        e => e.desc === 'TABLE DATA' && /gas_station/i.test(e.tag || ''),
+        e => e.desc === 'TABLE DATA' && /^gas_station$/i.test(e.tag || ''),
       );
       if (!stationEntry) {
         stationEntry = tocEntries.find(
@@ -93,6 +110,7 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
       }
 
       progress('extract', 20, `Tabelle "${stationEntry.tag}" gefunden, lese Daten...`);
+      console.log(`[Import] Stationstabelle: "${stationEntry.tag}" bei offset ${stationEntry.dataOffset}`);
 
       if (stationEntry.dataOffset < 0) {
         throw new Error('Kein Daten-Offset für Stations-Tabelle vorhanden');
@@ -100,10 +118,12 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
 
       // Read and decompress the COPY data
       const copyData = reader.readTableData(stationEntry.dataOffset);
+      console.log(`[Import] COPY-Daten gelesen: ${(copyData.length / 1024).toFixed(0)} KB`);
       progress('extract', 60, 'Daten extrahiert, parse Stationen...');
 
       // Parse columns from COPY statement
       const stations = parseStationsFromCopy(copyData, stationEntry.copyStmt);
+      console.log(`[Import] ${stations.length} Stationen geparst`);
 
       if (stations.length === 0) {
         throw new Error('Keine Stationen im Dump gefunden');
@@ -112,14 +132,56 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
       progress('extract', 80, `${stations.length.toLocaleString('de-DE')} Stationen extrahiert`);
 
       // ─── 4. Seed station cache ───────────────────────────────────
+      console.log('[Import] Phase 4/5: Cache befüllen');
       progress('seed', 0, 'Befülle Cache...');
       if (shouldAbort()) throw new Error('Abgebrochen');
 
-      const count = seedCache(stations, fuelType, (pct) => {
+      stationsImported = seedCache(stations, fuelType, (pct) => {
         progress('seed', pct, `${Math.round(stations.length * pct / 100).toLocaleString('de-DE')} / ${stations.length.toLocaleString('de-DE')}`);
       });
+      console.log(`[Import] Phase 4/5: Cache befüllt mit ${stationsImported} Stationen`);
 
-      return count;
+      // ─── 5. Import price history ─────────────────────────────────
+      console.log('[Import] Phase 5/5: Preishistorie');
+      progress('prices', 0, 'Suche Preishistorie im Dump...');
+      if (shouldAbort()) throw new Error('Abgebrochen');
+
+      // Find the history table
+      const historyEntry = tocEntries.find(
+        e => e.desc === 'TABLE DATA' && /gas_station_information_history/i.test(e.tag || ''),
+      );
+
+      if (historyEntry && historyEntry.dataOffset >= 0) {
+        console.log(`[Import] Preishistorie: "${historyEntry.tag}" bei offset ${historyEntry.dataOffset}`);
+
+        // Build station ID → metadata lookup from parsed stations
+        const stationMap = new Map<string, { name: string; brand: string; lat: number; lng: number }>();
+        for (const s of stations) {
+          stationMap.set(s.id, { name: s.name, brand: s.brand, lat: s.lat, lng: s.lng });
+        }
+
+        progress('prices', 5, `Tabelle "${historyEntry.tag}" gefunden, lese Preise...`);
+
+        pricesImported = await importPriceHistory(
+          reader,
+          historyEntry,
+          stationMap,
+          fuelType,
+          (pct, count) => {
+            pricesImported = count;
+            progress('prices', 5 + Math.round(pct * 0.95), `${count.toLocaleString('de-DE')} Preise importiert...`);
+          },
+          shouldAbort,
+        );
+
+        progress('prices', 100, `${pricesImported.toLocaleString('de-DE')} Preise importiert`);
+      } else {
+        console.log('[Import] Keine Preishistorie-Tabelle im Dump gefunden');
+        progress('prices', 100, 'Keine Preishistorie im Dump gefunden (übersprungen)');
+        console.log('[Import] No gas_station_information_history table found in dump');
+      }
+
+      return stationsImported;
     } finally {
       reader.close();
     }
@@ -356,6 +418,62 @@ class PgDumpReader {
     if (decompressedChunks.length === 0) return '';
     return Buffer.concat(decompressedChunks).toString('utf8');
   }
+
+  /**
+   * Stream table data line by line via callback.
+   * Essential for huge tables (like price history) to avoid loading everything into memory.
+   * Returns the total number of lines processed.
+   */
+  streamTableData(offset: number, onLine: (line: string) => void): number {
+    this.pos = offset;
+
+    const blockType = this.readByte();
+    this.readInt(); // dump ID
+
+    if (blockType !== 1) {
+      throw new Error(`Unerwarteter Block-Typ: ${blockType} (erwartet: 1 = DATA)`);
+    }
+
+    let lineCount = 0;
+    let remainder = '';
+
+    while (true) {
+      const blockLen = this.readInt();
+      if (blockLen === 0) break;
+      const raw = this.readBytes(blockLen);
+
+      let text: string;
+      if (this.compressed) {
+        try {
+          text = inflateSync(raw).toString('utf8');
+        } catch {
+          text = raw.toString('utf8');
+        }
+      } else {
+        text = raw.toString('utf8');
+      }
+
+      // Process complete lines, carry over incomplete last line
+      const combined = remainder + text;
+      const lines = combined.split('\n');
+      remainder = lines.pop() || ''; // last element may be incomplete
+
+      for (const line of lines) {
+        if (line && line !== '\\.' && !line.startsWith('COPY ')) {
+          onLine(line);
+          lineCount++;
+        }
+      }
+    }
+
+    // Process final remainder
+    if (remainder && remainder !== '\\.' && !remainder.startsWith('COPY ')) {
+      onLine(remainder);
+      lineCount++;
+    }
+
+    return lineCount;
+  }
 }
 
 // ─── COPY data parsing ──────────────────────────────────────────────
@@ -432,61 +550,277 @@ function parseCopyRow(columns: string[], line: string): CachedStation | null {
   };
 }
 
+// ─── Price history import ────────────────────────────────────────────
+
+/** Get database handle (lazy import to avoid circular deps). */
+function getDb(): { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> } | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('@/lib/server-runtime').database;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Stream the gas_station_information_history table from the dump and write
+ * price entries to the station_prices table.
+ *
+ * The history table typically has columns:
+ *   id, stid (station UUID), e5, e10, diesel, date, changed
+ *
+ * We filter by the configured fuel type and only import the last 30 days.
+ */
+async function importPriceHistory(
+  reader: PgDumpReader,
+  entry: TocEntry,
+  stationMap: Map<string, { name: string; brand: string; lat: number; lng: number }>,
+  fuelType: string,
+  onProgress: (pct: number, count: number) => void,
+  shouldAbort: () => boolean,
+): Promise<number> {
+  const db = getDb();
+  if (!db) {
+    console.log('[Import] No database available, skipping price history import');
+    return 0;
+  }
+
+  // Parse column names from COPY statement
+  let columns: string[] = [];
+  if (entry.copyStmt) {
+    const colMatch = entry.copyStmt.match(/\(([^)]+)\)/);
+    if (colMatch) {
+      columns = colMatch[1].split(',').map(c => c.trim());
+    }
+  }
+
+  if (columns.length === 0) {
+    console.log('[Import] Could not parse columns from history table COPY statement');
+    return 0;
+  }
+
+  // Map fuel type to column name in the dump
+  const fuelColumn = fuelType === 'e5' ? 'e5' : fuelType === 'e10' ? 'e10' : 'diesel';
+  const fuelIdx = columns.indexOf(fuelColumn);
+  const stidIdx = columns.indexOf('stid');
+  const dateIdx = columns.indexOf('date');
+  const changedIdx = columns.indexOf('changed');
+
+  if (fuelIdx < 0 || stidIdx < 0) {
+    console.log(`[Import] Missing columns in history table: fuelIdx=${fuelIdx} stidIdx=${stidIdx} columns=${columns.join(',')}`);
+    return 0;
+  }
+
+  // Only import prices from the last 30 days
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffStr = cutoff.toISOString();
+
+  // Collect rows in batches for efficient DB inserts
+  const BATCH_SIZE = 5000;
+  let batch: { timestamp: string; name: string; brand: string; price: number; locationId: string }[] = [];
+  let totalInserted = 0;
+  let rowsRead = 0;
+  let lastProgress = 0;
+
+  const flushBatch = async () => {
+    if (batch.length === 0) return;
+
+    const values: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+    for (const row of batch) {
+      values.push(`($${idx++}::timestamptz, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
+      params.push(row.timestamp, row.locationId, row.name, row.brand, row.price);
+    }
+    await db.query(
+      `INSERT INTO station_prices (timestamp, location_id, station_name, station_brand, price) VALUES ${values.join(', ')}`,
+      params,
+    );
+    totalInserted += batch.length;
+    batch = [];
+  };
+
+  // Stream the history table line by line
+  reader.streamTableData(entry.dataOffset, (line) => {
+    rowsRead++;
+
+    const values = line.split('\t');
+    if (values.length <= Math.max(fuelIdx, stidIdx)) return;
+
+    const stid = values[stidIdx];
+    const priceStr = values[fuelIdx];
+    const station = stationMap.get(stid);
+
+    // Skip: unknown station, NULL price, or zero price
+    if (!station || priceStr === '\\N' || !priceStr) return;
+    const price = parseFloat(priceStr);
+    if (!isFinite(price) || price <= 0) return;
+
+    // Use 'changed' timestamp if available, else 'date'
+    const tsStr = changedIdx >= 0 && values[changedIdx] !== '\\N'
+      ? values[changedIdx]
+      : dateIdx >= 0 && values[dateIdx] !== '\\N'
+        ? values[dateIdx]
+        : null;
+    if (!tsStr) return;
+
+    // Only import recent prices
+    if (tsStr < cutoffStr) return;
+
+    // Compute location_id using same grid as seedCache
+    const cellLat = Math.round(station.lat / 0.2) * 0.2;
+    const cellLng = Math.round(station.lng / 0.3) * 0.3;
+    const locationId = `de-import-${cellLat.toFixed(1)}-${cellLng.toFixed(1)}`;
+
+    batch.push({
+      timestamp: tsStr,
+      name: station.name,
+      brand: station.brand,
+      price,
+      locationId,
+    });
+  });
+
+  // Flush remaining in batches (streamTableData is sync, so we flush after)
+  // Re-batch the collected rows and insert asynchronously
+  const allRows = batch;
+  batch = [];
+
+  for (let i = 0; i < allRows.length; i += BATCH_SIZE) {
+    if (shouldAbort()) throw new Error('Abgebrochen');
+
+    batch = allRows.slice(i, i + BATCH_SIZE);
+    await flushBatch();
+
+    const pct = Math.round((i + BATCH_SIZE) / allRows.length * 100);
+    if (pct > lastProgress) {
+      onProgress(Math.min(pct, 100), totalInserted);
+      lastProgress = pct;
+    }
+  }
+
+  console.log(`[Import] Imported ${totalInserted} price entries from ${rowsRead} history rows (${fuelColumn}, last 30 days)`);
+  return totalInserted;
+}
+
 // ─── Download with progress ──────────────────────────────────────────
 
+const MAX_RETRIES = 10;
+const RETRY_DELAY_MS = 3_000;
+
+/**
+ * Download a large file with resume support.
+ * Uses HTTP Range headers to resume after connection drops ("terminated" errors).
+ */
 async function downloadFile(
   url: string,
   dest: string,
   onProgress: (pct: number, mbDown: number, mbTotal: number) => void,
   shouldAbort: () => boolean,
 ): Promise<void> {
-  const controller = new AbortController();
-  const response = await fetch(url, { signal: controller.signal });
-
-  if (!response.ok) {
-    const hint = await response.text().catch(() => '');
-    throw new Error(`Download fehlgeschlagen: HTTP ${response.status} — ${hint.slice(0, 200)}`);
-  }
-
-  const total = parseInt(response.headers.get('content-length') || '0', 10);
+  // First request to get total size
+  const headResp = await fetch(url, { method: 'HEAD' });
+  const total = parseInt(headResp.headers.get('content-length') || '0', 10);
+  const supportsRange = headResp.headers.get('accept-ranges') === 'bytes';
 
   let downloaded = 0;
+  let retries = 0;
   let lastReport = 0;
 
-  // Convert Web ReadableStream to Node.js Readable with progress + abort support
-  const webStream = response.body!;
-  const nodeReadable = new Readable({
-    async read() {
-      try {
-        if (shouldAbort()) {
-          controller.abort();
-          this.destroy(new Error('Abgebrochen'));
-          return;
-        }
-        const reader = (this as Readable & { _webReader?: ReadableStreamDefaultReader<Uint8Array> })._webReader
-          ??= webStream.getReader();
-        const { done, value } = await reader.read();
-        if (done) { this.push(null); return; }
+  while (true) {
+    if (shouldAbort()) throw new Error('Abgebrochen');
 
-        const buf = Buffer.from(value);
-        downloaded += buf.length;
+    const headers: Record<string, string> = {};
+    if (downloaded > 0 && supportsRange) {
+      headers['Range'] = `bytes=${downloaded}-`;
+    }
 
-        const now = Date.now();
-        if (now - lastReport > 500) {
-          const pct = total > 0 ? Math.round(downloaded / total * 100) : 0;
-          onProgress(pct, Math.round(downloaded / 1_048_576), Math.round(total / 1_048_576));
-          lastReport = now;
-        }
+    let response: Response;
+    try {
+      const controller = new AbortController();
+      // Abort after 60s of no data (stalled connection)
+      const timeoutId = setTimeout(() => controller.abort(), 60_000);
 
-        this.push(buf);
-      } catch (err) {
-        this.destroy(err instanceof Error ? err : new Error(String(err)));
+      response = await fetch(url, { signal: controller.signal, headers });
+      clearTimeout(timeoutId);
+
+      // 416 = Range Not Satisfiable → file already complete
+      if (response.status === 416) break;
+
+      if (!response.ok && response.status !== 206) {
+        const hint = await response.text().catch(() => '');
+        throw new Error(`Download fehlgeschlagen: HTTP ${response.status} — ${hint.slice(0, 200)}`);
       }
-    },
-  });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === 'Abgebrochen') throw err;
 
-  // pipeline handles backpressure and cleanup automatically
-  await pipeline(nodeReadable, createWriteStream(dest));
+      retries++;
+      if (retries > MAX_RETRIES) {
+        throw new Error(`Download nach ${MAX_RETRIES} Versuchen fehlgeschlagen: ${msg}`);
+      }
+      console.log(`[Import] Download interrupted at ${Math.round(downloaded / 1_048_576)} MB, retry ${retries}/${MAX_RETRIES}: ${msg}`);
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+      continue;
+    }
+
+    // Stream this chunk to disk
+    try {
+      const writer = createWriteStream(dest, { flags: downloaded > 0 ? 'r+' : 'w', start: downloaded });
+      const webStream = response.body!;
+
+      const nodeReadable = new Readable({
+        async read() {
+          try {
+            if (shouldAbort()) {
+              this.destroy(new Error('Abgebrochen'));
+              return;
+            }
+            const reader = (this as Readable & { _webReader?: ReadableStreamDefaultReader<Uint8Array> })._webReader
+              ??= webStream.getReader();
+            const { done, value } = await reader.read();
+            if (done) { this.push(null); return; }
+
+            const buf = Buffer.from(value);
+            downloaded += buf.length;
+            retries = 0; // Reset retry count on successful data
+
+            const now = Date.now();
+            if (now - lastReport > 500) {
+              const pct = total > 0 ? Math.round(downloaded / total * 100) : 0;
+              onProgress(pct, Math.round(downloaded / 1_048_576), Math.round(total / 1_048_576));
+              lastReport = now;
+            }
+
+            this.push(buf);
+          } catch (err) {
+            this.destroy(err instanceof Error ? err : new Error(String(err)));
+          }
+        },
+      });
+
+      await pipeline(nodeReadable, writer);
+
+      // Download complete
+      break;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === 'Abgebrochen') throw err;
+
+      // Connection dropped mid-stream — retry with resume
+      if (!supportsRange) {
+        throw new Error(`Download abgebrochen und Server unterstützt kein Resume: ${msg}`);
+      }
+
+      retries++;
+      if (retries > MAX_RETRIES) {
+        throw new Error(`Download nach ${MAX_RETRIES} Versuchen fehlgeschlagen: ${msg}`);
+      }
+      console.log(`[Import] Download interrupted at ${Math.round(downloaded / 1_048_576)} MB, retry ${retries}/${MAX_RETRIES}: ${msg}`);
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+    }
+  }
 
   // Final progress report
   const pct = total > 0 ? Math.round(downloaded / total * 100) : 100;

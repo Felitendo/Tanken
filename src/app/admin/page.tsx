@@ -60,10 +60,11 @@ interface CountryScanStatus {
 }
 
 interface ImportStatus {
-  phase: 'idle' | 'download' | 'decompress' | 'extract' | 'seed' | 'done' | 'error';
+  phase: 'idle' | 'download' | 'decompress' | 'extract' | 'seed' | 'prices' | 'done' | 'error';
   percent: number;
   detail: string;
   stationsImported: number;
+  pricesImported: number;
   error: string | null;
 }
 
@@ -482,6 +483,7 @@ function ScannerConsole() {
                   {status.import.phase === 'decompress' && '📦 '}
                   {status.import.phase === 'extract' && '🔍 '}
                   {status.import.phase === 'seed' && '💾 '}
+                  {status.import.phase === 'prices' && '📊 '}
                   {status.import.phase === 'done' && '✅ '}
                   {status.import.phase === 'error' && '❌ '}
                   {status.import.detail}
