@@ -162,33 +162,32 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
       const sqlReader = new PlainSqlReader(tempDump);
       readerCleanup = () => sqlReader.close();
 
-      // First, list all COPY tables for diagnostics
+      // First, list all COPY tables for diagnostics + table-name selection
       const allTables = sqlReader.listCopyTables();
       console.log(`[Import] COPY-Tabellen im SQL-Dump: ${allTables.length > 0 ? allTables.join(', ') : '(keine)'}`);
 
-      // Find and read station COPY block — try progressively broader patterns
+      // Pick station table by NAME (not by scanning the full COPY line —
+      // column lists can contain substrings like "info"/"price"/"history"
+      // and would otherwise cause false negatives).
       progress('extract', 10, 'Suche Stations-Tabelle im SQL-Dump...');
-      const stationPatterns: [RegExp, string][] = [
-        [/gas_station\b(?!.*(?:history|price|info))/i, 'gas_station'],
-        [/\bstation\b(?!.*(?:history|price|info))/i, 'station'],
-        [/\btankstelle\b/i, 'tankstelle'],
-      ];
-      let stationCopyStmt: string | null = null;
-      for (const [pattern, label] of stationPatterns) {
-        sqlReader.reset();
-        stationCopyStmt = sqlReader.findCopyBlock(pattern);
-        if (stationCopyStmt) {
-          console.log(`[Import] Stations-COPY gefunden (Muster: ${label}): ${stationCopyStmt.slice(0, 120)}`);
-          break;
-        }
-        console.log(`[Import] Muster "${label}" nicht gefunden, probiere nächstes...`);
-      }
-      if (!stationCopyStmt) {
+      const stationTable = pickTableName(allTables, 'station');
+      if (!stationTable) {
         throw new Error(
           `Stations-Tabelle nicht im SQL-Dump gefunden. ` +
           `Vorhandene Tabellen: ${allTables.length > 0 ? allTables.join(', ') : '(keine COPY-Blöcke gefunden)'}`
         );
       }
+      console.log(`[Import] Stations-Tabelle gewählt: ${stationTable}`);
+
+      sqlReader.reset();
+      const stationCopyStmt = sqlReader.findCopyBlock(buildCopyRegex(stationTable));
+      if (!stationCopyStmt) {
+        throw new Error(
+          `COPY-Block für Tabelle "${stationTable}" nicht im SQL-Dump gefunden. ` +
+          `Vorhandene Tabellen: ${allTables.join(', ')}`
+        );
+      }
+      console.log(`[Import] Stations-COPY gefunden: ${stationCopyStmt.slice(0, 120)}`);
 
       progress('extract', 30, 'Stations-Tabelle gefunden, lese Daten...');
 
@@ -198,23 +197,21 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
 
       stations = parseStationsFromCopy(copyData, stationCopyStmt);
 
-      // Find price history COPY block — try multiple patterns, each from start
-      const historyPatterns: RegExp[] = [
-        /gas_station_information_history/i,
-        /\bstation.*history/i,
-        /\bprice.*history/i,
-        /\binformation_history/i,
-      ];
+      // Price history — same name-based selection
+      const historyTable = pickTableName(allTables, 'history');
       let priceCopyStmt: string | null = null;
-      for (const pattern of historyPatterns) {
+      if (historyTable) {
         sqlReader.reset();
-        priceCopyStmt = sqlReader.findCopyBlock(pattern);
-        if (priceCopyStmt) break;
+        priceCopyStmt = sqlReader.findCopyBlock(buildCopyRegex(historyTable));
       }
       if (priceCopyStmt) {
         priceColumns = parseCopyColumns(priceCopyStmt);
         priceLineIterator = sqlReader.iterateCopyLines();
-        console.log(`[Import] Preishistorie-COPY gefunden: ${priceCopyStmt.slice(0, 100)}`);
+        console.log(`[Import] Preishistorie-COPY gefunden (${historyTable}): ${priceCopyStmt.slice(0, 100)}`);
+      } else if (historyTable) {
+        console.log(`[Import] Preishistorie-Tabelle "${historyTable}" erkannt, aber COPY-Block nicht gefunden.`);
+      } else {
+        console.log(`[Import] Keine Preishistorie-Tabelle im Dump gefunden — fahre ohne Preise fort.`);
       }
 
     } else if (format === 'tar') {
@@ -1170,6 +1167,55 @@ function parseCopyColumns(copyStmt: string | null): string[] {
   if (!copyStmt) return [];
   const colMatch = copyStmt.match(/\(([^)]+)\)/);
   return colMatch ? colMatch[1].split(',').map(c => c.trim()) : [];
+}
+
+/** Strip optional "schema." prefix from a table name (e.g. "public.gas_station" → "gas_station"). */
+function bareTableName(name: string): string {
+  const parts = name.split('.');
+  return parts[parts.length - 1].replace(/^"|"$/g, '');
+}
+
+/**
+ * Select the station or price-history table from a list of COPY table names
+ * (as returned by PlainSqlReader.listCopyTables). Prefers exact matches
+ * over fuzzy ones; for 'station' explicitly excludes history/price/info tables.
+ */
+function pickTableName(tables: string[], kind: 'station' | 'history'): string | null {
+  if (tables.length === 0) return null;
+  const bare = tables.map(t => ({ full: t, bare: bareTableName(t).toLowerCase() }));
+
+  if (kind === 'station') {
+    return (
+      bare.find(t => t.bare === 'gas_station')?.full ??
+      bare.find(t => t.bare === 'station')?.full ??
+      bare.find(t => t.bare === 'tankstelle')?.full ??
+      bare.find(t => /station/.test(t.bare) && !/history|price|info/.test(t.bare))?.full ??
+      null
+    );
+  }
+
+  // history
+  return (
+    bare.find(t => t.bare === 'gas_station_information_history')?.full ??
+    bare.find(t => /information_history/.test(t.bare))?.full ??
+    bare.find(t => /station/.test(t.bare) && /(history|price)/.test(t.bare))?.full ??
+    null
+  );
+}
+
+/**
+ * Build a regex that matches the header of a COPY statement for the given
+ * table name (with or without schema prefix, quoted or unquoted). Stops
+ * before the column list so column names can never cause false negatives.
+ */
+function buildCopyRegex(tableName: string): RegExp {
+  const bare = bareTableName(tableName);
+  const escaped = bare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Matches:  COPY <schema.>?<table> (    or   COPY "schema"."table" (
+  return new RegExp(
+    `^COPY\\s+(?:"[^"]+"\\.|[\\w]+\\.)?"?${escaped}"?\\s*\\(`,
+    'i',
+  );
 }
 
 function safeDelete(path: string): void {
