@@ -79,17 +79,25 @@ html, body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   opacity: 0;
-  transform: scale(0.98);
+  visibility: hidden;
+  transform: translateY(6px) scale(0.985);
   pointer-events: none;
-  transition: opacity 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
-              transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* Outgoing: fade out quickly, then hide */
+  transition: opacity 0.18s ease-in,
+              transform 0.18s ease-in,
+              visibility 0s linear 0.18s;
   will-change: opacity, transform;
 }
 
 .tab-view.active {
   opacity: 1;
-  transform: scale(1);
+  visibility: visible;
+  transform: translateY(0) scale(1);
   pointer-events: auto;
+  /* Incoming: wait for outgoing to clear, then ease in */
+  transition: opacity 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) 0.08s,
+              transform 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) 0.08s,
+              visibility 0s linear 0s;
 }
 
 /* === Sections (iOS Settings Style) === */
