@@ -1,11 +1,12 @@
 import { loadRepoConfig } from '@/config';
-import { fetchStationsEControl, fetchPricesByIds, fetchStationsLive } from '@/lib/measure';
+import { fetchStationsEControl, fetchPricesByIds } from '@/lib/measure';
 import {
   setCachedStations, getAllCachedLocations, countUniqueStations, getAllUniqueStations,
   persistPriceSnapshot, clearAllCache,
   updateCachedPrices,
 } from '@/lib/station-cache';
-import { generateAustriaGrid, generateGermanyGrid } from '@/lib/grid';
+import { generateAustriaGrid } from '@/lib/grid';
+import { importStationsFromDump, type ImportStatus } from '@/lib/dump-import';
 
 export interface ScanLogEntry {
   time: string;
@@ -44,6 +45,7 @@ export interface SchedulerStatus {
   cache: CacheStats;
   de: CountryScanStatus;
   at: CountryScanStatus;
+  import: ImportStatus;
 }
 
 const MAX_ERRORS = 20;
@@ -58,11 +60,6 @@ const AT_BATCH_DELAY_MS = 500;
 const PRICE_DUMP_DELAY_MS = 1_000;
 /** Max IDs per prices.php call. */
 const PRICE_DUMP_BATCH_SIZE = 10;
-
-/** Delay between list.php calls during DE grid discovery (Tankerkönig rate limit). */
-const DE_DISCOVERY_DELAY_MS = 10_000;
-/** Radius per grid point for DE discovery (Tankerkönig max = 25km). */
-const DE_DISCOVERY_RADIUS_KM = 25;
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -170,7 +167,9 @@ class ScanScheduler {
   private _lastCycleDurationSec: number | null = null;
   private _nextCycleAt: Date | null = null;
   private _waitingCancel: (() => void) | null = null;
-  private _deDiscoveryAbort = false;
+
+  private _importAbort = false;
+  private _importStatus: ImportStatus = { phase: 'idle', percent: 0, detail: '', stationsImported: 0, error: null };
 
   readonly de = new CountryScan();
   readonly at = new CountryScan();
@@ -187,7 +186,7 @@ class ScanScheduler {
   stop(): void {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
     if (this._gridTimer) { clearTimeout(this._gridTimer); this._gridTimer = null; }
-    this._deDiscoveryAbort = true;
+    this._importAbort = true;
     this.de.reset();
     this.at.reset();
     this._scanStartedAt = null;
@@ -220,6 +219,49 @@ class ScanScheduler {
     this.at.addLog('Cache geleert', 'warn');
   }
 
+  // ─── Dump Import ────────────────────────────────────────────────
+
+  /** Start importing stations from the official Tankerkönig PostgreSQL dump. */
+  triggerDumpImport(): boolean {
+    if (this._importStatus.phase !== 'idle' && this._importStatus.phase !== 'done' && this._importStatus.phase !== 'error') {
+      return false; // Already running
+    }
+
+    const config = loadRepoConfig();
+    const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
+    if (!apiKey) {
+      this._importStatus = { phase: 'error', percent: 0, detail: 'Kein API-Key konfiguriert', stationsImported: 0, error: 'Kein API-Key' };
+      return false;
+    }
+
+    this._importAbort = false;
+    const fuelType = config.fuel_type || 'diesel';
+    this._importStatus = { phase: 'download', percent: 0, detail: 'Starte...', stationsImported: 0, error: null };
+    this.de.addLog('Tankerkönig-Dump Import gestartet', 'info');
+
+    importStationsFromDump({
+      apiKey,
+      fuelType,
+      onProgress: (status) => { this._importStatus = status; },
+      shouldAbort: () => this._importAbort,
+    }).then((count) => {
+      this._importStatus = { phase: 'done', percent: 100, detail: `${count.toLocaleString('de-DE')} Stationen importiert`, stationsImported: count, error: null };
+      this.de.addLog(`Dump-Import fertig: ${count.toLocaleString('de-DE')} Stationen`, 'success');
+      console.log(`[Import] Complete: ${count} stations imported`);
+    }).catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      this._importStatus = { phase: 'error', percent: 0, detail: msg, stationsImported: 0, error: msg };
+      this.de.addLog(`Dump-Import Fehler: ${msg}`, 'error');
+      console.error(`[Import] Error:`, msg);
+    });
+
+    return true;
+  }
+
+  abortDumpImport(): void {
+    this._importAbort = true;
+  }
+
   getStatus(): SchedulerStatus {
     const cachedLocations = getAllCachedLocations();
     let oldestTs = Infinity, newestTs = 0;
@@ -242,145 +284,8 @@ class ScanScheduler {
       },
       de: this.de.getStatus(),
       at: this.at.getStatus(),
+      import: { ...this._importStatus },
     };
-  }
-
-  // ─── DE Grid Discovery (one-time, manual) ───────────────────────
-
-  /** Start a one-time grid discovery for Germany (runs asynchronously). */
-  triggerDeGridDiscovery(): boolean {
-    if (this.de.scanning) return false;
-
-    const config = loadRepoConfig();
-    const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
-    if (!apiKey) {
-      this.de.addLog('Kein API-Key — Grid-Discovery nicht möglich', 'warn');
-      return false;
-    }
-
-    this._deDiscoveryAbort = false;
-    const fuelType = config.fuel_type || 'diesel';
-
-    this.runDeGridDiscovery(apiKey, fuelType).catch(err => {
-      console.error('[DE] Grid discovery error:', err);
-      this.de.addError(`Grid-Discovery: ${err instanceof Error ? err.message : String(err)}`);
-      this.de.reset();
-    });
-
-    return true;
-  }
-
-  /** Abort a running grid discovery. */
-  abortDeGridDiscovery(): void {
-    this._deDiscoveryAbort = true;
-  }
-
-  private async runDeGridDiscovery(apiKey: string, fuelType: string): Promise<void> {
-    const grid = generateGermanyGrid();
-    const cs = this.de;
-    cs.scanning = true;
-    cs.mode = 'discovery';
-    cs.resetCycle();
-    cs.callDurations = [];
-    cs.gridPoints = grid.length;
-    cs.addLog(
-      `Grid-Discovery gestartet: ${grid.length} Punkte (${DE_DISCOVERY_RADIUS_KM}km Radius, ${DE_DISCOVERY_DELAY_MS / 1000}s Delay)`,
-      'info',
-    );
-    console.log(`[DE] Grid discovery: ${grid.length} points, radius: ${DE_DISCOVERY_RADIUS_KM}km, fuel: ${fuelType}`);
-
-    const startTime = Date.now();
-    let delay = DE_DISCOVERY_DELAY_MS;
-    let errors = 0;
-
-    try {
-      for (let i = 0; i < grid.length; i++) {
-        if (this._deDiscoveryAbort) {
-          cs.addLog('Grid-Discovery abgebrochen', 'warn');
-          console.log('[DE] Grid discovery aborted');
-          break;
-        }
-
-        const point = grid[i];
-        cs.progress = `${i + 1}/${grid.length}`;
-        cs.currentPoint = { lat: point.lat, lng: point.lng };
-
-        const remaining = grid.length - i - 1;
-        const avgCall = cs.callDurations.length > 0
-          ? cs.callDurations.reduce((a, b) => a + b, 0) / cs.callDurations.length + delay
-          : delay + 500;
-        cs.estimatedEndAt = new Date(Date.now() + remaining * avgCall);
-
-        try {
-          const t0 = Date.now();
-          const stations = await fetchStationsLive({
-            apiKey,
-            lat: point.lat,
-            lng: point.lng,
-            radiusKm: DE_DISCOVERY_RADIUS_KM,
-            fuelType,
-          });
-          cs.callDurations.push(Date.now() - t0);
-
-          if (stations.length > 0) {
-            setCachedStations(point.id, {
-              stations,
-              lat: point.lat,
-              lng: point.lng,
-              radiusKm: DE_DISCOVERY_RADIUS_KM,
-              fuelType,
-            });
-            cs.addStations(stations);
-          }
-
-          // Reset delay on success
-          if (delay > DE_DISCOVERY_DELAY_MS) {
-            delay = DE_DISCOVERY_DELAY_MS;
-          }
-        } catch (err) {
-          errors++;
-          const msg = `Punkt ${i + 1} (${point.lat},${point.lng}): ${err instanceof Error ? err.message : String(err)}`;
-          cs.addError(msg);
-
-          // Exponential backoff on errors (max 30s)
-          delay = Math.min(delay * 2, 30_000);
-          cs.addLog(`Fehler bei ${point.lat}°N ${point.lng}°E, Delay → ${delay / 1000}s`, 'warn');
-        }
-
-        // Log progress every 100 points
-        if ((i + 1) % 100 === 0) {
-          const elapsed = (Date.now() - startTime) / 1000;
-          cs.addLog(
-            `${i + 1}/${grid.length} Punkte, ${cs.stationsScanned.toLocaleString('de-DE')} Stationen (${fmtDuration(elapsed)})`,
-            'info',
-          );
-        }
-
-        if (i < grid.length - 1) await sleep(delay);
-      }
-
-      const dur = (Date.now() - startTime) / 1000;
-      cs.lastDurationSec = Math.round(dur);
-      cs.lastCompletedAt = new Date();
-      const errStr = errors > 0 ? `, ${errors} Fehler` : '';
-      cs.addLog(
-        `Grid-Discovery fertig: ${cs.stationsScanned.toLocaleString('de-DE')} Stationen in ${fmtDuration(dur)}${errStr}`,
-        'success',
-      );
-      console.log(`[DE] Grid discovery complete: ${cs.stationsScanned} stations in ${fmtDuration(dur)}`);
-
-      // Persist price snapshot after discovery
-      try {
-        const persisted = await persistPriceSnapshot();
-        if (persisted > 0) {
-          cs.addLog(`${persisted.toLocaleString('de-DE')} Preise in History gespeichert`, 'info');
-        }
-      } catch (err) {
-        cs.addLog(`History-Fehler: ${err instanceof Error ? err.message : String(err)}`, 'error');
-      }
-    } finally {
-      cs.reset();
-    }
   }
 
   // ─── Main loop ──────────────────────────────────────────────────
@@ -473,7 +378,7 @@ class ScanScheduler {
     const ids = allStations.filter(s => !s.id.startsWith('at-')).map(s => s.id);
 
     if (ids.length === 0) {
-      cs.addLog('Keine Stationen im Cache — bitte Stationen importieren oder Cache wiederherstellen', 'warn');
+      cs.addLog('Keine DE-Stationen im Cache — Stationen per Dump importieren oder Karte öffnen', 'warn');
       cs.reset();
       return;
     }

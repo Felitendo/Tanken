@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { runtimeConfig } from '@/lib/server-runtime';
-import { findCachedStations, findNearbyCachedStations, getCachedStationsByLocation, findStationsInBounds } from '@/lib/station-cache';
+import { findCachedStations, findNearbyCachedStations, getCachedStationsByLocation, findStationsInBounds, setCachedStations } from '@/lib/station-cache';
 import { fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
 import { canMakeLiveCall, recordLiveCall } from '@/lib/rate-limit';
 import { getScheduler } from '@/lib/scheduler';
@@ -81,6 +81,9 @@ export async function GET(request: NextRequest) {
     // E-Control API (no key needed)
     const stations = await fetchStationsEControl({ lat, lng, fuelType: fuel });
     if (stations.length > 0) {
+      // Cache for future lookups and daily price updates
+      const cacheId = `at-live-${lat.toFixed(2)}-${lng.toFixed(2)}`;
+      setCachedStations(cacheId, { stations, lat, lng, radiusKm: rad, fuelType: fuel });
       const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, stations);
       return NextResponse.json(enriched, { headers: { 'X-Cache': 'live-at' } });
     }
@@ -96,6 +99,9 @@ export async function GET(request: NextRequest) {
         fuelType: fuel,
       });
       if (stations.length > 0) {
+        // Cache for future lookups and daily price updates
+        const cacheId = `de-live-${lat.toFixed(2)}-${lng.toFixed(2)}`;
+        setCachedStations(cacheId, { stations, lat, lng, radiusKm: rad, fuelType: fuel });
         const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, stations);
         return NextResponse.json(enriched, { headers: { 'X-Cache': 'live' } });
       }

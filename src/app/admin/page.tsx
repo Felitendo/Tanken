@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings, UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, RotateCcw, Play, Square, Zap, Search } from 'lucide-react';
+import { Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings, UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, RotateCcw, Play, Square, Zap, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -59,6 +59,14 @@ interface CountryScanStatus {
   log: Array<{ time: string; message: string; type: 'info' | 'success' | 'error' | 'warn' }>;
 }
 
+interface ImportStatus {
+  phase: 'idle' | 'download' | 'decompress' | 'extract' | 'seed' | 'done' | 'error';
+  percent: number;
+  detail: string;
+  stationsImported: number;
+  error: string | null;
+}
+
 interface SchedulerStatus {
   running: boolean;
   cycleCount: number;
@@ -73,6 +81,7 @@ interface SchedulerStatus {
   };
   de: CountryScanStatus;
   at: CountryScanStatus;
+  import: ImportStatus;
 }
 
 type FeedbackType = 'success' | 'error' | 'info';
@@ -398,37 +407,66 @@ function ScannerConsole() {
 
           <Separator />
 
-          {/* Grid Discovery DE */}
-          <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
-            <div>
-              <p className="text-sm font-medium">Grid-Discovery 🇩🇪</p>
-              <p className="text-xs text-muted-foreground">
-                Einmalig alle deutschen Tankstellen entdecken (~4 Std.)
-              </p>
+          {/* Dump Import */}
+          <div className="rounded-lg border bg-muted/30 px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Tankerkönig-Dump importieren 🇩🇪</p>
+                <p className="text-xs text-muted-foreground">
+                  Offizielle Stationsliste (~15.000 Tankstellen) herunterladen und importieren
+                </p>
+              </div>
+              {status.import.phase !== 'idle' && status.import.phase !== 'done' && status.import.phase !== 'error' ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => handleAction('abortImport')}
+                >
+                  <Square className="h-3.5 w-3.5" />
+                  Abbrechen
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (confirm('Tankerkönig-Dump importieren?\n\nLädt history.dump.gz (~8 GB) herunter.\nBenötigt pg_restore und ~16 GB freien Speicher.\nDauer: je nach Verbindung 10–60 Min.'))
+                      handleAction('importDump');
+                  }}
+                  disabled={status.import.phase !== 'idle' && status.import.phase !== 'done' && status.import.phase !== 'error'}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Import starten
+                </Button>
+              )}
             </div>
-            {status.de.scanning && status.de.mode === 'discovery' ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={() => handleAction('abortGridDiscoveryDe')}
-              >
-                <Square className="h-3.5 w-3.5" />
-                Abbrechen
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (confirm('Grid-Discovery für Deutschland starten?\n\nScannt ~1.400 Punkte mit je 25km Radius.\nDauer: ca. 4 Stunden (6 Req/Min.).'))
-                    handleAction('gridDiscoveryDe');
-                }}
-                disabled={status.de.scanning}
-              >
-                <Search className="h-3.5 w-3.5" />
-                Discovery starten
-              </Button>
+
+            {/* Import progress */}
+            {status.import.phase !== 'idle' && (
+              <div className="space-y-1.5">
+                {status.import.phase !== 'done' && status.import.phase !== 'error' && (
+                  <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
+                      style={{ width: `${status.import.percent}%` }}
+                    />
+                  </div>
+                )}
+                <p className={`text-xs ${
+                  status.import.phase === 'error' ? 'text-destructive' :
+                  status.import.phase === 'done' ? 'text-emerald-600 dark:text-emerald-400' :
+                  'text-muted-foreground'
+                }`}>
+                  {status.import.phase === 'download' && '⬇️ '}
+                  {status.import.phase === 'decompress' && '📦 '}
+                  {status.import.phase === 'extract' && '🔍 '}
+                  {status.import.phase === 'seed' && '💾 '}
+                  {status.import.phase === 'done' && '✅ '}
+                  {status.import.phase === 'error' && '❌ '}
+                  {status.import.detail}
+                </p>
+              </div>
             )}
           </div>
 
@@ -455,18 +493,7 @@ function ScannerConsole() {
 
       {/* Per-country cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <CountryScannerCard
-          cs={status.de}
-          flag="🇩🇪"
-          label="Deutschland"
-          api={
-            status.de.scanning
-              ? status.de.mode === 'discovery'
-                ? 'Tankerkönig list.php (Grid-Discovery)'
-                : 'Tankerkönig prices.php (1s Delay)'
-              : 'Tankerkönig prices.php (1×/Tag um 12:01)'
-          }
-        />
+        <CountryScannerCard cs={status.de} flag="🇩🇪" label="Deutschland" api={status.de.scanning ? 'Tankerkönig prices.php (1s Delay)' : 'Tankerkönig prices.php + On-Demand list.php'} />
         <CountryScannerCard cs={status.at} flag="🇦🇹" label="Österreich" api="E-Control (5x parallel)" />
       </div>
     </div>
