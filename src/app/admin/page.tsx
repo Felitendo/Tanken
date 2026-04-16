@@ -1,14 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings, UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, RotateCcw, Play, Square, Zap, Download } from 'lucide-react';
+import {
+  Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings,
+  UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, ChevronRight,
+  RotateCcw, Play, Square, Zap, Download, Check, ArrowRight, ArrowLeft,
+  Lock,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+// ─── Types ─────────────────────────────────────────────────────────
 
 interface AdminConfig {
   apiKey: string;
@@ -86,6 +90,14 @@ interface SchedulerStatus {
 }
 
 type FeedbackType = 'success' | 'error' | 'info';
+type SidebarSection = 'config' | 'oidc' | 'smtp' | 'scanner';
+
+const SECTIONS: { id: SidebarSection; label: string; icon: typeof Settings; description: string }[] = [
+  { id: 'config', label: 'Konfiguration', icon: Settings, description: 'API-Keys, Kraftstoff und Intervalle' },
+  { id: 'oidc', label: 'Authentifizierung', icon: Shield, description: 'OIDC Single Sign-On' },
+  { id: 'smtp', label: 'E-Mail', icon: Mail, description: 'SMTP-Server für Benachrichtigungen' },
+  { id: 'scanner', label: 'Scanner', icon: Radio, description: 'Tankstellen-Scanner steuern' },
+];
 
 const defaultConfig: AdminConfig = {
   apiKey: '',
@@ -99,6 +111,8 @@ const defaultConfig: AdminConfig = {
   smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
 };
 
+// ─── API helper ────────────────────────────────────────────────────
+
 async function api<T = unknown>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -109,8 +123,7 @@ async function api<T = unknown>(url: string, options?: RequestInit): Promise<T> 
   return payload as T;
 }
 
-
-// ─── Shared formatters ──────────────────────────────────────────────
+// ─── Formatters ────────────────────────────────────────────────────
 
 const fmtTime = (iso: string) => {
   try { return new Date(iso).toLocaleString('de-DE'); } catch { return iso; }
@@ -144,21 +157,21 @@ const fmtEta = (iso: string) => {
   } catch { return iso; }
 };
 
-// ─── Tiny reusable pieces ───────────────────────────────────────────
+// ─── Micro-components ──────────────────────────────────────────────
 
 function StatCell({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="space-y-1">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
       <p className="text-sm font-semibold tabular-nums">{value}</p>
       {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }
 
-function StatusDot({ active, className }: { active: boolean; className?: string }) {
+function StatusDot({ active }: { active: boolean }) {
   return (
-    <span className={`inline-block h-2 w-2 rounded-full ${active ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground/30'} ${className ?? ''}`} />
+    <span className={`inline-block h-2 w-2 rounded-full ${active ? 'bg-emerald-500 admin-status-pulse' : 'bg-muted-foreground/30'}`} />
   );
 }
 
@@ -170,26 +183,12 @@ function Badge({ children, variant = 'default' }: { children: React.ReactNode; v
     destructive: 'bg-destructive/10 text-destructive',
   };
   return (
-    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${colors[variant]}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colors[variant]}`}>
       {children}
     </span>
   );
 }
 
-const logTypeDots: Record<string, string> = {
-  info: 'bg-blue-500',
-  success: 'bg-emerald-500',
-  error: 'bg-red-500',
-  warn: 'bg-amber-500',
-};
-const logTypeText: Record<string, string> = {
-  info: 'text-muted-foreground',
-  success: 'text-emerald-600 dark:text-emerald-400',
-  error: 'text-red-600 dark:text-red-400',
-  warn: 'text-amber-600 dark:text-amber-400',
-};
-
-/** SVG flags — Windows doesn't render country flag emojis. */
 function Flag({ country, className }: { country: 'de' | 'at'; className?: string }) {
   if (country === 'de') {
     return (
@@ -209,7 +208,96 @@ function Flag({ country, className }: { country: 'de' | 'at'; className?: string
   );
 }
 
-// ─── Country Scanner Card ───────────────────────────────────────────
+function IconBox({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`admin-icon-box ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+// ─── Feedback Toast ────────────────────────────────────────────────
+
+function FeedbackToast({ message, type, onDismiss }: { message: string; type: FeedbackType; onDismiss: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    if (type === 'success') {
+      const timer = setTimeout(() => {
+        setLeaving(true);
+        setTimeout(onDismiss, 300);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [type, onDismiss]);
+
+  const bgColor = type === 'success'
+    ? 'bg-emerald-500 text-white'
+    : type === 'error'
+      ? 'bg-red-500 text-white'
+      : 'bg-card text-card-foreground border border-border';
+
+  const icon = type === 'success'
+    ? <Check className="h-4 w-4" />
+    : type === 'error'
+      ? <span className="text-sm">!</span>
+      : null;
+
+  return (
+    <div className={`admin-toast ${leaving ? 'admin-toast--leaving' : ''}`}>
+      <button
+        type="button"
+        onClick={() => { setLeaving(true); setTimeout(onDismiss, 300); }}
+        className={`flex items-center gap-2.5 px-4 py-2.5 rounded-full shadow-lg ${bgColor} text-sm font-medium cursor-pointer`}
+      >
+        {icon}
+        {message}
+      </button>
+    </div>
+  );
+}
+
+// ─── Settings Group (iOS inset grouped) ────────────────────────────
+
+function SettingsGroup({ title, children }: { title?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      {title && <p className="admin-section-header">{title}</p>}
+      <div className="admin-settings-group">{children}</div>
+    </div>
+  );
+}
+
+function SettingsRow({ label, hint, children, inline }: { label?: string; hint?: React.ReactNode; children: React.ReactNode; inline?: boolean }) {
+  return (
+    <div className={`admin-settings-row ${inline ? 'admin-settings-row--inline' : ''}`}>
+      {label && (
+        <div className={inline ? 'admin-row-label' : ''}>
+          <Label className="text-sm">{label}</Label>
+          {hint && <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p>}
+        </div>
+      )}
+      <div className={inline ? 'admin-row-control' : 'w-full'}>{children}</div>
+    </div>
+  );
+}
+
+// ─── Log type styles ───────────────────────────────────────────────
+
+const logTypeDots: Record<string, string> = {
+  info: 'bg-blue-500',
+  success: 'bg-emerald-500',
+  error: 'bg-red-500',
+  warn: 'bg-amber-500',
+};
+const logTypeText: Record<string, string> = {
+  info: 'text-muted-foreground',
+  success: 'text-emerald-600 dark:text-emerald-400',
+  error: 'text-red-600 dark:text-red-400',
+  warn: 'text-amber-600 dark:text-amber-400',
+};
+
+// ─── Country Scanner Card ──────────────────────────────────────────
 
 function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
   cs: CountryScanStatus;
@@ -226,75 +314,75 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
   })();
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center w-8 shrink-0">{flag}</span>
-            <div>
-              <CardTitle className="text-base">{label}</CardTitle>
-              <CardDescription className="text-xs">{apiLabel}</CardDescription>
-            </div>
-          </div>
-          {cs.scanning ? (
-            <Badge variant="success">
-              {cs.mode === 'discovery' ? `Grid-Discovery ${cs.progress}` : `Preis-Update ${cs.progress}`}
-            </Badge>
-          ) : cs.lastCompletedAt ? (
-            <Badge>{fmtRelative(cs.lastCompletedAt)}</Badge>
-          ) : (
-            <Badge variant="warning">Warte</Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Progress bar */}
-        {cs.scanning && cs.progress && (
-          <div className="space-y-2">
-            <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              {cs.currentPoint && (
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3" />
-                  {cs.currentPoint.lat.toFixed(2)}°N, {cs.currentPoint.lng.toFixed(2)}°E
-                </span>
-              )}
-              {cs.estimatedEndAt && (
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {fmtEta(cs.estimatedEndAt)}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Stats grid */}
-        <div className="grid grid-cols-4 gap-4">
-          <StatCell label={cs.mode === 'price-dump' ? 'Batches' : 'Grid'} value={cs.gridPoints ? cs.gridPoints.toLocaleString('de-DE') : '—'} />
-          <StatCell label="Stationen" value={cs.stationsScanned ? cs.stationsScanned.toLocaleString('de-DE') : '—'} />
-          <StatCell label="Dauer" value={cs.lastDurationSec ? fmtDuration(cs.lastDurationSec) : '—'} />
-          <StatCell label="Ø Call" value={cs.avgCallSec ? `${cs.avgCallSec}s` : '—'} />
-        </div>
-
-        {/* Log toggle */}
-        {cs.log.length > 0 && (
+    <div className="admin-settings-group p-4 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center w-8 shrink-0">{flag}</span>
           <div>
-            <button
-              type="button"
-              onClick={() => setShowLog(!showLog)}
-              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Activity className="h-3 w-3" />
-              Log ({cs.log.length})
-              <ChevronDown className={`h-3 w-3 transition-transform ${showLog ? 'rotate-180' : ''}`} />
-            </button>
-            {showLog && (
+            <p className="text-sm font-semibold">{label}</p>
+            <p className="text-[11px] text-muted-foreground">{apiLabel}</p>
+          </div>
+        </div>
+        {cs.scanning ? (
+          <Badge variant="success">
+            {cs.mode === 'discovery' ? `Grid-Discovery ${cs.progress}` : `Preis-Update ${cs.progress}`}
+          </Badge>
+        ) : cs.lastCompletedAt ? (
+          <Badge>{fmtRelative(cs.lastCompletedAt)}</Badge>
+        ) : (
+          <Badge variant="warning">Warte</Badge>
+        )}
+      </div>
+
+      {/* Progress bar */}
+      {cs.scanning && cs.progress && (
+        <div className="space-y-2">
+          <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+            <div
+              className={`h-full admin-progress-bar ${cs.scanning ? 'admin-progress-bar--active' : 'bg-primary'}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            {cs.currentPoint && (
+              <span className="flex items-center gap-1">
+                <MapPin className="h-3 w-3" />
+                {cs.currentPoint.lat.toFixed(2)}°N, {cs.currentPoint.lng.toFixed(2)}°E
+              </span>
+            )}
+            {cs.estimatedEndAt && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {fmtEta(cs.estimatedEndAt)}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-4 gap-4">
+        <StatCell label={cs.mode === 'price-dump' ? 'Batches' : 'Grid'} value={cs.gridPoints ? cs.gridPoints.toLocaleString('de-DE') : '—'} />
+        <StatCell label="Stationen" value={cs.stationsScanned ? cs.stationsScanned.toLocaleString('de-DE') : '—'} />
+        <StatCell label="Dauer" value={cs.lastDurationSec ? fmtDuration(cs.lastDurationSec) : '—'} />
+        <StatCell label="Ø Call" value={cs.avgCallSec ? `${cs.avgCallSec}s` : '—'} />
+      </div>
+
+      {/* Log toggle */}
+      {cs.log.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowLog(!showLog)}
+            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Activity className="h-3 w-3" />
+            Log ({cs.log.length})
+            <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${showLog ? 'rotate-180' : ''}`} />
+          </button>
+          <div className={`admin-log-expand ${showLog ? 'admin-log-expand--open' : ''}`}>
+            <div>
               <div className="mt-2 rounded-lg border bg-muted/30 max-h-44 overflow-y-auto">
                 {cs.log.slice().reverse().map((entry, i) => (
                   <div key={i} className="flex items-start gap-2 px-3 py-1.5 border-b border-border/40 last:border-0">
@@ -308,27 +396,27 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* Errors */}
-        {cs.errors.length > 0 && (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/5 max-h-28 overflow-y-auto">
-            <div className="px-3 py-1.5 border-b border-destructive/10">
-              <p className="text-xs font-medium text-destructive">Fehler ({cs.errors.length})</p>
             </div>
-            {cs.errors.slice().reverse().map((err, i) => (
-              <p key={i} className="px-3 py-1 text-[11px] text-muted-foreground font-mono break-all border-b border-destructive/5 last:border-0">{err}</p>
-            ))}
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+
+      {/* Errors */}
+      {cs.errors.length > 0 && (
+        <div className="rounded-lg border border-destructive/20 bg-destructive/5 max-h-28 overflow-y-auto">
+          <div className="px-3 py-1.5 border-b border-destructive/10">
+            <p className="text-xs font-medium text-destructive">Fehler ({cs.errors.length})</p>
+          </div>
+          {cs.errors.slice().reverse().map((err, i) => (
+            <p key={i} className="px-3 py-1 text-[11px] text-muted-foreground font-mono break-all border-b border-destructive/5 last:border-0">{err}</p>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
-// ─── Scanner Console ────────────────────────────────────────────────
+// ─── Scanner Console ───────────────────────────────────────────────
 
 function ScannerConsole() {
   const [status, setStatus] = useState<SchedulerStatus | null>(null);
@@ -362,156 +450,145 @@ function ScannerConsole() {
 
   if (!status) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          <div className="animate-pulse">Scanner-Status wird geladen...</div>
-        </CardContent>
-      </Card>
+      <div className="admin-settings-group p-12 text-center text-muted-foreground">
+        <div className="animate-pulse text-sm">Scanner-Status wird geladen...</div>
+      </div>
     );
   }
 
   const isScanning = status.de.scanning || status.at.scanning;
 
   return (
-    <div className="space-y-4">
-      {/* Scanner header card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${status.running ? 'bg-emerald-500/10' : 'bg-muted'}`}>
-                <Radio className={`h-4 w-4 ${status.running ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
+    <div className="space-y-5 admin-stagger">
+      {/* Scanner header */}
+      <div className="admin-settings-group p-5">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <IconBox className={status.running ? 'bg-emerald-500/10' : 'bg-muted'}>
+              <Radio className={`h-4 w-4 ${status.running ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
+            </IconBox>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-base font-semibold">Scanner</p>
+                <StatusDot active={status.running} />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-lg">Scanner</CardTitle>
-                  <StatusDot active={status.running} />
-                </div>
-                <CardDescription>
-                  {status.running
-                    ? isScanning ? 'Scannt DE + AT parallel' : 'Wartet auf nächsten Zyklus'
-                    : 'Gestoppt'}
-                </CardDescription>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                {status.running
+                  ? isScanning ? 'Scannt DE + AT parallel' : 'Wartet auf nächsten Zyklus'
+                  : 'Gestoppt'}
+              </p>
             </div>
-            <div className="flex gap-1.5">
-              <Button
-                variant={status.running ? 'outline' : 'default'}
-                size="sm"
-                onClick={() => handleAction(status.running ? 'stop' : 'start')}
-              >
-                {status.running ? <><Square className="h-3.5 w-3.5" /> Stoppen</> : <><Play className="h-3.5 w-3.5" /> Starten</>}
-              </Button>
-              {status.running && (
-                <>
-                  <Button variant="outline" size="sm" onClick={() => handleAction('restart')}>
-                    <RotateCcw className="h-3.5 w-3.5" />
+          </div>
+          <div className="flex gap-1.5">
+            <Button
+              variant={status.running ? 'outline' : 'default'}
+              size="sm"
+              className="admin-btn"
+              onClick={() => handleAction(status.running ? 'stop' : 'start')}
+            >
+              {status.running ? <><Square className="h-3.5 w-3.5" /> Stoppen</> : <><Play className="h-3.5 w-3.5" /> Starten</>}
+            </Button>
+            {status.running && (
+              <>
+                <Button variant="outline" size="sm" className="admin-btn" onClick={() => handleAction('restart')}>
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+                {!isScanning && (
+                  <Button variant="outline" size="sm" className="admin-btn" onClick={() => handleAction('triggerNow')}>
+                    <Zap className="h-3.5 w-3.5" /> Jetzt
                   </Button>
-                  {!isScanning && (
-                    <Button variant="outline" size="sm" onClick={() => handleAction('triggerNow')}>
-                      <Zap className="h-3.5 w-3.5" /> Jetzt scannen
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Global stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-            <StatCell label="Grid-Zellen" value={status.cache.gridCells.toLocaleString('de-DE')} />
-            <StatCell label="Tankstellen" value={status.cache.totalStations.toLocaleString('de-DE')} sub="eindeutig" />
-            <StatCell label="Zyklen" value={String(status.cycleCount)} />
-            <StatCell label="Letzter Zyklus" value={status.lastCycleDurationSec ? fmtDuration(status.lastCycleDurationSec) : '—'} sub={status.nextCycleAt ? `Nächster: ${new Date(status.nextCycleAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : undefined} />
-          </div>
-
-          <Separator />
-
-          {/* Dump Import */}
-          <div className="rounded-lg border bg-muted/30 px-4 py-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium flex items-center gap-1.5">Tankerkönig-Dump importieren <Flag country="de" className="inline h-3" /></p>
-                <p className="text-xs text-muted-foreground">
-                  Offizielle Stationsliste (~15.000 Tankstellen) herunterladen und importieren
-                </p>
-              </div>
-              {status.import.phase !== 'idle' && status.import.phase !== 'done' && status.import.phase !== 'error' ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => handleAction('abortImport')}
-                >
-                  <Square className="h-3.5 w-3.5" />
-                  Abbrechen
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (confirm('Tankerkönig-Dump importieren?\n\nLädt history.dump.gz (~8 GB) herunter.\nBenötigt ~16 GB freien Speicher.\nDauer: je nach Verbindung 10–60 Min.'))
-                      handleAction('importDump');
-                  }}
-                  disabled={status.import.phase !== 'idle' && status.import.phase !== 'done' && status.import.phase !== 'error'}
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Import starten
-                </Button>
-              )}
-            </div>
-
-            {/* Import progress */}
-            {status.import.phase !== 'idle' && (
-              <div className="space-y-1.5">
-                {status.import.phase !== 'done' && status.import.phase !== 'error' && (
-                  <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
-                      style={{ width: `${status.import.percent}%` }}
-                    />
-                  </div>
                 )}
-                <p className={`text-xs ${
-                  status.import.phase === 'error' ? 'text-destructive' :
-                  status.import.phase === 'done' ? 'text-emerald-600 dark:text-emerald-400' :
-                  'text-muted-foreground'
-                }`}>
-                  {status.import.phase === 'download' && '⬇️ '}
-                  {status.import.phase === 'decompress' && '📦 '}
-                  {status.import.phase === 'extract' && '🔍 '}
-                  {status.import.phase === 'seed' && '💾 '}
-                  {status.import.phase === 'prices' && '📊 '}
-                  {status.import.phase === 'done' && '✅ '}
-                  {status.import.phase === 'error' && '❌ '}
-                  {status.import.detail}
-                </p>
-              </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Global stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-5">
+          <StatCell label="Grid-Zellen" value={status.cache.gridCells.toLocaleString('de-DE')} />
+          <StatCell label="Tankstellen" value={status.cache.totalStations.toLocaleString('de-DE')} sub="eindeutig" />
+          <StatCell label="Zyklen" value={String(status.cycleCount)} />
+          <StatCell label="Letzter Zyklus" value={status.lastCycleDurationSec ? fmtDuration(status.lastCycleDurationSec) : '—'} sub={status.nextCycleAt ? `Nächster: ${new Date(status.nextCycleAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : undefined} />
+        </div>
+
+        <div className="h-px bg-border/60 mb-5" />
+
+        {/* Dump Import */}
+        <div className="rounded-xl bg-muted/40 px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium flex items-center gap-1.5">Tankerkönig-Dump <Flag country="de" className="inline h-3" /></p>
+              <p className="text-[11px] text-muted-foreground">
+                Stationsliste (~15.000) herunterladen und importieren
+              </p>
+            </div>
+            {status.import.phase !== 'idle' && status.import.phase !== 'done' && status.import.phase !== 'error' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive admin-btn"
+                onClick={() => handleAction('abortImport')}
+              >
+                <Square className="h-3.5 w-3.5" />
+                Abbrechen
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="admin-btn"
+                onClick={() => {
+                  if (confirm('Tankerkönig-Dump importieren?\n\nLädt history.dump.gz (~8 GB) herunter.\nBenötigt ~16 GB freien Speicher.\nDauer: je nach Verbindung 10–60 Min.'))
+                    handleAction('importDump');
+                }}
+                disabled={status.import.phase !== 'idle' && status.import.phase !== 'done' && status.import.phase !== 'error'}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Import starten
+              </Button>
             )}
           </div>
 
-          {/* Cache info + clear */}
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              {status.cache.oldestScan && status.cache.newestScan
-                ? `Cache: ${fmtRelative(status.cache.oldestScan)} — ${fmtRelative(status.cache.newestScan)}`
-                : 'Cache leer'}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => { if (confirm('Cache wirklich leeren? Alle gecachten Tankstellen werden gelöscht.')) handleAction('clearCache'); }}
-              disabled={clearing}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              {clearing ? 'Löscht...' : 'Cache leeren'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          {status.import.phase !== 'idle' && (
+            <div className="space-y-1.5">
+              {status.import.phase !== 'done' && status.import.phase !== 'error' && (
+                <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                  <div
+                    className="h-full admin-progress-bar admin-progress-bar--active"
+                    style={{ width: `${status.import.percent}%` }}
+                  />
+                </div>
+              )}
+              <p className={`text-xs ${
+                status.import.phase === 'error' ? 'text-destructive' :
+                status.import.phase === 'done' ? 'text-emerald-600 dark:text-emerald-400' :
+                'text-muted-foreground'
+              }`}>
+                {status.import.detail}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Cache info */}
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-[11px] text-muted-foreground">
+            {status.cache.oldestScan && status.cache.newestScan
+              ? `Cache: ${fmtRelative(status.cache.oldestScan)} — ${fmtRelative(status.cache.newestScan)}`
+              : 'Cache leer'}
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive text-xs"
+            onClick={() => { if (confirm('Cache wirklich leeren? Alle gecachten Tankstellen werden gelöscht.')) handleAction('clearCache'); }}
+            disabled={clearing}
+          >
+            <Trash2 className="h-3 w-3" />
+            {clearing ? 'Löscht...' : 'Cache leeren'}
+          </Button>
+        </div>
+      </div>
 
       {/* Per-country cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -522,27 +599,152 @@ function ScannerConsole() {
   );
 }
 
-// ─── Section wrapper ────────────────────────────────────────────────
+// ─── Config Section Components ─────────────────────────────────────
 
-function ConfigSection({ icon: Icon, title, children }: { icon: React.ElementType; title: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// ─── Config Fields ──────────────────────────────────────────────────
-
-function ConfigFields({
+function AppConfigSection({
   config,
   onChange,
   onTestApiKey,
   testingApiKey,
+}: {
+  config: AdminConfig;
+  onChange: (patch: Partial<AdminConfig>) => void;
+  onTestApiKey?: () => void;
+  testingApiKey?: boolean;
+}) {
+  return (
+    <div className="space-y-5 admin-stagger">
+      <SettingsGroup title="API-Schlüssel">
+        <SettingsRow label="Tankerkönig API Key" hint={<>Kostenlos unter <a href="https://creativecommons.tankerkoenig.de" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">tankerkoenig.de</a></>}>
+          <div className="flex gap-2">
+            <Input
+              value={config.apiKey}
+              onChange={(e) => onChange({ apiKey: e.target.value })}
+              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              className="font-mono text-xs"
+            />
+            {onTestApiKey && (
+              <Button type="button" variant="outline" size="sm" className="admin-btn shrink-0" onClick={onTestApiKey} disabled={testingApiKey || !config.apiKey}>
+                <KeyRound className="h-3.5 w-3.5" />
+                {testingApiKey ? 'Teste...' : 'Testen'}
+              </Button>
+            )}
+          </div>
+        </SettingsRow>
+        <SettingsRow label="OpenRouteService Key" hint={<>Optional — unter <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">openrouteservice.org</a> registrieren</>}>
+          <Input
+            value={config.orsApiKey}
+            onChange={(e) => onChange({ orsApiKey: e.target.value })}
+            placeholder="Für Fahrtdistanzen statt Luftlinie"
+          />
+        </SettingsRow>
+        <SettingsRow label="Session Secret">
+          <Input
+            value={config.sessionSecret}
+            onChange={(e) => onChange({ sessionSecret: e.target.value })}
+            placeholder="Wird automatisch generiert"
+            className="font-mono text-xs"
+          />
+        </SettingsRow>
+      </SettingsGroup>
+
+      <SettingsGroup title="Suche">
+        <SettingsRow label="Kraftstoff">
+          <Select value={config.fuelType} onValueChange={(v) => onChange({ fuelType: v })}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="diesel">Diesel</SelectItem>
+              <SelectItem value="e5">Super E5</SelectItem>
+              <SelectItem value="e10">Super E10</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingsRow>
+        <SettingsRow label="Radius" inline>
+          <div className="flex items-center gap-2">
+            <Input type="number" min={1} max={25} value={config.radiusKm} onChange={(e) => onChange({ radiusKm: Number(e.target.value) || 10 })} className="w-20 text-right" />
+            <span className="text-sm text-muted-foreground">km</span>
+          </div>
+        </SettingsRow>
+        <SettingsRow label="Scan-Intervall" inline>
+          <div className="flex items-center gap-2">
+            <Input type="number" min={1} value={config.refreshIntervalMinutes} onChange={(e) => onChange({ refreshIntervalMinutes: Number(e.target.value) || 60 })} className="w-20 text-right" />
+            <span className="text-sm text-muted-foreground">Min.</span>
+          </div>
+        </SettingsRow>
+      </SettingsGroup>
+
+      <SettingsGroup title="Schwellenwerte">
+        <SettingsRow label="Gut unter Durchschnitt" inline>
+          <div className="flex items-center gap-2">
+            <Input type="number" value={config.thresholds.goodBelowAvgCents} onChange={(e) => onChange({ thresholds: { ...config.thresholds, goodBelowAvgCents: Number(e.target.value) || 3 } })} className="w-20 text-right" />
+            <span className="text-sm text-muted-foreground">ct</span>
+          </div>
+        </SettingsRow>
+        <SettingsRow label="Okay unter Durchschnitt" inline>
+          <div className="flex items-center gap-2">
+            <Input type="number" value={config.thresholds.okayBelowAvgCents} onChange={(e) => onChange({ thresholds: { ...config.thresholds, okayBelowAvgCents: Number(e.target.value) || 1 } })} className="w-20 text-right" />
+            <span className="text-sm text-muted-foreground">ct</span>
+          </div>
+        </SettingsRow>
+      </SettingsGroup>
+    </div>
+  );
+}
+
+function OidcSection({ config, onChange }: { config: AdminConfig; onChange: (patch: Partial<AdminConfig>) => void }) {
+  return (
+    <div className="space-y-5 admin-stagger">
+      <SettingsGroup title="Anbieter">
+        <SettingsRow label="Anzeigename" hint="z.B. Google, Authelia, Keycloak">
+          <Input value={config.oidc.name} onChange={(e) => onChange({ oidc: { ...config.oidc, name: e.target.value } })} placeholder="z.B. Felo ID, Google, Authelia" />
+        </SettingsRow>
+        <SettingsRow label="Issuer URL">
+          <Input type="url" value={config.oidc.issuerUrl} onChange={(e) => onChange({ oidc: { ...config.oidc, issuerUrl: e.target.value } })} placeholder="https://auth.example.com" />
+        </SettingsRow>
+      </SettingsGroup>
+
+      <SettingsGroup title="Zugangsdaten">
+        <SettingsRow label="Client ID">
+          <Input value={config.oidc.clientId} onChange={(e) => onChange({ oidc: { ...config.oidc, clientId: e.target.value } })} />
+        </SettingsRow>
+        <SettingsRow label="Client Secret">
+          <Input value={config.oidc.clientSecret} onChange={(e) => onChange({ oidc: { ...config.oidc, clientSecret: e.target.value } })} />
+        </SettingsRow>
+        <SettingsRow label="Callback URL" hint="Als Redirect URI beim OIDC-Anbieter eintragen">
+          <div className="flex items-center gap-2">
+            <Input
+              readOnly
+              value={`${typeof window !== 'undefined' ? window.location.origin : ''}/auth/oidc/callback`}
+              className="font-mono text-xs bg-muted"
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+            />
+            <Button type="button" variant="outline" size="sm" className="admin-btn shrink-0" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/auth/oidc/callback`)}>
+              Kopieren
+            </Button>
+          </div>
+        </SettingsRow>
+      </SettingsGroup>
+
+      <SettingsGroup title="Claims">
+        <SettingsRow label="Scope">
+          <Input value={config.oidc.scope} onChange={(e) => onChange({ oidc: { ...config.oidc, scope: e.target.value } })} />
+        </SettingsRow>
+        <SettingsRow label="Username Claim">
+          <Input value={config.oidc.usernameClaim} onChange={(e) => onChange({ oidc: { ...config.oidc, usernameClaim: e.target.value } })} placeholder="preferred_username" />
+        </SettingsRow>
+        <SettingsRow label="Picture Claim">
+          <Input value={config.oidc.pictureClaim} onChange={(e) => onChange({ oidc: { ...config.oidc, pictureClaim: e.target.value } })} placeholder="picture" />
+        </SettingsRow>
+      </SettingsGroup>
+    </div>
+  );
+}
+
+function SmtpSection({
+  config,
+  onChange,
   onTestEmail,
   testingEmail,
   testEmailRecipient,
@@ -550,195 +752,395 @@ function ConfigFields({
 }: {
   config: AdminConfig;
   onChange: (patch: Partial<AdminConfig>) => void;
-  onTestApiKey?: () => void;
-  testingApiKey?: boolean;
   onTestEmail?: () => void;
   testingEmail?: boolean;
   testEmailRecipient?: string;
   onTestEmailRecipientChange?: (value: string) => void;
 }) {
   return (
-    <div className="space-y-8">
-      {/* App Configuration */}
-      <ConfigSection icon={Settings} title="App-Konfiguration">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="apiKey">Tankerkönig API Key</Label>
-            <Input
-              id="apiKey"
-              value={config.apiKey}
-              onChange={(e) => onChange({ apiKey: e.target.value })}
-              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    <div className="space-y-5 admin-stagger">
+      <SettingsGroup title="Server">
+        <SettingsRow label="Host">
+          <Input value={config.smtp.host} onChange={(e) => onChange({ smtp: { ...config.smtp, host: e.target.value } })} placeholder="smtp.example.com" />
+        </SettingsRow>
+        <SettingsRow label="Port" inline>
+          <Input type="number" min={1} max={65535} value={config.smtp.port} onChange={(e) => onChange({ smtp: { ...config.smtp, port: Number(e.target.value) || 587 } })} className="w-24 text-right" />
+        </SettingsRow>
+        <SettingsRow label="SSL/TLS" inline>
+          <label className="relative inline-flex cursor-pointer items-center">
+            <input
+              type="checkbox"
+              checked={config.smtp.secure}
+              onChange={(e) => onChange({ smtp: { ...config.smtp, secure: e.target.checked } })}
+              className="peer sr-only"
             />
-            <p className="text-xs text-muted-foreground">
-              Kostenlos unter <a href="https://creativecommons.tankerkoenig.de" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">creativecommons.tankerkoenig.de</a>
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="orsApiKey">OpenRouteService Key <span className="text-muted-foreground font-normal">(optional)</span></Label>
-            <Input
-              id="orsApiKey"
-              value={config.orsApiKey}
-              onChange={(e) => onChange({ orsApiKey: e.target.value })}
-              placeholder="Für Fahrtdistanzen statt Luftlinie"
-            />
-            <p className="text-xs text-muted-foreground">
-              Unter <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">openrouteservice.org</a> registrieren
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="sessionSecret">Session Secret</Label>
-            <Input
-              id="sessionSecret"
-              value={config.sessionSecret}
-              onChange={(e) => onChange({ sessionSecret: e.target.value })}
-              placeholder="Wird automatisch generiert"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Kraftstoff</Label>
-            <Select value={config.fuelType} onValueChange={(v) => onChange({ fuelType: v })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="diesel">Diesel</SelectItem>
-                <SelectItem value="e5">Super E5</SelectItem>
-                <SelectItem value="e10">Super E10</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="radiusKm">Radius (km)</Label>
-            <Input id="radiusKm" type="number" min={1} max={25} value={config.radiusKm} onChange={(e) => onChange({ radiusKm: Number(e.target.value) || 10 })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="refreshInterval">Intervall (Min.)</Label>
-            <Input id="refreshInterval" type="number" min={1} value={config.refreshIntervalMinutes} onChange={(e) => onChange({ refreshIntervalMinutes: Number(e.target.value) || 60 })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="thresholdGood">Gut unter Ø (ct)</Label>
-            <Input id="thresholdGood" type="number" value={config.thresholds.goodBelowAvgCents} onChange={(e) => onChange({ thresholds: { ...config.thresholds, goodBelowAvgCents: Number(e.target.value) || 3 } })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="thresholdOkay">Okay unter Ø (ct)</Label>
-            <Input id="thresholdOkay" type="number" value={config.thresholds.okayBelowAvgCents} onChange={(e) => onChange({ thresholds: { ...config.thresholds, okayBelowAvgCents: Number(e.target.value) || 1 } })} />
-          </div>
-        </div>
-        {onTestApiKey && (
-          <Button type="button" variant="outline" size="sm" onClick={onTestApiKey} disabled={testingApiKey || !config.apiKey}>
-            <KeyRound className="h-3.5 w-3.5" />
-            {testingApiKey ? 'Teste...' : 'API-Key testen'}
-          </Button>
-        )}
-      </ConfigSection>
+            <div className="h-6 w-11 rounded-full bg-muted peer-checked:bg-emerald-500 peer-focus-visible:ring-2 peer-focus-visible:ring-ring transition-colors after:content-[''] after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:after:translate-x-5" />
+          </label>
+        </SettingsRow>
+      </SettingsGroup>
 
-      <Separator />
+      <SettingsGroup title="Zugangsdaten">
+        <SettingsRow label="Benutzername">
+          <Input value={config.smtp.user} onChange={(e) => onChange({ smtp: { ...config.smtp, user: e.target.value } })} />
+        </SettingsRow>
+        <SettingsRow label="Passwort">
+          <Input type="password" value={config.smtp.pass} onChange={(e) => onChange({ smtp: { ...config.smtp, pass: e.target.value } })} />
+        </SettingsRow>
+      </SettingsGroup>
 
-      {/* OIDC */}
-      <ConfigSection icon={Shield} title="OIDC-Authentifizierung">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="sm:col-span-2 space-y-2">
-            <Label htmlFor="oidcName">Anzeigename</Label>
-            <Input id="oidcName" value={config.oidc.name} onChange={(e) => onChange({ oidc: { ...config.oidc, name: e.target.value } })} placeholder="z.B. Felo ID, Google, Authelia" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="oidcIssuer">Issuer URL</Label>
-            <Input id="oidcIssuer" type="url" value={config.oidc.issuerUrl} onChange={(e) => onChange({ oidc: { ...config.oidc, issuerUrl: e.target.value } })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="oidcClientId">Client ID</Label>
-            <Input id="oidcClientId" value={config.oidc.clientId} onChange={(e) => onChange({ oidc: { ...config.oidc, clientId: e.target.value } })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="oidcClientSecret">Client Secret</Label>
-            <Input id="oidcClientSecret" value={config.oidc.clientSecret} onChange={(e) => onChange({ oidc: { ...config.oidc, clientSecret: e.target.value } })} />
-          </div>
-          <div className="space-y-2">
-            <Label>Callback URL</Label>
+      <SettingsGroup title="Absender">
+        <SettingsRow label="Von-Adresse">
+          <Input type="email" value={config.smtp.from} onChange={(e) => onChange({ smtp: { ...config.smtp, from: e.target.value } })} placeholder="tanken@example.com" />
+        </SettingsRow>
+      </SettingsGroup>
+
+      {onTestEmail && (
+        <SettingsGroup title="Test">
+          <SettingsRow label="Test-E-Mail senden">
             <div className="flex items-center gap-2">
-              <Input
-                readOnly
-                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/auth/oidc/callback`}
-                className="font-mono text-xs bg-muted"
-                onClick={(e) => (e.target as HTMLInputElement).select()}
-              />
-              <Button type="button" variant="outline" size="sm" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/auth/oidc/callback`)}>
-                Kopieren
+              <Input type="email" value={testEmailRecipient ?? ''} onChange={(e) => onTestEmailRecipientChange?.(e.target.value)} placeholder="deine@email.com" />
+              <Button type="button" variant="outline" size="sm" className="admin-btn shrink-0" onClick={onTestEmail} disabled={testingEmail || !config.smtp.host || !config.smtp.from || !testEmailRecipient}>
+                <Mail className="h-3.5 w-3.5" />
+                {testingEmail ? 'Sende...' : 'Senden'}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Als Redirect URI beim OIDC-Anbieter eintragen.</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="oidcScope">Scope</Label>
-            <Input id="oidcScope" value={config.oidc.scope} onChange={(e) => onChange({ oidc: { ...config.oidc, scope: e.target.value } })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="oidcUsernameClaim">Username Claim</Label>
-            <Input id="oidcUsernameClaim" value={config.oidc.usernameClaim} onChange={(e) => onChange({ oidc: { ...config.oidc, usernameClaim: e.target.value } })} placeholder="preferred_username" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="oidcPictureClaim">Picture Claim</Label>
-            <Input id="oidcPictureClaim" value={config.oidc.pictureClaim} onChange={(e) => onChange({ oidc: { ...config.oidc, pictureClaim: e.target.value } })} placeholder="picture" />
-          </div>
-        </div>
-      </ConfigSection>
-
-      <Separator />
-
-      {/* SMTP */}
-      <ConfigSection icon={Mail} title="SMTP (E-Mail)">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="smtpHost">Host</Label>
-            <Input id="smtpHost" value={config.smtp.host} onChange={(e) => onChange({ smtp: { ...config.smtp, host: e.target.value } })} placeholder="smtp.example.com" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="smtpPort">Port</Label>
-            <Input id="smtpPort" type="number" min={1} max={65535} value={config.smtp.port} onChange={(e) => onChange({ smtp: { ...config.smtp, port: Number(e.target.value) || 587 } })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="smtpUser">Benutzername</Label>
-            <Input id="smtpUser" value={config.smtp.user} onChange={(e) => onChange({ smtp: { ...config.smtp, user: e.target.value } })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="smtpPass">Passwort</Label>
-            <Input id="smtpPass" type="password" value={config.smtp.pass} onChange={(e) => onChange({ smtp: { ...config.smtp, pass: e.target.value } })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="smtpFrom">Absender</Label>
-            <Input id="smtpFrom" type="email" value={config.smtp.from} onChange={(e) => onChange({ smtp: { ...config.smtp, from: e.target.value } })} placeholder="tanken@example.com" />
-          </div>
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 cursor-pointer h-9 px-1">
-              <input
-                type="checkbox"
-                checked={config.smtp.secure}
-                onChange={(e) => onChange({ smtp: { ...config.smtp, secure: e.target.checked } })}
-                className="rounded border-input h-4 w-4"
-              />
-              <span className="text-sm font-medium">SSL/TLS</span>
-            </label>
-          </div>
-        </div>
-        {onTestEmail && (
-          <div className="flex items-end gap-2">
-            <div className="flex-1 space-y-1">
-              <Label htmlFor="testEmailRecipient">Test-Empfänger</Label>
-              <Input id="testEmailRecipient" type="email" value={testEmailRecipient ?? ''} onChange={(e) => onTestEmailRecipientChange?.(e.target.value)} placeholder="deine@email.com" />
-            </div>
-            <Button type="button" variant="outline" size="sm" onClick={onTestEmail} disabled={testingEmail || !config.smtp.host || !config.smtp.from || !testEmailRecipient}>
-              <Mail className="h-3.5 w-3.5" />
-              {testingEmail ? 'Sende...' : 'Testen'}
-            </Button>
-          </div>
-        )}
-      </ConfigSection>
+          </SettingsRow>
+        </SettingsGroup>
+      )}
     </div>
   );
 }
 
-// ─── Main Admin Page ────────────────────────────────────────────────
+// ─── Setup Wizard ──────────────────────────────────────────────────
+
+function SetupPanel({
+  config,
+  onChange,
+  username,
+  password,
+  onUsernameChange,
+  onPasswordChange,
+  onSubmit,
+  submitting,
+}: {
+  config: AdminConfig;
+  onChange: (patch: Partial<AdminConfig>) => void;
+  username: string;
+  password: string;
+  onUsernameChange: (v: string) => void;
+  onPasswordChange: (v: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  submitting: boolean;
+}) {
+  const [step, setStep] = useState(0);
+  const steps = ['Account', 'API & Suche', 'Erweitert'];
+
+  return (
+    <div className="admin-panel-enter max-w-xl mx-auto">
+      {/* Step indicator */}
+      <div className="flex items-center justify-center gap-2 mb-8">
+        {steps.map((s, i) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setStep(i)}
+            className="flex items-center gap-2 group"
+          >
+            <div className={`admin-step-dot ${i === step ? 'admin-step-dot--active' : i < step ? 'admin-step-dot--done' : ''}`} />
+            <span className={`text-xs font-medium transition-colors ${i === step ? 'text-foreground' : 'text-muted-foreground'}`}>
+              {s}
+            </span>
+            {i < steps.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground/40 mx-1" />}
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={onSubmit}>
+        {/* Header */}
+        <div className="text-center mb-8">
+          <IconBox className="admin-icon-box--lg bg-primary/10 mx-auto mb-4">
+            <UserPlus className="h-6 w-6 text-primary" />
+          </IconBox>
+          <h2 className="text-xl font-semibold tracking-tight">Erstkonfiguration</h2>
+          <p className="text-sm text-muted-foreground mt-1">Admin anlegen und Tanken einrichten.</p>
+        </div>
+
+        {/* Step 0: Account */}
+        <div className={step === 0 ? 'admin-section-enter' : 'hidden'}>
+          <SettingsGroup title="Admin-Account">
+            <SettingsRow label="Benutzername">
+              <Input autoComplete="username" required minLength={3} value={username} onChange={(e) => onUsernameChange(e.target.value)} />
+            </SettingsRow>
+            <SettingsRow label="Passwort">
+              <Input type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => onPasswordChange(e.target.value)} />
+            </SettingsRow>
+          </SettingsGroup>
+        </div>
+
+        {/* Step 1: API & Search */}
+        <div className={step === 1 ? 'admin-section-enter' : 'hidden'}>
+          <AppConfigSection config={config} onChange={onChange} />
+        </div>
+
+        {/* Step 2: Advanced */}
+        <div className={step === 2 ? 'admin-section-enter' : 'hidden'}>
+          <div className="space-y-5">
+            <OidcSection config={config} onChange={onChange} />
+            <SmtpSection config={config} onChange={onChange} />
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex items-center justify-between mt-8">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setStep(Math.max(0, step - 1))}
+            className={step === 0 ? 'invisible' : ''}
+          >
+            <ArrowLeft className="h-4 w-4" /> Zurück
+          </Button>
+          {step < steps.length - 1 ? (
+            <Button
+              type="button"
+              size="sm"
+              className="admin-btn"
+              onClick={() => setStep(step + 1)}
+            >
+              Weiter <ArrowRight className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button type="submit" className="admin-btn" disabled={submitting}>
+              <Save className="h-4 w-4" />
+              {submitting ? 'Speichert...' : 'Setup abschließen'}
+            </Button>
+          )}
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ─── Login Panel ───────────────────────────────────────────────────
+
+function LoginPanel({
+  username,
+  password,
+  onUsernameChange,
+  onPasswordChange,
+  onSubmit,
+  submitting,
+}: {
+  username: string;
+  password: string;
+  onUsernameChange: (v: string) => void;
+  onPasswordChange: (v: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  submitting: boolean;
+}) {
+  return (
+    <div className="admin-panel-enter flex items-center justify-center min-h-[70vh]">
+      <div className="admin-glass-card w-full max-w-sm p-8">
+        <div className="text-center mb-6">
+          <IconBox className="admin-icon-box--lg bg-primary/10 mx-auto mb-4">
+            <Lock className="h-6 w-6 text-primary" />
+          </IconBox>
+          <h2 className="text-xl font-semibold tracking-tight">Admin Login</h2>
+          <p className="text-sm text-muted-foreground mt-1">Mit lokalem Account anmelden.</p>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="login-username" className="text-sm">Benutzername</Label>
+            <Input id="login-username" autoComplete="username" required value={username} onChange={(e) => onUsernameChange(e.target.value)} className="h-11" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="login-password" className="text-sm">Passwort</Label>
+            <Input id="login-password" type="password" autoComplete="current-password" required value={password} onChange={(e) => onPasswordChange(e.target.value)} className="h-11" />
+          </div>
+          <Button type="submit" className="w-full h-11 admin-btn mt-2" disabled={submitting}>
+            {submitting ? 'Einloggen...' : 'Einloggen'}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Dashboard Panel ───────────────────────────────────────────────
+
+function DashboardPanel({
+  config,
+  onChange,
+  onSubmit,
+  submitting,
+  onLogout,
+  onTestApiKey,
+  testingApiKey,
+  onTestEmail,
+  testingEmail,
+  testEmailRecipient,
+  onTestEmailRecipientChange,
+  user,
+}: {
+  config: AdminConfig;
+  onChange: (patch: Partial<AdminConfig>) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  submitting: boolean;
+  onLogout: () => void;
+  onTestApiKey: () => void;
+  testingApiKey: boolean;
+  onTestEmail: () => void;
+  testingEmail: boolean;
+  testEmailRecipient: string;
+  onTestEmailRecipientChange: (v: string) => void;
+  user?: { username?: string; displayName?: string };
+}) {
+  const [activeSection, setActiveSection] = useState<SidebarSection>('config');
+  const [animKey, setAnimKey] = useState(0);
+
+  const switchSection = (section: SidebarSection) => {
+    if (section === activeSection) return;
+    setActiveSection(section);
+    setAnimKey((k) => k + 1);
+  };
+
+  const sectionIcons: Record<SidebarSection, string> = {
+    config: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    oidc: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+    smtp: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+    scanner: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  };
+
+  return (
+    <div className="admin-panel-enter flex min-h-screen">
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:fixed lg:inset-y-0 border-r border-border/50 bg-card/50 backdrop-blur-sm">
+        {/* Sidebar header */}
+        <div className="p-5 pb-2">
+          <div className="flex items-center gap-2 mb-1">
+            <Fuel className="h-4 w-4 text-primary" />
+            <span className="text-[11px] font-bold tracking-widest uppercase text-primary">Tanken</span>
+          </div>
+          <h1 className="text-lg font-semibold tracking-tight">Einstellungen</h1>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {user?.username || user?.displayName || 'Admin'}
+          </p>
+        </div>
+
+        {/* Nav items */}
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          {SECTIONS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => switchSection(id)}
+              className={`admin-sidebar-item ${activeSection === id ? 'admin-sidebar-item--active' : ''}`}
+            >
+              <IconBox className={`admin-icon-box--sm ${sectionIcons[id]}`}>
+                <Icon className="h-3.5 w-3.5" />
+              </IconBox>
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Sidebar footer */}
+        <div className="p-3 border-t border-border/50">
+          <button
+            type="button"
+            onClick={onLogout}
+            className="admin-sidebar-item text-muted-foreground hover:text-destructive"
+          >
+            <LogOut className="h-4 w-4" />
+            Abmelden
+          </button>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 lg:pl-60">
+        {/* Mobile pill bar */}
+        <div className="lg:hidden sticky top-0 z-10 bg-[--admin-bg]/90 backdrop-blur-md border-b border-border/50 px-4 pt-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Fuel className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold">Einstellungen</span>
+            </div>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Abmelden
+            </button>
+          </div>
+          <div className="admin-pill-bar">
+            {SECTIONS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => switchSection(id)}
+                className={`admin-pill ${activeSection === id ? 'admin-pill--active' : ''}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Content area */}
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 lg:py-10">
+          {/* Section header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight">
+                {SECTIONS.find((s) => s.id === activeSection)?.label}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {SECTIONS.find((s) => s.id === activeSection)?.description}
+              </p>
+            </div>
+            {activeSection !== 'scanner' && (
+              <Button
+                type="button"
+                size="sm"
+                className="admin-btn"
+                disabled={submitting}
+                onClick={onSubmit as unknown as () => void}
+              >
+                <Save className="h-4 w-4" />
+                {submitting ? 'Speichert...' : 'Speichern'}
+              </Button>
+            )}
+          </div>
+
+          {/* Section content with animation */}
+          <form onSubmit={onSubmit}>
+            <div key={animKey} className="admin-section-enter">
+              {activeSection === 'config' && (
+                <AppConfigSection config={config} onChange={onChange} onTestApiKey={onTestApiKey} testingApiKey={testingApiKey} />
+              )}
+              {activeSection === 'oidc' && (
+                <OidcSection config={config} onChange={onChange} />
+              )}
+              {activeSection === 'smtp' && (
+                <SmtpSection config={config} onChange={onChange} onTestEmail={onTestEmail} testingEmail={testingEmail} testEmailRecipient={testEmailRecipient} onTestEmailRecipientChange={onTestEmailRecipientChange} />
+              )}
+              {activeSection === 'scanner' && (
+                <ScannerConsole />
+              )}
+            </div>
+          </form>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// ─── Main Admin Page ───────────────────────────────────────────────
 
 export default function AdminPage() {
   const [status, setStatus] = useState<AdminStatus | null>(null);
@@ -755,8 +1157,9 @@ export default function AdminPage() {
 
   const showFeedback = useCallback((message: string, type: FeedbackType) => {
     setFeedback({ message, type });
-    if (type === 'success') setTimeout(() => setFeedback(null), 4000);
   }, []);
+
+  const dismissFeedback = useCallback(() => setFeedback(null), []);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -873,17 +1276,23 @@ export default function AdminPage() {
     setFeedback(null);
     try {
       await api('/api/logout', { method: 'POST' });
-      showFeedback('Logout erfolgreich.', 'success');
+      showFeedback('Abgemeldet.', 'success');
       await refreshStatus();
     } catch (err) {
       showFeedback((err as Error).message || 'Logout fehlgeschlagen.', 'error');
     }
   };
 
+  // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground text-sm">Laden...</div>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--admin-bg)' }}>
+        <div className="text-center admin-panel-enter">
+          <IconBox className="admin-icon-box--lg bg-primary/10 mx-auto mb-4">
+            <Fuel className="h-6 w-6 text-primary" />
+          </IconBox>
+          <div className="animate-pulse text-sm text-muted-foreground">Laden...</div>
+        </div>
       </div>
     );
   }
@@ -891,135 +1300,62 @@ export default function AdminPage() {
   const panel = !status?.bootstrapped ? 'setup' : status.authenticated ? 'dashboard' : 'login';
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12 space-y-6">
-        {/* Header */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Fuel className="h-5 w-5 text-primary" />
-            <span className="text-xs font-bold tracking-widest uppercase text-primary">Tanken</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Admin Panel</h1>
-          <p className="text-sm text-muted-foreground">
-            Konfiguration, Scanner und Authentifizierung verwalten.
-          </p>
+    <div className="min-h-screen" style={{ background: 'var(--admin-bg)' }}>
+      {/* Toast feedback */}
+      {feedback && (
+        <FeedbackToast
+          key={feedback.message}
+          message={feedback.message}
+          type={feedback.type}
+          onDismiss={dismissFeedback}
+        />
+      )}
+
+      {/* Setup */}
+      {panel === 'setup' && (
+        <div className="px-4 py-8 sm:py-12">
+          <SetupPanel
+            config={config}
+            onChange={handleConfigChange}
+            username={username}
+            password={password}
+            onUsernameChange={setUsername}
+            onPasswordChange={setPassword}
+            onSubmit={handleBootstrap}
+            submitting={submitting}
+          />
         </div>
+      )}
 
-        {/* Feedback */}
-        {feedback && (
-          <Alert variant={feedback.type === 'error' ? 'destructive' : feedback.type === 'success' ? 'success' : 'default'}>
-            <AlertDescription>{feedback.message}</AlertDescription>
-          </Alert>
-        )}
+      {/* Login */}
+      {panel === 'login' && (
+        <LoginPanel
+          username={username}
+          password={password}
+          onUsernameChange={setUsername}
+          onPasswordChange={setPassword}
+          onSubmit={handleLogin}
+          submitting={submitting}
+        />
+      )}
 
-        {/* Setup */}
-        {panel === 'setup' && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-                  <UserPlus className="h-4 w-4 text-primary" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">Erstkonfiguration</CardTitle>
-                  <CardDescription>Admin anlegen und Startkonfiguration speichern.</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <form onSubmit={handleBootstrap}>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="setup-username">Benutzername</Label>
-                    <Input id="setup-username" autoComplete="username" required minLength={3} value={username} onChange={(e) => setUsername(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="setup-password">Passwort</Label>
-                    <Input id="setup-password" type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
-                  </div>
-                </div>
-                <Separator />
-                <ConfigFields config={config} onChange={handleConfigChange} />
-              </CardContent>
-              <CardFooter className="justify-end border-t pt-6">
-                <Button type="submit" disabled={submitting}>
-                  <Save className="h-4 w-4" />
-                  {submitting ? 'Speichert...' : 'Setup abschließen'}
-                </Button>
-              </CardFooter>
-            </form>
-          </Card>
-        )}
-
-        {/* Login */}
-        {panel === 'login' && (
-          <Card className="max-w-sm mx-auto">
-            <CardHeader className="text-center">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 mb-2">
-                <KeyRound className="h-5 w-5 text-primary" />
-              </div>
-              <CardTitle className="text-lg">Admin Login</CardTitle>
-              <CardDescription>Mit lokalem Account anmelden.</CardDescription>
-            </CardHeader>
-            <form onSubmit={handleLogin}>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-username">Benutzername</Label>
-                  <Input id="login-username" autoComplete="username" required value={username} onChange={(e) => setUsername(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">Passwort</Label>
-                  <Input id="login-password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-                </div>
-              </CardContent>
-              <CardFooter className="border-t pt-6">
-                <Button type="submit" className="w-full" disabled={submitting}>
-                  {submitting ? 'Einloggen...' : 'Einloggen'}
-                </Button>
-              </CardFooter>
-            </form>
-          </Card>
-        )}
-
-        {/* Dashboard */}
-        {panel === 'dashboard' && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10">
-                    <Settings className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">Konfiguration</CardTitle>
-                    <CardDescription>
-                      Angemeldet als <span className="font-medium text-foreground">{status?.user?.username || status?.user?.displayName || 'Admin'}</span>
-                    </CardDescription>
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm" onClick={handleLogout}>
-                  <LogOut className="h-4 w-4" />
-                  Logout
-                </Button>
-              </div>
-            </CardHeader>
-            <form onSubmit={handleSaveConfig}>
-              <CardContent>
-                <ConfigFields config={config} onChange={handleConfigChange} onTestApiKey={handleTestApiKey} testingApiKey={testingApiKey} onTestEmail={handleTestEmail} testingEmail={testingEmail} testEmailRecipient={testEmailRecipient} onTestEmailRecipientChange={setTestEmailRecipient} />
-              </CardContent>
-              <CardFooter className="justify-end border-t pt-6">
-                <Button type="submit" disabled={submitting}>
-                  <Save className="h-4 w-4" />
-                  {submitting ? 'Speichert...' : 'Speichern'}
-                </Button>
-              </CardFooter>
-            </form>
-          </Card>
-        )}
-
-        {/* Scanner */}
-        {panel === 'dashboard' && <ScannerConsole />}
-      </div>
+      {/* Dashboard */}
+      {panel === 'dashboard' && (
+        <DashboardPanel
+          config={config}
+          onChange={handleConfigChange}
+          onSubmit={handleSaveConfig}
+          submitting={submitting}
+          onLogout={handleLogout}
+          onTestApiKey={handleTestApiKey}
+          testingApiKey={testingApiKey}
+          onTestEmail={handleTestEmail}
+          testingEmail={testingEmail}
+          testEmailRecipient={testEmailRecipient}
+          onTestEmailRecipientChange={setTestEmailRecipient}
+          user={status?.user}
+        />
+      )}
     </div>
   );
 }

@@ -38,6 +38,17 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
+/* ─── Design tokens ─────────────────────────────────────────── */
+
+:root {
+  --admin-bg: oklch(0.97 0.004 260);
+  --admin-card-radius: 12px;
+  --admin-section-radius: 10px;
+  --admin-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --admin-ease-smooth: cubic-bezier(0.32, 0.72, 0, 1);
+  --admin-ease-default: cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
 @layer base {
   *,
   *::before,
@@ -46,39 +57,43 @@
   }
 
   body {
-    background-color: var(--color-background);
+    background-color: var(--admin-bg);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
+    --admin-bg: oklch(0.1 0.008 260);
+
     --color-background: oklch(0.145 0.017 285.823);
     --color-foreground: oklch(0.985 0.002 247.839);
-    --color-card: oklch(0.205 0.015 285.823);
+    --color-card: oklch(0.18 0.012 270);
     --color-card-foreground: oklch(0.985 0.002 247.839);
     --color-popover: oklch(0.205 0.015 285.823);
     --color-popover-foreground: oklch(0.985 0.002 247.839);
     --color-primary: oklch(0.985 0.002 247.839);
     --color-primary-foreground: oklch(0.279 0.041 260.031);
-    --color-secondary: oklch(0.269 0.015 285.823);
+    --color-secondary: oklch(0.22 0.012 270);
     --color-secondary-foreground: oklch(0.985 0.002 247.839);
-    --color-muted: oklch(0.269 0.015 285.823);
+    --color-muted: oklch(0.22 0.012 270);
     --color-muted-foreground: oklch(0.551 0.027 264.364);
-    --color-accent: oklch(0.269 0.015 285.823);
+    --color-accent: oklch(0.22 0.012 270);
     --color-accent-foreground: oklch(0.985 0.002 247.839);
     --color-destructive: oklch(0.577 0.245 27.325);
     --color-destructive-foreground: oklch(0.577 0.245 27.325);
-    --color-border: oklch(0.335 0.015 285.823);
-    --color-input: oklch(0.335 0.015 285.823);
+    --color-border: oklch(0.28 0.012 270);
+    --color-input: oklch(0.28 0.012 270);
     --color-ring: oklch(0.551 0.027 264.364);
     --color-chart-1: oklch(0.488 0.243 264.376);
     --color-chart-2: oklch(0.696 0.17 162.48);
     --color-chart-3: oklch(0.769 0.188 70.08);
     --color-chart-4: oklch(0.627 0.265 303.9);
     --color-chart-5: oklch(0.645 0.246 16.439);
-    --color-sidebar: oklch(0.205 0.015 285.823);
+    --color-sidebar: oklch(0.16 0.01 270);
     --color-sidebar-foreground: oklch(0.985 0.002 247.839);
     --color-sidebar-primary: oklch(0.488 0.243 264.376);
     --color-sidebar-primary-foreground: oklch(0.985 0.002 247.839);
@@ -87,4 +102,424 @@
     --color-sidebar-border: oklch(0.335 0.015 285.823);
     --color-sidebar-ring: oklch(0.551 0.027 264.364);
   }
+}
+
+/* ─── Panel entrance ────────────────────────────────────────── */
+
+@keyframes admin-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.admin-panel-enter {
+  animation: admin-fade-in 0.45s var(--admin-ease-default) both;
+}
+
+/* ─── Section slide transitions ─────────────────────────────── */
+
+@keyframes admin-section-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes admin-section-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+
+.admin-section-enter {
+  animation: admin-section-in 0.35s var(--admin-ease-smooth) both;
+}
+
+.admin-section-exit {
+  animation: admin-section-out 0.25s var(--admin-ease-smooth) both;
+  position: absolute;
+  inset: 0;
+}
+
+/* ─── Toast notification ────────────────────────────────────── */
+
+@keyframes admin-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -16px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes admin-toast-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -16px) scale(0.95);
+  }
+}
+
+.admin-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  animation: admin-toast-in 0.45s var(--admin-ease-spring) both;
+}
+
+.admin-toast--leaving {
+  animation: admin-toast-out 0.3s var(--admin-ease-default) both;
+}
+
+/* ─── Login glass card ──────────────────────────────────────── */
+
+@keyframes admin-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+.admin-glass-card {
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  background: oklch(1 0 0 / 0.78);
+  border: 1px solid oklch(0 0 0 / 0.06);
+  border-radius: 20px;
+  box-shadow:
+    0 8px 40px oklch(0 0 0 / 0.08),
+    0 2px 8px oklch(0 0 0 / 0.04);
+  animation: admin-float 6s ease-in-out infinite;
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-glass-card {
+    background: oklch(0.18 0.012 270 / 0.78);
+    border-color: oklch(1 0 0 / 0.08);
+    box-shadow:
+      0 8px 40px oklch(0 0 0 / 0.3),
+      0 2px 8px oklch(0 0 0 / 0.15);
+  }
+}
+
+/* ─── Staggered entrance ────────────────────────────────────── */
+
+@keyframes admin-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.admin-stagger > * {
+  animation: admin-fade-in-up 0.35s cubic-bezier(0.2, 0, 0, 1) both;
+}
+.admin-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.admin-stagger > *:nth-child(2) { animation-delay: 60ms; }
+.admin-stagger > *:nth-child(3) { animation-delay: 120ms; }
+.admin-stagger > *:nth-child(4) { animation-delay: 180ms; }
+.admin-stagger > *:nth-child(5) { animation-delay: 240ms; }
+.admin-stagger > *:nth-child(6) { animation-delay: 300ms; }
+
+/* ─── Button micro-interactions ─────────────────────────────── */
+
+.admin-btn {
+  transition:
+    transform 0.15s cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.admin-btn:hover:not(:disabled) {
+  transform: scale(1.03);
+  box-shadow: 0 2px 12px oklch(0 0 0 / 0.1);
+}
+
+.admin-btn:active:not(:disabled) {
+  transform: scale(0.97);
+  box-shadow: none;
+}
+
+/* ─── Sidebar ───────────────────────────────────────────────── */
+
+.admin-sidebar-item {
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s ease;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.admin-sidebar-item:hover {
+  background: oklch(0 0 0 / 0.04);
+  color: var(--color-foreground);
+}
+
+.admin-sidebar-item--active {
+  background: oklch(0.55 0.24 264 / 0.1);
+  color: oklch(0.45 0.2 264);
+}
+
+.admin-sidebar-item--active:hover {
+  background: oklch(0.55 0.24 264 / 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-sidebar-item:hover {
+    background: oklch(1 0 0 / 0.06);
+  }
+
+  .admin-sidebar-item--active {
+    background: oklch(0.55 0.24 264 / 0.18);
+    color: oklch(0.7 0.15 264);
+  }
+
+  .admin-sidebar-item--active:hover {
+    background: oklch(0.55 0.24 264 / 0.22);
+  }
+}
+
+/* ─── Settings group (iOS inset grouped) ────────────────────── */
+
+.admin-settings-group {
+  background: var(--color-card);
+  border-radius: var(--admin-card-radius);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.04);
+}
+
+.admin-settings-row {
+  padding: 12px 16px;
+  border-bottom: 1px solid oklch(0 0 0 / 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-settings-row:last-child {
+  border-bottom: none;
+}
+
+@media (min-width: 640px) {
+  .admin-settings-row--inline {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .admin-settings-row--inline > label,
+  .admin-settings-row--inline > .admin-row-label {
+    flex-shrink: 0;
+    min-width: 140px;
+  }
+
+  .admin-settings-row--inline > input,
+  .admin-settings-row--inline > .admin-row-control {
+    flex: 1;
+    max-width: 320px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-settings-group {
+    box-shadow: 0 1px 3px oklch(0 0 0 / 0.12);
+  }
+
+  .admin-settings-row {
+    border-bottom-color: oklch(1 0 0 / 0.04);
+  }
+}
+
+/* ─── Status pulse ──────────────────────────────────────────── */
+
+@keyframes admin-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(1.4); }
+}
+
+.admin-status-pulse {
+  animation: admin-pulse 2s ease-in-out infinite;
+}
+
+/* ─── Progress bar shimmer ──────────────────────────────────── */
+
+@keyframes admin-shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+.admin-progress-bar {
+  transition: width 0.7s var(--admin-ease-default);
+  border-radius: 999px;
+}
+
+.admin-progress-bar--active {
+  background: linear-gradient(90deg, oklch(0.55 0.24 264) 0%, oklch(0.65 0.2 264) 50%, oklch(0.55 0.24 264) 100%);
+  background-size: 200% 100%;
+  animation: admin-shimmer 2s ease-in-out infinite;
+}
+
+/* ─── Log expand animation ──────────────────────────────────── */
+
+.admin-log-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s var(--admin-ease-smooth);
+}
+
+.admin-log-expand--open {
+  grid-template-rows: 1fr;
+}
+
+.admin-log-expand > div {
+  overflow: hidden;
+}
+
+/* ─── Step indicator ────────────────────────────────────────── */
+
+.admin-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-border);
+  transition:
+    background-color 0.3s ease,
+    transform 0.3s var(--admin-ease-spring),
+    width 0.3s ease;
+}
+
+.admin-step-dot--active {
+  width: 24px;
+  border-radius: 4px;
+  background: oklch(0.55 0.24 264);
+  transform: scale(1);
+}
+
+.admin-step-dot--done {
+  background: oklch(0.55 0.24 264 / 0.4);
+}
+
+/* ─── Section header (iOS style) ────────────────────────────── */
+
+.admin-section-header {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+  padding: 0 4px;
+  margin-bottom: 8px;
+}
+
+/* ─── Mobile pill bar ───────────────────────────────────────── */
+
+.admin-pill-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0 4px 12px;
+}
+
+.admin-pill-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.admin-pill {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--color-secondary);
+  color: var(--color-muted-foreground);
+  border: none;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s ease;
+  white-space: nowrap;
+}
+
+.admin-pill:hover {
+  background: oklch(0 0 0 / 0.06);
+}
+
+.admin-pill--active {
+  background: oklch(0.55 0.24 264 / 0.12);
+  color: oklch(0.45 0.2 264);
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-pill:hover {
+    background: oklch(1 0 0 / 0.08);
+  }
+
+  .admin-pill--active {
+    background: oklch(0.55 0.24 264 / 0.2);
+    color: oklch(0.7 0.15 264);
+  }
+}
+
+/* ─── Utility ───────────────────────────────────────────────── */
+
+.admin-icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.admin-icon-box--sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+.admin-icon-box--lg {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
 }

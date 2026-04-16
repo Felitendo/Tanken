@@ -110,16 +110,26 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
       }
       progress('extract', 10, `${tocEntries.length} Einträge im Dump, suche Stationen...`);
 
-      // Find station table
-      let stationEntry = tocEntries.find(
-        e => e.desc === 'TABLE DATA' && /^gas_station$/i.test(e.tag || ''),
-      );
+      // Find station table — try progressively broader patterns
+      const dataEntries = tocEntries.filter(e => e.desc === 'TABLE DATA');
+      const tableNames = dataEntries.map(e => e.tag).filter(Boolean);
+      console.log(`[Import] TABLE DATA Einträge: ${tableNames.join(', ') || '(keine)'}`);
+
+      let stationEntry = dataEntries.find(e => /^gas_station$/i.test(e.tag || ''));
       if (!stationEntry) {
-        stationEntry = tocEntries.find(
-          e => e.desc === 'TABLE DATA' && /\bstation\b/i.test(e.tag || '') && !/history|price|info/i.test(e.tag || ''),
+        stationEntry = dataEntries.find(
+          e => /\bstation\b/i.test(e.tag || '') && !/history|price|info/i.test(e.tag || ''),
         );
       }
-      if (!stationEntry) throw new Error('Stations-Tabelle nicht im Dump gefunden');
+      if (!stationEntry) {
+        stationEntry = dataEntries.find(e => /\btankstelle\b/i.test(e.tag || ''));
+      }
+      if (!stationEntry) {
+        throw new Error(
+          `Stations-Tabelle nicht im Dump gefunden. ` +
+          `Vorhandene TABLE DATA: ${tableNames.length > 0 ? tableNames.join(', ') : '(keine)'}`
+        );
+      }
 
       progress('extract', 20, `Tabelle "${stationEntry.tag}" gefunden, lese Daten...`);
       console.log(`[Import] Stationstabelle: "${stationEntry.tag}" bei offset ${stationEntry.dataOffset}`);
@@ -131,10 +141,15 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
 
       stations = parseStationsFromCopy(copyData, stationEntry.copyStmt);
 
-      // Prepare price history iterator
-      const historyEntry = tocEntries.find(
-        e => e.desc === 'TABLE DATA' && /gas_station_information_history/i.test(e.tag || ''),
+      // Prepare price history iterator — try multiple patterns
+      let historyEntry = dataEntries.find(
+        e => /gas_station_information_history/i.test(e.tag || ''),
       );
+      if (!historyEntry) {
+        historyEntry = dataEntries.find(
+          e => /\b(station.*history|price.*history|information_history)\b/i.test(e.tag || ''),
+        );
+      }
       if (historyEntry && historyEntry.dataOffset >= 0) {
         priceColumns = parseCopyColumns(historyEntry.copyStmt);
         priceLineIterator = reader.iterateTableLines(historyEntry.dataOffset);
@@ -147,12 +162,34 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
       const sqlReader = new PlainSqlReader(tempDump);
       readerCleanup = () => sqlReader.close();
 
-      // Find and read station COPY block
-      progress('extract', 10, 'Suche Stations-Tabelle im SQL-Dump...');
-      const stationCopyStmt = sqlReader.findCopyBlock(/gas_station\b(?!.*(?:history|price|info))/i);
-      if (!stationCopyStmt) throw new Error('Stations-Tabelle nicht im SQL-Dump gefunden');
+      // First, list all COPY tables for diagnostics
+      const allTables = sqlReader.listCopyTables();
+      console.log(`[Import] COPY-Tabellen im SQL-Dump: ${allTables.length > 0 ? allTables.join(', ') : '(keine)'}`);
 
-      console.log(`[Import] Stations-COPY gefunden: ${stationCopyStmt.slice(0, 100)}`);
+      // Find and read station COPY block — try progressively broader patterns
+      progress('extract', 10, 'Suche Stations-Tabelle im SQL-Dump...');
+      const stationPatterns: [RegExp, string][] = [
+        [/gas_station\b(?!.*(?:history|price|info))/i, 'gas_station'],
+        [/\bstation\b(?!.*(?:history|price|info))/i, 'station'],
+        [/\btankstelle\b/i, 'tankstelle'],
+      ];
+      let stationCopyStmt: string | null = null;
+      for (const [pattern, label] of stationPatterns) {
+        sqlReader.reset();
+        stationCopyStmt = sqlReader.findCopyBlock(pattern);
+        if (stationCopyStmt) {
+          console.log(`[Import] Stations-COPY gefunden (Muster: ${label}): ${stationCopyStmt.slice(0, 120)}`);
+          break;
+        }
+        console.log(`[Import] Muster "${label}" nicht gefunden, probiere nächstes...`);
+      }
+      if (!stationCopyStmt) {
+        throw new Error(
+          `Stations-Tabelle nicht im SQL-Dump gefunden. ` +
+          `Vorhandene Tabellen: ${allTables.length > 0 ? allTables.join(', ') : '(keine COPY-Blöcke gefunden)'}`
+        );
+      }
+
       progress('extract', 30, 'Stations-Tabelle gefunden, lese Daten...');
 
       const copyData = sqlReader.readCopyData();
@@ -161,8 +198,19 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
 
       stations = parseStationsFromCopy(copyData, stationCopyStmt);
 
-      // Find price history COPY block (continues scanning from current position)
-      const priceCopyStmt = sqlReader.findCopyBlock(/gas_station_information_history/i);
+      // Find price history COPY block — try multiple patterns, each from start
+      const historyPatterns: RegExp[] = [
+        /gas_station_information_history/i,
+        /\bstation.*history/i,
+        /\bprice.*history/i,
+        /\binformation_history/i,
+      ];
+      let priceCopyStmt: string | null = null;
+      for (const pattern of historyPatterns) {
+        sqlReader.reset();
+        priceCopyStmt = sqlReader.findCopyBlock(pattern);
+        if (priceCopyStmt) break;
+      }
       if (priceCopyStmt) {
         priceColumns = parseCopyColumns(priceCopyStmt);
         priceLineIterator = sqlReader.iterateCopyLines();
@@ -554,6 +602,13 @@ class PlainSqlReader {
     try { closeSync(this.fd); } catch { /* ignore */ }
   }
 
+  /** Reset read position to start of file. */
+  reset(): void {
+    this.pos = 0;
+    this.bufPos = 0;
+    this.bufLen = 0;
+  }
+
   private fillBuffer(): boolean {
     if (this.pos >= this.fileSize) return false;
     const toRead = Math.min(this.buf.length, this.fileSize - this.pos);
@@ -590,10 +645,36 @@ class PlainSqlReader {
     for (;;) {
       const line = this.readLine();
       if (line === null) return null;
-      if (line.startsWith('COPY ') && line.includes('FROM stdin') && tablePattern.test(line)) {
+      // Case-insensitive check: pg_dump can emit "FROM stdin" or "FROM STDIN"
+      if (line.startsWith('COPY ') && /FROM\s+stdin/i.test(line) && tablePattern.test(line)) {
         return line;
       }
     }
+  }
+
+  /** Scan from beginning and collect all COPY table names for diagnostics. */
+  listCopyTables(): string[] {
+    const savedPos = this.pos;
+    const savedBufPos = this.bufPos;
+    const savedBufLen = this.bufLen;
+    this.pos = 0;
+    this.bufPos = 0;
+    this.bufLen = 0;
+    const tables: string[] = [];
+    for (;;) {
+      const line = this.readLine();
+      if (line === null) break;
+      if (line.startsWith('COPY ') && /FROM\s+stdin/i.test(line)) {
+        // Extract table name: COPY [schema.]table (cols) FROM stdin
+        const m = line.match(/^COPY\s+(?:"[^"]+"\.)?"?([^"\s(]+)"?\s*\(/);
+        tables.push(m ? m[1] : line.slice(0, 80));
+      }
+    }
+    // Restore position
+    this.pos = savedPos;
+    this.bufPos = savedBufPos;
+    this.bufLen = savedBufLen;
+    return tables;
   }
 
   readCopyData(): string {
