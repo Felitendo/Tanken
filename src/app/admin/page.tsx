@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings, UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, RotateCcw, Play, Square } from 'lucide-react';
+import { Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings, UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, RotateCcw, Play, Square, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -371,9 +371,16 @@ function ScannerConsole() {
                 {status.running ? <><Square className="h-3.5 w-3.5" /> Stoppen</> : <><Play className="h-3.5 w-3.5" /> Starten</>}
               </Button>
               {status.running && (
-                <Button variant="outline" size="sm" onClick={() => handleAction('restart')}>
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </Button>
+                <>
+                  <Button variant="outline" size="sm" onClick={() => handleAction('restart')}>
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </Button>
+                  {!isScanning && (
+                    <Button variant="outline" size="sm" onClick={() => handleAction('triggerNow')}>
+                      <Zap className="h-3.5 w-3.5" /> Jetzt scannen
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </div>

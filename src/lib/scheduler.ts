@@ -68,6 +68,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/** Cancellable sleep — resolves immediately when cancel() is called. */
+function cancellableSleep(ms: number): { promise: Promise<void>; cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout>;
+  let _cancel: () => void;
+  const promise = new Promise<void>(resolve => {
+    _cancel = () => { clearTimeout(timer); resolve(); };
+    timer = setTimeout(resolve, ms);
+  });
+  return { promise, cancel: _cancel! };
+}
+
 function fmtDuration(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -158,6 +169,7 @@ class ScanScheduler {
   private _scanStartedAt: Date | null = null;
   private _lastCycleDurationSec: number | null = null;
   private _nextCycleAt: Date | null = null;
+  private _waitingCancel: (() => void) | null = null;
 
   readonly de = new CountryScan();
   readonly at = new CountryScan();
@@ -185,6 +197,18 @@ class ScanScheduler {
 
   restart(): void { this.stop(); this.start(); }
   isRunning(): boolean { return this.timer !== null; }
+
+  /** Cancel the 12:01 wait and trigger a scan cycle immediately. */
+  triggerNow(): void {
+    if (!this.timer) return;
+    if (this._waitingCancel) {
+      this.de.addLog('Manueller Scan ausgelöst', 'info');
+      this.at.addLog('Manueller Scan ausgelöst', 'info');
+      console.log('[Scheduler] Manual trigger — cancelling wait');
+      this._waitingCancel();
+      this._waitingCancel = null;
+    }
+  }
 
   async clearCache(): Promise<void> {
     await clearAllCache();
@@ -254,7 +278,10 @@ class ScanScheduler {
         this.de.addLog(`Nächster ${reason} um 12:01 Uhr (in ${waitH} Std.)`, 'info');
         this.at.addLog(`Nächster Scan um 12:01 Uhr (in ${waitH} Std.)`, 'info');
         console.log(`[Scheduler] Next ${reason} in ${waitH}h at 12:01`);
-        await sleep(waitMs);
+        const { promise, cancel } = cancellableSleep(waitMs);
+        this._waitingCancel = cancel;
+        await promise;
+        this._waitingCancel = null;
         if (!this.timer) break;
       }
       firstRun = false;
