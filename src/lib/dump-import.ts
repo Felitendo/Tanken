@@ -13,6 +13,7 @@
  */
 
 import { createWriteStream, createReadStream, unlinkSync, existsSync, openSync, readSync, closeSync } from 'fs';
+import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { createGunzip, inflateSync } from 'zlib';
 import { tmpdir } from 'os';
@@ -317,6 +318,8 @@ class PgDumpReader {
 
   /**
    * Read and decompress table data at the given file offset.
+   * Each block in pg_dump custom format is independently compressed,
+   * so we must inflate each block separately.
    * Returns the raw COPY text output.
    */
   readTableData(offset: number): string {
@@ -330,28 +333,28 @@ class PgDumpReader {
       throw new Error(`Unerwarteter Block-Typ: ${blockType} (erwartet: 1 = DATA)`);
     }
 
-    // Read all data blocks. Together they form one zlib stream (if compressed).
-    const rawChunks: Buffer[] = [];
+    // Each block is independently zlib-compressed in pg_dump custom format.
+    // Decompress each one separately and concatenate the results.
+    const decompressedChunks: Buffer[] = [];
     while (true) {
       const blockLen = this.readInt();
       if (blockLen === 0) break;
-      rawChunks.push(this.readBytes(blockLen));
-    }
+      const raw = this.readBytes(blockLen);
 
-    if (rawChunks.length === 0) return '';
-
-    const rawData = Buffer.concat(rawChunks);
-
-    if (this.compressed) {
-      try {
-        return inflateSync(rawData).toString('utf8');
-      } catch {
-        // Fallback: try treating as uncompressed
-        return rawData.toString('utf8');
+      if (this.compressed) {
+        try {
+          decompressedChunks.push(inflateSync(raw));
+        } catch {
+          // Fallback: treat block as uncompressed
+          decompressedChunks.push(raw);
+        }
+      } else {
+        decompressedChunks.push(raw);
       }
     }
 
-    return rawData.toString('utf8');
+    if (decompressedChunks.length === 0) return '';
+    return Buffer.concat(decompressedChunks).toString('utf8');
   }
 }
 
@@ -446,38 +449,48 @@ async function downloadFile(
   }
 
   const total = parseInt(response.headers.get('content-length') || '0', 10);
-  const reader = response.body!.getReader();
-  const writer = createWriteStream(dest);
 
   let downloaded = 0;
   let lastReport = 0;
 
-  try {
-    while (true) {
-      if (shouldAbort()) {
-        controller.abort();
-        throw new Error('Abgebrochen');
+  // Convert Web ReadableStream to Node.js Readable with progress + abort support
+  const webStream = response.body!;
+  const nodeReadable = new Readable({
+    async read() {
+      try {
+        if (shouldAbort()) {
+          controller.abort();
+          this.destroy(new Error('Abgebrochen'));
+          return;
+        }
+        const reader = (this as Readable & { _webReader?: ReadableStreamDefaultReader<Uint8Array> })._webReader
+          ??= webStream.getReader();
+        const { done, value } = await reader.read();
+        if (done) { this.push(null); return; }
+
+        const buf = Buffer.from(value);
+        downloaded += buf.length;
+
+        const now = Date.now();
+        if (now - lastReport > 500) {
+          const pct = total > 0 ? Math.round(downloaded / total * 100) : 0;
+          onProgress(pct, Math.round(downloaded / 1_048_576), Math.round(total / 1_048_576));
+          lastReport = now;
+        }
+
+        this.push(buf);
+      } catch (err) {
+        this.destroy(err instanceof Error ? err : new Error(String(err)));
       }
+    },
+  });
 
-      const { done, value } = await reader.read();
-      if (done) break;
+  // pipeline handles backpressure and cleanup automatically
+  await pipeline(nodeReadable, createWriteStream(dest));
 
-      writer.write(Buffer.from(value));
-      downloaded += value.length;
-
-      // Report progress at most every 500ms
-      const now = Date.now();
-      if (now - lastReport > 500 || done) {
-        const pct = total > 0 ? Math.round(downloaded / total * 100) : 0;
-        onProgress(pct, Math.round(downloaded / 1_048_576), Math.round(total / 1_048_576));
-        lastReport = now;
-      }
-    }
-  } finally {
-    writer.end();
-    // Wait for writer to finish
-    await new Promise<void>((resolve) => writer.on('finish', resolve));
-  }
+  // Final progress report
+  const pct = total > 0 ? Math.round(downloaded / total * 100) : 100;
+  onProgress(pct, Math.round(downloaded / 1_048_576), Math.round(total / 1_048_576));
 }
 
 // ─── Decompress ──────────────────────────────────────────────────────

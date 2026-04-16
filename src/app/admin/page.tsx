@@ -188,11 +188,31 @@ const logTypeText: Record<string, string> = {
   warn: 'text-amber-600 dark:text-amber-400',
 };
 
+/** SVG flags — Windows doesn't render country flag emojis. */
+function Flag({ country, className }: { country: 'de' | 'at'; className?: string }) {
+  if (country === 'de') {
+    return (
+      <svg viewBox="0 0 5 3" className={className} aria-label="Deutschland">
+        <rect width="5" height="1" y="0" fill="#000" />
+        <rect width="5" height="1" y="1" fill="#D00" />
+        <rect width="5" height="1" y="2" fill="#FFCE00" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 5 3" className={className} aria-label="Österreich">
+      <rect width="5" height="1" y="0" fill="#ED2939" />
+      <rect width="5" height="1" y="1" fill="#FFF" />
+      <rect width="5" height="1" y="2" fill="#ED2939" />
+    </svg>
+  );
+}
+
 // ─── Country Scanner Card ───────────────────────────────────────────
 
 function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
   cs: CountryScanStatus;
-  flag: string;
+  flag: React.ReactNode;
   label: string;
   api: string;
 }) {
@@ -209,7 +229,7 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-2xl leading-none">{flag}</span>
+            <span className="inline-flex items-center w-8 shrink-0">{flag}</span>
             <div>
               <CardTitle className="text-base">{label}</CardTitle>
               <CardDescription className="text-xs">{apiLabel}</CardDescription>
@@ -411,7 +431,7 @@ function ScannerConsole() {
           <div className="rounded-lg border bg-muted/30 px-4 py-3 space-y-2">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">Tankerkönig-Dump importieren 🇩🇪</p>
+                <p className="text-sm font-medium flex items-center gap-1.5">Tankerkönig-Dump importieren <Flag country="de" className="inline h-3" /></p>
                 <p className="text-xs text-muted-foreground">
                   Offizielle Stationsliste (~15.000 Tankstellen) herunterladen und importieren
                 </p>
@@ -493,8 +513,8 @@ function ScannerConsole() {
 
       {/* Per-country cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <CountryScannerCard cs={status.de} flag="🇩🇪" label="Deutschland" api={status.de.scanning ? 'Tankerkönig prices.php (1s Delay)' : 'Tankerkönig prices.php + On-Demand list.php'} />
-        <CountryScannerCard cs={status.at} flag="🇦🇹" label="Österreich" api="E-Control (5x parallel)" />
+        <CountryScannerCard cs={status.de} flag={<Flag country="de" className="h-5 rounded-sm" />} label="Deutschland" api={status.de.scanning ? 'Tankerkönig prices.php (1s Delay)' : 'Tankerkönig prices.php + On-Demand list.php'} />
+        <CountryScannerCard cs={status.at} flag={<Flag country="at" className="h-5 rounded-sm" />} label="Österreich" api="E-Control (5x parallel)" />
       </div>
     </div>
   );
