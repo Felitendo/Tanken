@@ -403,7 +403,7 @@ function ScannerConsole() {
             <div>
               <p className="text-sm font-medium">Grid-Discovery 🇩🇪</p>
               <p className="text-xs text-muted-foreground">
-                Einmalig alle deutschen Tankstellen entdecken (~2,5 Std.)
+                Einmalig alle deutschen Tankstellen entdecken (~4 Std.)
               </p>
             </div>
             {status.de.scanning && status.de.mode === 'discovery' ? (
@@ -421,7 +421,7 @@ function ScannerConsole() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  if (confirm('Grid-Discovery für Deutschland starten?\n\nScannt ~1.400 Punkte mit je 25km Radius.\nDauer: ca. 2,5 Stunden (Tankerkönig: max 10 Req/Min.).'))
+                  if (confirm('Grid-Discovery für Deutschland starten?\n\nScannt ~1.400 Punkte mit je 25km Radius.\nDauer: ca. 4 Stunden (6 Req/Min.).'))
                     handleAction('gridDiscoveryDe');
                 }}
                 disabled={status.de.scanning}

@@ -59,8 +59,8 @@ const PRICE_DUMP_DELAY_MS = 1_000;
 /** Max IDs per prices.php call. */
 const PRICE_DUMP_BATCH_SIZE = 10;
 
-/** Delay between list.php calls during DE grid discovery (Tankerkönig: max 10 Req/Min). */
-const DE_DISCOVERY_DELAY_MS = 6_000;
+/** Delay between list.php calls during DE grid discovery (Tankerkönig rate limit). */
+const DE_DISCOVERY_DELAY_MS = 10_000;
 /** Radius per grid point for DE discovery (Tankerkönig max = 25km). */
 const DE_DISCOVERY_RADIUS_KM = 25;
 
