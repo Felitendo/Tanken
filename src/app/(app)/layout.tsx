@@ -4,13 +4,23 @@ import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
   title: 'Tanken',
-  description: 'Diesel- und Spritpreise in deiner Naehe',
+  description: 'Diesel- und Spritpreise in deiner Nähe',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
     title: 'Tanken'
-  }
+  },
+  openGraph: {
+    title: 'Tanken',
+    description: 'Diesel- und Spritpreise in deiner Nähe',
+    type: 'website',
+    locale: 'de_DE',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export const viewport: Viewport = {

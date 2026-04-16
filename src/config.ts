@@ -162,7 +162,13 @@ export function loadRuntimeConfig(): RuntimeConfig {
     orsApiKey: repoConfig.ors_api_key || process.env.ORS_API_KEY || '',
     databaseUrl: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/tanken',
     cookieName: 'tank_session',
-    sessionSecret: repoConfig.session_secret || process.env.TANKEN_SESSION_SECRET || process.env.SESSION_SECRET || 'CHANGE_ME_TANKEN_SESSION_SECRET',
+    sessionSecret: (() => {
+      const secret = repoConfig.session_secret || process.env.TANKEN_SESSION_SECRET || process.env.SESSION_SECRET || 'CHANGE_ME_TANKEN_SESSION_SECRET';
+      if (process.env.NODE_ENV === 'production' && (secret === 'CHANGE_ME_TANKEN_SESSION_SECRET' || secret === 'CHANGE_ME_LONG_RANDOM_SECRET')) {
+        console.warn('[Config] ⚠ Using default session secret in production — set TANKEN_SESSION_SECRET or session_secret in config.json');
+      }
+      return secret;
+    })(),
     sessionTtlMs: 1000 * 60 * 60 * 24 * (repoConfig.session_ttl_days ?? 90),
     oidcIssuerUrl: oidcConfig.issuer_url || process.env.OIDC_ISSUER_URL || '',
     oidcClientId: oidcConfig.client_id || process.env.OIDC_CLIENT_ID || '',

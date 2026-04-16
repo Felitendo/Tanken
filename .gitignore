@@ -4,10 +4,15 @@ dist/
 tsconfig.tsbuildinfo
 data/*.json
 .env
+.env.local
+.env.*.local
 npm-debug.log*
+*.log
 .DS_Store
 .claude
 .codex
+.vscode/
+.idea/
 
 config.json
 

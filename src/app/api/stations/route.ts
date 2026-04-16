@@ -21,8 +21,10 @@ const fuelTypeSchema = z.enum(['diesel', 'e5', 'e10']);
  * actual driving distances via the OpenRouteService Matrix API (single request).
  */
 export async function GET(request: NextRequest) {
-  const lat = Number.parseFloat(request.nextUrl.searchParams.get('lat') ?? '') || 51.1657;
-  const lng = Number.parseFloat(request.nextUrl.searchParams.get('lng') ?? '') || 10.4515;
+  const rawLat = Number.parseFloat(request.nextUrl.searchParams.get('lat') ?? '');
+  const rawLng = Number.parseFloat(request.nextUrl.searchParams.get('lng') ?? '');
+  const lat = Number.isFinite(rawLat) && rawLat >= -90 && rawLat <= 90 ? rawLat : 51.1657;
+  const lng = Number.isFinite(rawLng) && rawLng >= -180 && rawLng <= 180 ? rawLng : 10.4515;
   const fuelCandidate = request.nextUrl.searchParams.get('fuel');
   const fuel = fuelTypeSchema.safeParse(fuelCandidate).success ? fuelCandidate! : runtimeConfig.repoConfig.fuel_type;
   const rad = Math.max(1, Math.min(25, Number.parseFloat(

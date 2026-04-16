@@ -1,4 +1,9 @@
+const DEFAULT_TIMEOUT_MS = 15_000;
+
 export async function fetchJson<T>(url: string, init: RequestInit = {}): Promise<{ status: number; data: T }> {
+  if (!init.signal) {
+    init.signal = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
+  }
   const response = await fetch(url, init);
   const payload = await response.text();
 

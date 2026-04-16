@@ -88,7 +88,8 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.redirect(new URL(saved.redirectAfter || '/', origin));
     response.headers.set('Set-Cookie', stores.sessionStore.setSessionCookie(session.id));
     return response;
-  } catch {
+  } catch (err) {
+    console.error('[OIDC Callback]', err instanceof Error ? err.message : err);
     return new NextResponse('OIDC Callback kaputt.', { status: 500 });
   }
 }

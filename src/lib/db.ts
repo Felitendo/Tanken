@@ -18,7 +18,10 @@ export function createDatabase(config: RuntimeConfig) {
 
 function createDatabaseInternal(config: RuntimeConfig) {
   const pool = new Pool({
-    connectionString: config.databaseUrl
+    connectionString: config.databaseUrl,
+    max: 20,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
   });
 
   let initPromise: Promise<void> | null = null;

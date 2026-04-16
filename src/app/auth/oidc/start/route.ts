@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   }
 
   const redirectParam = request.nextUrl.searchParams.get('redirect');
-  const redirectAfter = redirectParam && redirectParam.startsWith('/') ? redirectParam : '/';
+  const redirectAfter = redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//') ? redirectParam : '/';
   const discovery = await getOidcDiscovery(runtimeConfig);
   const { state, codeVerifier, codeChallenge } = createPkcePair();
 
