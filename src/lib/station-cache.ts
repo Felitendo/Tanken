@@ -386,6 +386,32 @@ export async function getLastDiscoveryTime(): Promise<Date | null> {
   return null;
 }
 
+/**
+ * Bootstrap known_stations from existing cache (one-time migration).
+ * Avoids a 22h discovery scan when deploying the price-dump feature
+ * on a system that already has cached station data.
+ * Returns number of stations bootstrapped (0 if table already populated).
+ */
+export async function bootstrapKnownStationsFromCache(): Promise<number> {
+  const knownCount = await countKnownStations();
+  if (knownCount > 0) return 0; // already populated
+
+  const c = getCache();
+  let total = 0;
+  for (const [locationId, entry] of c) {
+    if (!locationId.startsWith('grid-')) continue; // only DE stations
+    if (entry.stations.length === 0) continue;
+    const saved = await saveKnownStations(entry.stations, locationId);
+    total += saved;
+  }
+
+  if (total > 0) {
+    await setLastDiscoveryTime(total);
+    console.log(`[StationCache] Bootstrapped ${total} known stations from cache`);
+  }
+  return total;
+}
+
 /** Record discovery scan completion in app_meta. */
 export async function setLastDiscoveryTime(stationCount: number): Promise<void> {
   const db = getDb();

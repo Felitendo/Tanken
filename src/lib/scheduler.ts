@@ -3,7 +3,7 @@ import { fetchStationsLive, fetchStationsEControl, fetchPricesByIds } from '@/li
 import {
   setCachedStations, getAllCachedLocations, countUniqueStations, persistPriceSnapshot, clearAllCache,
   saveKnownStations, loadKnownStationIds, countKnownStations,
-  updateCachedPrices, getLastDiscoveryTime, setLastDiscoveryTime,
+  updateCachedPrices, getLastDiscoveryTime, setLastDiscoveryTime, bootstrapKnownStationsFromCache,
 } from '@/lib/station-cache';
 import { generateGermanyGrid, generateAustriaGrid } from '@/lib/grid';
 
@@ -224,6 +224,19 @@ class ScanScheduler {
     const config = loadRepoConfig();
     const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
     const fuelType = config.fuel_type || 'diesel';
+
+    // Bootstrap: if cache has DE stations but known_stations is empty (first deploy),
+    // populate known_stations from cache to avoid unnecessary 22h discovery scan.
+    if (apiKey) {
+      try {
+        const bootstrapped = await bootstrapKnownStationsFromCache();
+        if (bootstrapped > 0) {
+          this.de.addLog(`${bootstrapped.toLocaleString('de-DE')} Stationen aus Cache übernommen — Discovery übersprungen`, 'success');
+        }
+      } catch (err) {
+        console.error('[Scheduler] Bootstrap error:', err instanceof Error ? err.message : err);
+      }
+    }
 
     // First cycle: run discovery immediately if needed (no 12:01 wait)
     let firstRun = true;
