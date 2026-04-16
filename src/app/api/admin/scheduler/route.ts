@@ -33,8 +33,18 @@ export async function POST(request: NextRequest) {
     await scheduler.clearCache();
   } else if (action === 'triggerNow') {
     scheduler.triggerNow();
+  } else if (action === 'gridDiscoveryDe') {
+    const started = scheduler.triggerDeGridDiscovery();
+    if (!started) {
+      return NextResponse.json(
+        { error: 'Grid-Discovery konnte nicht gestartet werden (läuft bereits oder kein API-Key).' },
+        { status: 409 },
+      );
+    }
+  } else if (action === 'abortGridDiscoveryDe') {
+    scheduler.abortDeGridDiscovery();
   } else {
-    return NextResponse.json({ error: 'Ungültige Aktion. Erlaubt: start, stop, restart, clearCache, triggerNow' }, { status: 400 });
+    return NextResponse.json({ error: 'Ungültige Aktion. Erlaubt: start, stop, restart, clearCache, triggerNow, gridDiscoveryDe, abortGridDiscoveryDe' }, { status: 400 });
   }
 
   return NextResponse.json({ ok: true, status: scheduler.getStatus() });

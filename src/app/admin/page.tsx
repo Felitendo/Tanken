@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings, UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, RotateCcw, Play, Square, Zap } from 'lucide-react';
+import { Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings, UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, RotateCcw, Play, Square, Zap, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -207,7 +207,9 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
             </div>
           </div>
           {cs.scanning ? (
-            <Badge variant="success">Preis-Update {cs.progress}</Badge>
+            <Badge variant="success">
+              {cs.mode === 'discovery' ? `Grid-Discovery ${cs.progress}` : `Preis-Update ${cs.progress}`}
+            </Badge>
           ) : cs.lastCompletedAt ? (
             <Badge>{fmtRelative(cs.lastCompletedAt)}</Badge>
           ) : (
@@ -396,6 +398,40 @@ function ScannerConsole() {
 
           <Separator />
 
+          {/* Grid Discovery DE */}
+          <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">Grid-Discovery 🇩🇪</p>
+              <p className="text-xs text-muted-foreground">
+                Einmalig alle deutschen Tankstellen entdecken (~{Math.round(1400 / 60)} Min.)
+              </p>
+            </div>
+            {status.de.scanning && status.de.mode === 'discovery' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => handleAction('abortGridDiscoveryDe')}
+              >
+                <Square className="h-3.5 w-3.5" />
+                Abbrechen
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (confirm('Grid-Discovery für Deutschland starten?\n\nScannt ~1.400 Punkte mit je 25km Radius.\nDauer: ca. 23 Minuten bei 1 Req/Sek.'))
+                    handleAction('gridDiscoveryDe');
+                }}
+                disabled={status.de.scanning}
+              >
+                <Search className="h-3.5 w-3.5" />
+                Discovery starten
+              </Button>
+            )}
+          </div>
+
           {/* Cache info + clear */}
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
@@ -419,7 +455,18 @@ function ScannerConsole() {
 
       {/* Per-country cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <CountryScannerCard cs={status.de} flag="🇩🇪" label="Deutschland" api={status.de.scanning ? 'Tankerkönig prices.php (1s Delay)' : 'Tankerkönig prices.php (1×/Tag um 12:01)'} />
+        <CountryScannerCard
+          cs={status.de}
+          flag="🇩🇪"
+          label="Deutschland"
+          api={
+            status.de.scanning
+              ? status.de.mode === 'discovery'
+                ? 'Tankerkönig list.php (Grid-Discovery)'
+                : 'Tankerkönig prices.php (1s Delay)'
+              : 'Tankerkönig prices.php (1×/Tag um 12:01)'
+          }
+        />
         <CountryScannerCard cs={status.at} flag="🇦🇹" label="Österreich" api="E-Control (5x parallel)" />
       </div>
     </div>
