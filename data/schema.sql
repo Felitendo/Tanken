@@ -55,6 +55,17 @@ CREATE INDEX IF NOT EXISTS idx_station_prices_timestamp ON station_prices(timest
 CREATE INDEX IF NOT EXISTS idx_station_prices_location ON station_prices(location_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_station_prices_name ON station_prices(station_name, timestamp DESC);
 
+-- Known stations for daily price dump (populated by weekly discovery scan)
+CREATE TABLE IF NOT EXISTS known_stations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  brand TEXT NOT NULL DEFAULT '',
+  lat DOUBLE PRECISION NOT NULL DEFAULT 0,
+  lng DOUBLE PRECISION NOT NULL DEFAULT 0,
+  grid_point_id TEXT NOT NULL DEFAULT '',
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Persistent station cache (survives restarts, populated by grid/location scans)
 CREATE TABLE IF NOT EXISTS station_cache (
   location_id TEXT PRIMARY KEY,

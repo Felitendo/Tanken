@@ -37,6 +37,41 @@ export async function fetchStationsLive(params: {
   return mapStations(data.stations);
 }
 
+/**
+ * Fetch current prices for up to 10 stations by ID via Tankerkönig prices.php.
+ * Much faster than list.php for daily price updates of known stations.
+ */
+export async function fetchPricesByIds(params: {
+  apiKey: string;
+  ids: string[];
+  fuelType: string;
+}): Promise<Map<string, { price: number | null; isOpen: boolean }>> {
+  const { apiKey, ids, fuelType } = params;
+  if (ids.length === 0 || ids.length > 10) {
+    throw new Error(`ids muss 1–10 sein, bekommen: ${ids.length}`);
+  }
+  const url = `https://creativecommons.tankerkoenig.de/json/prices.php?ids=${ids.join(',')}&apikey=${apiKey}`;
+  const { data } = await fetchJson<{
+    ok?: boolean;
+    message?: string;
+    prices?: Record<string, Record<string, unknown>>;
+  }>(url);
+  if (!data.ok) {
+    throw new Error(data.message || 'API-Fehler (ok=false)');
+  }
+  const result = new Map<string, { price: number | null; isOpen: boolean }>();
+  if (data.prices) {
+    for (const [id, info] of Object.entries(data.prices)) {
+      const status = info.status as string;
+      const isOpen = status === 'open';
+      const rawPrice = info[fuelType];
+      const price = typeof rawPrice === 'number' && rawPrice > 0 ? rawPrice : null;
+      result.set(id, { price, isOpen });
+    }
+  }
+  return result;
+}
+
 // ─── E-Control (Austria) ─────────────────────────────────────────────
 
 interface EControlStation {

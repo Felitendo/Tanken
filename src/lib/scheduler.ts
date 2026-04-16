@@ -1,6 +1,10 @@
 import { loadRepoConfig } from '@/config';
-import { fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
-import { setCachedStations, getAllCachedLocations, countUniqueStations, persistPriceSnapshot, clearAllCache } from '@/lib/station-cache';
+import { fetchStationsLive, fetchStationsEControl, fetchPricesByIds } from '@/lib/measure';
+import {
+  setCachedStations, getAllCachedLocations, countUniqueStations, persistPriceSnapshot, clearAllCache,
+  saveKnownStations, loadKnownStationIds, countKnownStations,
+  updateCachedPrices, getLastDiscoveryTime, setLastDiscoveryTime,
+} from '@/lib/station-cache';
 import { generateGermanyGrid, generateAustriaGrid } from '@/lib/grid';
 
 export interface ScanLogEntry {
@@ -11,6 +15,7 @@ export interface ScanLogEntry {
 
 export interface CountryScanStatus {
   scanning: boolean;
+  mode: 'discovery' | 'price-dump' | null;
   progress: string | null;
   currentPoint: { lat: number; lng: number } | null;
   stationsScanned: number;
@@ -35,6 +40,7 @@ export interface SchedulerStatus {
   cycleCount: number;
   scanStartedAt: string | null;
   lastCycleDurationSec: number | null;
+  nextCycleAt: string | null;
   cache: CacheStats;
   de: CountryScanStatus;
   at: CountryScanStatus;
@@ -43,12 +49,19 @@ export interface SchedulerStatus {
 const MAX_ERRORS = 20;
 const MAX_LOG = 30;
 
-/** Delay between Tankerkönig calls (DE). 5 Min. laut offizieller Empfehlung. */
+/** Delay between Tankerkönig list.php calls (DE discovery). 5 Min. laut offizieller Empfehlung. */
 const DE_DELAY_MS = 5 * 60_000;
 /** Concurrent E-Control requests (AT). No documented rate limit. */
 const AT_CONCURRENCY = 5;
 /** Small pause between AT batches to avoid hammering. */
 const AT_BATCH_DELAY_MS = 500;
+
+/** Delay between prices.php calls during price dump. Start aggressive (1s). */
+const PRICE_DUMP_DELAY_MS = 1_000;
+/** Max IDs per prices.php call. */
+const PRICE_DUMP_BATCH_SIZE = 10;
+/** Run discovery scan every N days to find new/closed stations. */
+const DISCOVERY_INTERVAL_DAYS = 7;
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -67,6 +80,7 @@ function fmtDuration(totalSeconds: number): string {
 
 class CountryScan {
   scanning = false;
+  mode: 'discovery' | 'price-dump' | null = null;
   progress: string | null = null;
   currentPoint: { lat: number; lng: number } | null = null;
   stationsScanned = 0;
@@ -86,6 +100,10 @@ class CountryScan {
     this.stationsScanned = this._uniqueStationIds.size;
   }
 
+  addStationCount(count: number): void {
+    this.stationsScanned = count;
+  }
+
   addLog(message: string, type: ScanLogEntry['type'] = 'info'): void {
     this.log.push({ time: new Date().toISOString(), message, type });
     if (this.log.length > MAX_LOG) this.log = this.log.slice(-MAX_LOG);
@@ -103,6 +121,7 @@ class CountryScan {
 
   reset(): void {
     this.scanning = false;
+    this.mode = null;
     this.progress = null;
     this.currentPoint = null;
     this.estimatedEndAt = null;
@@ -114,6 +133,7 @@ class CountryScan {
       : null;
     return {
       scanning: this.scanning,
+      mode: this.mode,
       progress: this.progress,
       currentPoint: this.currentPoint,
       stationsScanned: this.stationsScanned,
@@ -136,6 +156,7 @@ class ScanScheduler {
   private _cycleCount = 0;
   private _scanStartedAt: Date | null = null;
   private _lastCycleDurationSec: number | null = null;
+  private _nextCycleAt: Date | null = null;
 
   readonly de = new CountryScan();
   readonly at = new CountryScan();
@@ -155,6 +176,7 @@ class ScanScheduler {
     this.de.reset();
     this.at.reset();
     this._scanStartedAt = null;
+    this._nextCycleAt = null;
     this.de.addLog('Scheduler gestoppt', 'info');
     this.at.addLog('Scheduler gestoppt', 'info');
     console.log('[Scheduler] Stopped');
@@ -184,6 +206,7 @@ class ScanScheduler {
       cycleCount: this._cycleCount,
       scanStartedAt: this._scanStartedAt?.toISOString() ?? null,
       lastCycleDurationSec: this._lastCycleDurationSec,
+      nextCycleAt: this._nextCycleAt?.toISOString() ?? null,
       cache: {
         gridCells: cachedLocations.length,
         totalStations: countUniqueStations(),
@@ -202,7 +225,27 @@ class ScanScheduler {
     const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
     const fuelType = config.fuel_type || 'diesel';
 
+    // First cycle: run discovery immediately if needed (no 12:01 wait)
+    let firstRun = true;
+
     while (this.timer) {
+      const discovery = apiKey ? await this.needsDiscovery() : false;
+
+      // Wait until 12:01 for price updates (skip wait on first run if discovery needed)
+      if (!(firstRun && discovery)) {
+        const waitMs = this.msUntilNext1201();
+        const waitH = Math.round(waitMs / 3_600_000 * 10) / 10;
+        const reason = discovery ? 'Discovery-Scan' : 'Preis-Update';
+        this._nextCycleAt = new Date(Date.now() + waitMs);
+        this.de.addLog(`Nächster ${reason} um 12:01 Uhr (in ${waitH} Std.)`, 'info');
+        this.at.addLog(`Nächster Scan um 12:01 Uhr (in ${waitH} Std.)`, 'info');
+        console.log(`[Scheduler] Next ${reason} in ${waitH}h at 12:01`);
+        await sleep(waitMs);
+        if (!this.timer) break;
+      }
+      firstRun = false;
+      this._nextCycleAt = null;
+
       const cycleStart = Date.now();
       this._scanStartedAt = new Date();
       this._cycleCount++;
@@ -210,7 +253,11 @@ class ScanScheduler {
       // Run DE and AT in parallel
       const tasks: Promise<void>[] = [];
       if (apiKey) {
-        tasks.push(this.runDeGridCycle(apiKey, fuelType));
+        if (discovery) {
+          tasks.push(this.runDeDiscoveryCycle(apiKey, fuelType));
+        } else {
+          tasks.push(this.runDePriceDump(apiKey, fuelType));
+        }
       } else {
         this.de.addLog('Kein API-Key — übersprungen', 'warn');
       }
@@ -237,38 +284,58 @@ class ScanScheduler {
       }
 
       const total = this.de.stationsScanned + this.at.stationsScanned;
-      const msg = `Zyklus #${this._cycleCount} fertig: ${total.toLocaleString('de-DE')} Stationen in ${fmtDuration(cycleDuration)}`;
+      const modeLabel = discovery ? 'Discovery' : 'Preis-Update';
+      const msg = `${modeLabel} #${this._cycleCount} fertig: ${total.toLocaleString('de-DE')} Stationen in ${fmtDuration(cycleDuration)}`;
       this.de.addLog(msg, 'success');
       this.at.addLog(msg, 'success');
       console.log(`[Grid] ${msg}`);
-
-      // Seit April 2026 dürfen Tankstellen nur noch 1× täglich um 12 Uhr Preise ändern.
-      // → Nächsten Zyklus so planen, dass er rechtzeitig nach 12 Uhr fertig ist.
-      if (this.timer) {
-        const now = new Date();
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(0, 0, 0, 0); // Mitternacht → Start, fertig bis ~22:30
-        const waitMs = Math.max(5 * 60_000, tomorrow.getTime() - now.getTime());
-        const waitH = Math.round(waitMs / 3_600_000 * 10) / 10;
-        this.de.addLog(`Nächster Zyklus in ${waitH} Std. (1× täglich)`, 'info');
-        this.at.addLog(`Nächster Zyklus in ${waitH} Std. (1× täglich)`, 'info');
-        await sleep(waitMs);
-      }
     }
   }
 
-  // ─── Germany (sequential, rate-limited) ───────────────────────
+  // ─── Helpers ────────────────────────────────────────────────────
 
-  private async runDeGridCycle(apiKey: string, fuelType: string): Promise<void> {
+  /** Check if a full discovery scan is needed (vs. quick price dump). */
+  private async needsDiscovery(): Promise<boolean> {
+    // No DE grid cells in cache → need discovery
+    const cached = getAllCachedLocations();
+    const hasDeCache = cached.some(c => c.locationId.startsWith('grid-'));
+    if (!hasDeCache) return true;
+
+    // No known stations → need discovery
+    const knownCount = await countKnownStations();
+    if (knownCount === 0) return true;
+
+    // Check last discovery time
+    const lastDiscovery = await getLastDiscoveryTime();
+    if (!lastDiscovery) return true;
+
+    const daysSince = (Date.now() - lastDiscovery.getTime()) / (1000 * 60 * 60 * 24);
+    return daysSince >= DISCOVERY_INTERVAL_DAYS;
+  }
+
+  /** Calculate ms until next 12:01 (today or tomorrow). */
+  private msUntilNext1201(): number {
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(12, 1, 0, 0);
+    if (now >= target) {
+      target.setDate(target.getDate() + 1);
+    }
+    return Math.max(5 * 60_000, target.getTime() - now.getTime());
+  }
+
+  // ─── Germany: Discovery (full grid scan, weekly) ────────────────
+
+  private async runDeDiscoveryCycle(apiKey: string, fuelType: string): Promise<void> {
     const grid = generateGermanyGrid();
     const cs = this.de;
     cs.scanning = true;
+    cs.mode = 'discovery';
     cs.resetCycle();
     cs.callDurations = [];
     cs.gridPoints = grid.length;
-    cs.addLog(`Scan gestartet: ${grid.length} Punkte (${DE_DELAY_MS / 1000}s Delay)`, 'info');
-    console.log(`[Grid-DE] Starting: ${grid.length} points, fuel: ${fuelType}`);
+    cs.addLog(`Discovery gestartet: ${grid.length} Punkte (${DE_DELAY_MS / 1000}s Delay)`, 'info');
+    console.log(`[Grid-DE] Discovery: ${grid.length} points, fuel: ${fuelType}`);
 
     const startTime = Date.now();
 
@@ -288,6 +355,11 @@ class ScanScheduler {
           if (stations.length > 0) {
             setCachedStations(point.id, { stations, lat: point.lat, lng: point.lng, radiusKm: 25, fuelType });
             cs.addStations(stations);
+
+            // Save to known_stations for future price dumps
+            await saveKnownStations(stations, point.id).catch(err => {
+              console.error(`[Grid-DE] Failed to save known stations for ${point.id}:`, err instanceof Error ? err.message : err);
+            });
           }
         } catch (err) {
           const msg = `${point.id}: ${err instanceof Error ? err.message : String(err)}`;
@@ -302,8 +374,88 @@ class ScanScheduler {
       const dur = (Date.now() - startTime) / 1000;
       cs.lastDurationSec = Math.round(dur);
       cs.lastCompletedAt = new Date();
-      cs.addLog(`Fertig: ${cs.stationsScanned.toLocaleString('de-DE')} Stationen in ${fmtDuration(dur)}`, 'success');
-      console.log(`[Grid-DE] Complete: ${cs.stationsScanned} stations`);
+
+      // Record discovery completion
+      await setLastDiscoveryTime(cs.stationsScanned);
+
+      cs.addLog(`Discovery fertig: ${cs.stationsScanned.toLocaleString('de-DE')} Stationen in ${fmtDuration(dur)}`, 'success');
+      console.log(`[Grid-DE] Discovery complete: ${cs.stationsScanned} stations`);
+    } finally {
+      cs.reset();
+    }
+  }
+
+  // ─── Germany: Price Dump (daily, uses prices.php) ───────────────
+
+  private async runDePriceDump(apiKey: string, fuelType: string): Promise<void> {
+    const cs = this.de;
+    cs.scanning = true;
+    cs.mode = 'price-dump';
+    cs.resetCycle();
+    cs.callDurations = [];
+
+    const ids = await loadKnownStationIds();
+    if (ids.length === 0) {
+      cs.addLog('Keine bekannten Stationen — Discovery nötig', 'warn');
+      cs.reset();
+      return;
+    }
+
+    const totalBatches = Math.ceil(ids.length / PRICE_DUMP_BATCH_SIZE);
+    cs.gridPoints = totalBatches;
+    cs.addLog(`Preis-Update gestartet: ${ids.length.toLocaleString('de-DE')} Stationen (${totalBatches} Batches × ${PRICE_DUMP_BATCH_SIZE})`, 'info');
+    console.log(`[Grid-DE] Price dump: ${ids.length} stations in ${totalBatches} batches, fuel: ${fuelType}`);
+
+    const startTime = Date.now();
+    const allPrices = new Map<string, { price: number | null; isOpen: boolean }>();
+    let errors = 0;
+    let delay = PRICE_DUMP_DELAY_MS;
+
+    try {
+      for (let b = 0; b < totalBatches; b++) {
+        if (!this.timer) break;
+        const batch = ids.slice(b * PRICE_DUMP_BATCH_SIZE, (b + 1) * PRICE_DUMP_BATCH_SIZE);
+        cs.progress = `${b + 1}/${totalBatches}`;
+        cs.estimatedEndAt = new Date(Date.now() + (totalBatches - b - 1) * delay);
+
+        try {
+          const t0 = Date.now();
+          const prices = await fetchPricesByIds({ apiKey, ids: batch, fuelType });
+          cs.callDurations.push(Date.now() - t0);
+
+          for (const [id, data] of prices) {
+            allPrices.set(id, data);
+          }
+
+          // Reset delay on success (adaptive rate limiting)
+          if (delay > PRICE_DUMP_DELAY_MS) {
+            delay = PRICE_DUMP_DELAY_MS;
+          }
+        } catch (err) {
+          errors++;
+          const msg = `Batch ${b + 1}: ${err instanceof Error ? err.message : String(err)}`;
+          console.error(`[Grid-DE] ${msg}`);
+          cs.addError(msg);
+
+          // Back off on errors (double delay, max 30s)
+          delay = Math.min(delay * 2, 30_000);
+          cs.addLog(`Fehler, Delay erhöht auf ${delay / 1000}s`, 'warn');
+        }
+
+        if (b < totalBatches - 1 && this.timer) await sleep(delay);
+      }
+
+      // Update in-memory cache with new prices
+      const updated = updateCachedPrices(allPrices);
+
+      const dur = (Date.now() - startTime) / 1000;
+      cs.lastDurationSec = Math.round(dur);
+      cs.lastCompletedAt = new Date();
+      cs.addStationCount(allPrices.size);
+
+      const errStr = errors > 0 ? `, ${errors} Fehler` : '';
+      cs.addLog(`Preis-Update fertig: ${allPrices.size.toLocaleString('de-DE')} Preise, ${updated.toLocaleString('de-DE')} Cache-Updates in ${fmtDuration(dur)}${errStr}`, 'success');
+      console.log(`[Grid-DE] Price dump complete: ${allPrices.size} prices, ${updated} cache updates in ${fmtDuration(dur)}`);
     } finally {
       cs.reset();
     }
@@ -315,6 +467,7 @@ class ScanScheduler {
     const grid = generateAustriaGrid();
     const cs = this.at;
     cs.scanning = true;
+    cs.mode = 'discovery';
     cs.resetCycle();
     cs.callDurations = [];
     cs.gridPoints = grid.length;
@@ -366,10 +519,6 @@ class ScanScheduler {
     } finally {
       cs.reset();
     }
-  }
-
-  private addError(msg: string): void {
-    this.de.addError(msg);
   }
 }
 

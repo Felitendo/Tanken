@@ -46,6 +46,7 @@ interface AdminStatus {
 
 interface CountryScanStatus {
   scanning: boolean;
+  mode: 'discovery' | 'price-dump' | null;
   progress: string | null;
   currentPoint: { lat: number; lng: number } | null;
   stationsScanned: number;
@@ -63,6 +64,7 @@ interface SchedulerStatus {
   cycleCount: number;
   scanStartedAt: string | null;
   lastCycleDurationSec: number | null;
+  nextCycleAt: string | null;
   cache: {
     gridCells: number;
     totalStations: number;
@@ -205,7 +207,7 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
             </div>
           </div>
           {cs.scanning ? (
-            <Badge variant="success">Scannt {cs.progress}</Badge>
+            <Badge variant="success">{cs.mode === 'price-dump' ? 'Preis-Update' : 'Discovery'} {cs.progress}</Badge>
           ) : cs.lastCompletedAt ? (
             <Badge>{fmtRelative(cs.lastCompletedAt)}</Badge>
           ) : (
@@ -382,7 +384,7 @@ function ScannerConsole() {
             <StatCell label="Grid-Zellen" value={status.cache.gridCells.toLocaleString('de-DE')} />
             <StatCell label="Tankstellen" value={status.cache.totalStations.toLocaleString('de-DE')} sub="eindeutig" />
             <StatCell label="Zyklen" value={String(status.cycleCount)} />
-            <StatCell label="Letzter Zyklus" value={status.lastCycleDurationSec ? fmtDuration(status.lastCycleDurationSec) : '—'} />
+            <StatCell label="Letzter Zyklus" value={status.lastCycleDurationSec ? fmtDuration(status.lastCycleDurationSec) : '—'} sub={status.nextCycleAt ? `Nächster: ${new Date(status.nextCycleAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : undefined} />
           </div>
 
           <Separator />

@@ -286,6 +286,119 @@ export function findStationsInBounds(
   };
 }
 
+// ─── Known stations (for daily price dump) ──────────────────────────
+
+/** Save discovered stations to known_stations table (upsert). */
+export async function saveKnownStations(stations: CachedStation[], gridPointId: string): Promise<number> {
+  const db = getDb();
+  if (!db || !stations.length) return 0;
+
+  const BATCH = 500;
+  let saved = 0;
+  for (let i = 0; i < stations.length; i += BATCH) {
+    const batch = stations.slice(i, i + BATCH);
+    const values: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+    for (const s of batch) {
+      values.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, NOW())`);
+      params.push(s.id, s.name, s.brand, s.lat, s.lng, gridPointId);
+    }
+    await db.query(
+      `INSERT INTO known_stations (id, name, brand, lat, lng, grid_point_id, last_seen_at)
+       VALUES ${values.join(', ')}
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name, brand = EXCLUDED.brand,
+         lat = EXCLUDED.lat, lng = EXCLUDED.lng,
+         grid_point_id = EXCLUDED.grid_point_id, last_seen_at = NOW()`,
+      params
+    );
+    saved += batch.length;
+  }
+  return saved;
+}
+
+/** Load all known DE station IDs for price dump. */
+export async function loadKnownStationIds(): Promise<string[]> {
+  const db = getDb();
+  if (!db) return [];
+  try {
+    const { rows } = await db.query('SELECT id FROM known_stations ORDER BY id');
+    return rows.map(r => r.id as string);
+  } catch {
+    return [];
+  }
+}
+
+/** Count known DE stations. */
+export async function countKnownStations(): Promise<number> {
+  const db = getDb();
+  if (!db) return 0;
+  try {
+    const { rows } = await db.query('SELECT COUNT(*)::int AS cnt FROM known_stations');
+    return (rows[0]?.cnt as number) ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Update prices in the in-memory cache from a price dump.
+ * Returns number of station-entries updated (including duplicates across grid cells).
+ */
+export function updateCachedPrices(priceMap: Map<string, { price: number | null; isOpen: boolean }>): number {
+  let updated = 0;
+  const now = Date.now();
+  const c = getCache();
+  for (const [locationId, entry] of c) {
+    let changed = false;
+    for (const station of entry.stations) {
+      const update = priceMap.get(station.id);
+      if (update) {
+        station.price = update.price;
+        station.isOpen = update.isOpen;
+        changed = true;
+        updated++;
+      }
+    }
+    if (changed) {
+      entry.timestamp = now;
+      persistToDb(locationId, entry).catch(err => {
+        console.error(`[StationCache] DB persist error for ${locationId}:`, err instanceof Error ? err.message : err);
+      });
+    }
+  }
+  invalidateUniqueCount();
+  return updated;
+}
+
+/** Get last discovery scan timestamp from app_meta. */
+export async function getLastDiscoveryTime(): Promise<Date | null> {
+  const db = getDb();
+  if (!db) return null;
+  try {
+    const { rows } = await db.query("SELECT value_json FROM app_meta WHERE key = 'last_discovery'");
+    if (rows[0]?.value_json) {
+      const val = rows[0].value_json as { timestamp?: string };
+      return val.timestamp ? new Date(val.timestamp) : null;
+    }
+  } catch { /* table might not exist yet */ }
+  return null;
+}
+
+/** Record discovery scan completion in app_meta. */
+export async function setLastDiscoveryTime(stationCount: number): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+  await db.query(
+    `INSERT INTO app_meta (key, value_json, updated_at) VALUES ('last_discovery', $1::jsonb, NOW())
+     ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()`,
+    [JSON.stringify({ timestamp: new Date().toISOString(), stationCount })]
+  ).catch(err => {
+    console.error('[StationCache] Failed to save discovery time:', err instanceof Error ? err.message : err);
+  });
+}
+
 // ─── Database persistence ────────────────────────────────────────────
 
 let _db: { query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> } | null = null;
