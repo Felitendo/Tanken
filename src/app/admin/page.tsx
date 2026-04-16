@@ -431,7 +431,7 @@ function ScannerConsole() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    if (confirm('Tankerkönig-Dump importieren?\n\nLädt history.dump.gz (~8 GB) herunter.\nBenötigt pg_restore und ~16 GB freien Speicher.\nDauer: je nach Verbindung 10–60 Min.'))
+                    if (confirm('Tankerkönig-Dump importieren?\n\nLädt history.dump.gz (~8 GB) herunter.\nBenötigt ~16 GB freien Speicher.\nDauer: je nach Verbindung 10–60 Min.'))
                       handleAction('importDump');
                   }}
                   disabled={status.import.phase !== 'idle' && status.import.phase !== 'done' && status.import.phase !== 'error'}
