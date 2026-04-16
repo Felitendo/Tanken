@@ -12,7 +12,7 @@
  * - Enough disk space for the download + decompressed dump (~16 GB peak)
  */
 
-import { createWriteStream, createReadStream, unlinkSync, existsSync, openSync, readSync, closeSync } from 'fs';
+import { createWriteStream, createReadStream, unlinkSync, existsSync, statSync, openSync, readSync, closeSync } from 'fs';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { createGunzip, inflateSync } from 'zlib';
@@ -706,12 +706,13 @@ async function importPriceHistory(
 
 // ─── Download with progress ──────────────────────────────────────────
 
-const MAX_RETRIES = 10;
-const RETRY_DELAY_MS = 3_000;
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 5_000;
 
 /**
- * Download a large file with resume support.
- * Uses HTTP Range headers to resume after connection drops ("terminated" errors).
+ * Download a large file with retry support.
+ * On connection drop, the download restarts from scratch using Range headers
+ * based on the actual file size on disk (not an in-memory counter).
  */
 async function downloadFile(
   url: string,
@@ -719,55 +720,62 @@ async function downloadFile(
   onProgress: (pct: number, mbDown: number, mbTotal: number) => void,
   shouldAbort: () => boolean,
 ): Promise<void> {
-  // First request to get total size
-  const headResp = await fetch(url, { method: 'HEAD' });
-  const total = parseInt(headResp.headers.get('content-length') || '0', 10);
-  const supportsRange = headResp.headers.get('accept-ranges') === 'bytes';
-
-  let downloaded = 0;
+  let total = 0;
   let retries = 0;
-  let lastReport = 0;
 
-  while (true) {
+  for (;;) {
     if (shouldAbort()) throw new Error('Abgebrochen');
 
+    // Check how much we already have on disk from a previous attempt
+    const existingBytes = existsSync(dest) ? statSync(dest).size : 0;
     const headers: Record<string, string> = {};
-    if (downloaded > 0 && supportsRange) {
-      headers['Range'] = `bytes=${downloaded}-`;
+    if (existingBytes > 0) {
+      headers['Range'] = `bytes=${existingBytes}-`;
+      console.log(`[Import] Download fortsetzen ab ${Math.round(existingBytes / 1_048_576)} MB`);
     }
 
     let response: Response;
     try {
-      const controller = new AbortController();
-      // Abort after 60s of no data (stalled connection)
-      const timeoutId = setTimeout(() => controller.abort(), 60_000);
-
-      response = await fetch(url, { signal: controller.signal, headers });
-      clearTimeout(timeoutId);
-
-      // 416 = Range Not Satisfiable → file already complete
-      if (response.status === 416) break;
-
-      if (!response.ok && response.status !== 206) {
-        const hint = await response.text().catch(() => '');
-        throw new Error(`Download fehlgeschlagen: HTTP ${response.status} — ${hint.slice(0, 200)}`);
-      }
+      response = await fetch(url, { headers });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg === 'Abgebrochen') throw err;
-
-      retries++;
-      if (retries > MAX_RETRIES) {
-        throw new Error(`Download nach ${MAX_RETRIES} Versuchen fehlgeschlagen: ${msg}`);
-      }
-      console.log(`[Import] Download interrupted at ${Math.round(downloaded / 1_048_576)} MB, retry ${retries}/${MAX_RETRIES}: ${msg}`);
-      await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
-      continue;
+      if (await retryOrThrow(err, ++retries, existingBytes, 'fetch')) continue;
+      throw err; // unreachable, retryOrThrow throws
     }
 
-    // Stream this chunk to disk
+    // 416 = Range Not Satisfiable → file already complete
+    if (response.status === 416) {
+      console.log('[Import] Server sagt 416 — Datei bereits vollständig');
+      break;
+    }
+
+    if (!response.ok && response.status !== 206) {
+      // Don't retry HTTP errors (auth, not found, etc.)
+      const hint = await response.text().catch(() => '');
+      throw new Error(`Download fehlgeschlagen: HTTP ${response.status} — ${hint.slice(0, 200)}`);
+    }
+
+    // Get total size from first response
+    if (response.status === 206) {
+      // Content-Range: bytes 12345-99999/100000
+      const cr = response.headers.get('content-range') || '';
+      const m = cr.match(/\/(\d+)/);
+      if (m) total = parseInt(m[1], 10);
+    } else {
+      total = parseInt(response.headers.get('content-length') || '0', 10);
+      // Full response (no range support) → start from scratch
+      if (existingBytes > 0) {
+        console.log('[Import] Server unterstützt kein Resume, starte neu');
+        safeDelete(dest);
+      }
+    }
+
+    // Stream to disk
+    let downloaded = existingBytes;
+    let lastReport = 0;
+    const isResume = response.status === 206;
+
     try {
-      const writer = createWriteStream(dest, { flags: downloaded > 0 ? 'r+' : 'w', start: downloaded });
+      const writer = createWriteStream(dest, isResume ? { flags: 'a' } : undefined);
       const webStream = response.body!;
 
       const nodeReadable = new Readable({
@@ -784,7 +792,6 @@ async function downloadFile(
 
             const buf = Buffer.from(value);
             downloaded += buf.length;
-            retries = 0; // Reset retry count on successful data
 
             const now = Date.now();
             if (now - lastReport > 500) {
@@ -802,29 +809,40 @@ async function downloadFile(
 
       await pipeline(nodeReadable, writer);
 
-      // Download complete
+      // Verify file size
+      const finalSize = statSync(dest).size;
+      if (total > 0 && finalSize !== total) {
+        console.log(`[Import] Dateigröße ${finalSize} stimmt nicht mit erwartetem ${total} überein`);
+        if (await retryOrThrow(new Error(`Unvollständiger Download: ${finalSize}/${total} Bytes`), ++retries, finalSize, 'size-mismatch')) continue;
+      }
+
+      console.log(`[Import] Download abgeschlossen: ${Math.round(finalSize / 1_048_576)} MB`);
       break;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg === 'Abgebrochen') throw err;
 
-      // Connection dropped mid-stream — retry with resume
-      if (!supportsRange) {
-        throw new Error(`Download abgebrochen und Server unterstützt kein Resume: ${msg}`);
-      }
-
-      retries++;
-      if (retries > MAX_RETRIES) {
-        throw new Error(`Download nach ${MAX_RETRIES} Versuchen fehlgeschlagen: ${msg}`);
-      }
-      console.log(`[Import] Download interrupted at ${Math.round(downloaded / 1_048_576)} MB, retry ${retries}/${MAX_RETRIES}: ${msg}`);
-      await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+      const diskSize = existsSync(dest) ? statSync(dest).size : 0;
+      if (await retryOrThrow(err, ++retries, diskSize, 'stream')) continue;
+      throw err; // unreachable
     }
   }
 
-  // Final progress report
-  const pct = total > 0 ? Math.round(downloaded / total * 100) : 100;
-  onProgress(pct, Math.round(downloaded / 1_048_576), Math.round(total / 1_048_576));
+  // Final progress
+  const finalSize = existsSync(dest) ? statSync(dest).size : 0;
+  const pct = total > 0 ? Math.round(finalSize / total * 100) : 100;
+  onProgress(pct, Math.round(finalSize / 1_048_576), Math.round(total / 1_048_576));
+
+  /** Returns true to continue (retry), throws if max retries reached. */
+  async function retryOrThrow(err: unknown, attempt: number, bytesOnDisk: number, context: string): Promise<true> {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (attempt > MAX_RETRIES) {
+      throw new Error(`Download nach ${MAX_RETRIES} Versuchen fehlgeschlagen (${context}): ${msg}`);
+    }
+    console.log(`[Import] Download unterbrochen bei ${Math.round(bytesOnDisk / 1_048_576)} MB (${context}), Versuch ${attempt}/${MAX_RETRIES}: ${msg}`);
+    await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+    return true;
+  }
 }
 
 // ─── Decompress ──────────────────────────────────────────────────────
