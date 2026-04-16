@@ -1,6 +1,5 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
-    const { loadRepoConfig } = await import('./config');
     const { getScheduler } = await import('./lib/scheduler');
     const { restoreCacheFromDb, initStationCacheDb } = await import('./lib/station-cache');
     const { database } = await import('./lib/server-runtime');

@@ -46,7 +46,7 @@ interface AdminStatus {
 
 interface CountryScanStatus {
   scanning: boolean;
-  mode: 'discovery' | 'price-dump' | null;
+  mode: 'price-dump' | 'discovery' | null;
   progress: string | null;
   currentPoint: { lat: number; lng: number } | null;
   stationsScanned: number;
@@ -207,7 +207,7 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
             </div>
           </div>
           {cs.scanning ? (
-            <Badge variant="success">{cs.mode === 'price-dump' ? 'Preis-Update' : 'Discovery'} {cs.progress}</Badge>
+            <Badge variant="success">Preis-Update {cs.progress}</Badge>
           ) : cs.lastCompletedAt ? (
             <Badge>{fmtRelative(cs.lastCompletedAt)}</Badge>
           ) : (
@@ -419,7 +419,7 @@ function ScannerConsole() {
 
       {/* Per-country cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <CountryScannerCard cs={status.de} flag="🇩🇪" label="Deutschland" api={status.de.mode === 'price-dump' ? 'Tankerkönig prices.php (1s Delay)' : status.de.mode === 'discovery' ? 'Tankerkönig list.php (5 Min. Delay)' : 'Tankerkönig (1×/Tag um 12:01)'} />
+        <CountryScannerCard cs={status.de} flag="🇩🇪" label="Deutschland" api={status.de.scanning ? 'Tankerkönig prices.php (1s Delay)' : 'Tankerkönig prices.php (1×/Tag um 12:01)'} />
         <CountryScannerCard cs={status.at} flag="🇦🇹" label="Österreich" api="E-Control (5x parallel)" />
       </div>
     </div>
