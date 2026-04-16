@@ -1145,6 +1145,7 @@ function updateExpandBtnIcon(btn, expanded) {
 }
 
 function setupSheetDrag(content, handleArea, backdrop, closeSheet) {
+  if (window.matchMedia('(min-width: 900px)').matches) return;
   let startY = 0, currentY = 0, isDragging = false;
   let velocityY = 0, lastY = 0, lastTime = 0;
   let dragSource = null; // 'handle' or 'content'
@@ -1566,6 +1567,7 @@ function showStationSheet(station) {
     content.style.transform = '';
     content.classList.remove('dragging', 'snapping', 'expanded');
     content.querySelector('.sheet-expand-btn')?.remove();
+    content.querySelector('.sheet-desktop-close')?.remove();
     backdrop.style.opacity = '';
     sheet.classList.add('hidden');
     backdrop.removeEventListener('click', closeSheet);
@@ -1573,6 +1575,16 @@ function showStationSheet(station) {
     if (state.defaultBounds) showResetViewBtn();
   };
   backdrop.addEventListener('click', closeSheet);
+
+  // --- Desktop: add close button for side panel ---
+  if (window.matchMedia('(min-width: 900px)').matches) {
+    content.querySelector('.sheet-desktop-close')?.remove();
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'sheet-desktop-close';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.addEventListener('click', closeSheet);
+    content.prepend(closeBtn);
+  }
 
   // --- Real drag-to-dismiss ---
   setupSheetDrag(content, handleArea, backdrop, closeSheet);

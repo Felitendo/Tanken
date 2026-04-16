@@ -29,14 +29,16 @@ export const APP_SHELL = `
         <span data-i18n="loadingStations">Tankstellen laden…</span>
       </div>
     </div>
-    <div class="station-sort-bar">
-      <span class="station-sort-label" id="station-count"></span>
-      <button class="station-sort-btn" id="station-sort">
-        <svg id="sort-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/></svg>
-        <span id="sort-label"></span>
-      </button>
+    <div class="desktop-station-panel">
+      <div class="station-sort-bar">
+        <span class="station-sort-label" id="station-count"></span>
+        <button class="station-sort-btn" id="station-sort">
+          <svg id="sort-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/></svg>
+          <span id="sort-label"></span>
+        </button>
+      </div>
+      <div id="station-list" class="station-list"></div>
     </div>
-    <div id="station-list" class="station-list"></div>
   </div>
 
   <div class="tab-view" id="view-history">

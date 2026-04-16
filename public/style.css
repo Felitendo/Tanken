@@ -1359,21 +1359,23 @@ body.logged-in .cloud-sync-hint {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 6px 12px;
+  padding: 6px 14px;
+  border-radius: 10px;
   -webkit-user-select: none;
   user-select: none;
   color: var(--color-hint);
-  transition: color 0.2s;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .tab-item.active {
   color: var(--color-accent);
+  background: rgba(0, 122, 255, 0.1);
 }
 
 @keyframes tab-bounce {
   0%   { transform: scale(1); }
-  40%  { transform: scale(1.22); }
-  70%  { transform: scale(0.92); }
+  35%  { transform: scale(1.18); }
+  65%  { transform: scale(0.94); }
   100% { transform: scale(1); }
 }
 
@@ -1390,6 +1392,10 @@ body.logged-in .cloud-sync-hint {
 .tab-item span {
   font-size: 10px;
   font-weight: 500;
+}
+
+.tab-item.active span {
+  font-weight: 600;
 }
 
 /* === Location chip in settings === */
@@ -2353,4 +2359,698 @@ html[data-theme="dark"] .pwa-popup-icon img,
   font-size: 11px;
   color: var(--color-hint);
   opacity: 0.5;
+}
+
+/* === Desktop Station Panel (transparent wrapper on mobile) === */
+.desktop-station-panel {
+  display: contents;
+}
+
+/* === Desktop Layout === */
+@media (min-width: 900px) {
+
+  /* --- Desktop-specific custom properties --- */
+  :root {
+    --sidebar-w: 88px;
+    --panel-w: 360px;
+    --sheet-w: 440px;
+    --content-max: 660px;
+    --dt-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dt-ease-bounce: cubic-bezier(0.34, 1.4, 0.64, 1);
+    --dt-duration: 0.4s;
+    --dt-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --dt-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+    --dt-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
+    --dt-shadow-sheet: 0 16px 64px rgba(0, 0, 0, 0.14), 0 6px 20px rgba(0, 0, 0, 0.08);
+    --dt-blur: 20px;
+  }
+
+  html[data-theme="dark"] {
+    --dt-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+    --dt-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.25);
+    --dt-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.35);
+    --dt-shadow-sheet: 0 16px 64px rgba(0, 0, 0, 0.45);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --dt-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+      --dt-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.25);
+      --dt-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.35);
+      --dt-shadow-sheet: 0 16px 64px rgba(0, 0, 0, 0.45);
+    }
+  }
+
+  /* --- Sidebar Navigation --- */
+  .tab-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: auto;
+    width: var(--sidebar-w);
+    height: 100%;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 16px 8px;
+    border-top: none;
+    border-right: 1px solid var(--color-separator);
+    gap: 2px;
+    z-index: 100;
+    background: var(--color-bg-secondary);
+  }
+
+  .tab-item {
+    padding: 10px 0;
+    width: 100%;
+    gap: 3px;
+    border-radius: 10px;
+    position: relative;
+    transition: color 0.2s ease,
+                background 0.2s ease;
+  }
+
+  .tab-item span {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    transition: opacity 0.2s ease;
+  }
+
+  .tab-item:hover {
+    background: var(--color-separator);
+  }
+
+  .tab-item:active {
+    background: var(--color-separator);
+    opacity: 0.7;
+  }
+
+  .tab-item.active {
+    color: var(--color-accent);
+    background: rgba(0, 122, 255, 0.1);
+  }
+
+  .tab-item.active span {
+    font-weight: 600;
+  }
+
+  .tab-icon {
+    transition: transform 0.3s var(--dt-ease-bounce);
+  }
+
+  .tab-item.active .tab-icon {
+    animation: dt-tab-pop 0.4s var(--dt-ease-bounce);
+  }
+
+  @keyframes dt-tab-pop {
+    0%   { transform: scale(1); }
+    35%  { transform: scale(1.18); }
+    65%  { transform: scale(0.94); }
+    100% { transform: scale(1); }
+  }
+
+  /* --- App container shifts right --- */
+  #app {
+    left: var(--sidebar-w);
+    bottom: 0;
+  }
+
+  /* --- Tab view transitions (desktop-refined) --- */
+  .tab-view {
+    transition: opacity var(--dt-duration) var(--dt-ease),
+                transform var(--dt-duration) var(--dt-ease);
+    transform: scale(0.97) translateY(8px);
+  }
+
+  .tab-view.active {
+    transform: scale(1) translateY(0);
+  }
+
+  /* --- Non-map views: centered content with padding --- */
+  #view-history,
+  #view-stats,
+  #view-settings {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 24px 24px;
+  }
+
+  #view-history.active,
+  #view-stats.active,
+  #view-settings.active {
+    display: flex;
+  }
+
+  #view-history > *,
+  #view-stats > *,
+  #view-settings > * {
+    width: 100%;
+    max-width: var(--content-max);
+  }
+
+  /* Desktop card refinements */
+  .card {
+    border-radius: 14px;
+    transition: box-shadow 0.25s var(--dt-ease),
+                transform 0.25s var(--dt-ease);
+    box-shadow: var(--dt-shadow-sm);
+  }
+
+  .card:hover {
+    box-shadow: var(--dt-shadow-md);
+  }
+
+  .card-list {
+    border-radius: 14px;
+    box-shadow: var(--dt-shadow-sm);
+    transition: box-shadow 0.25s var(--dt-ease);
+  }
+
+  .card-list:hover {
+    box-shadow: var(--dt-shadow-md);
+  }
+
+  /* Desktop chip refinements */
+  .chip {
+    transition: background 0.2s var(--dt-ease),
+                color 0.2s var(--dt-ease),
+                transform 0.15s var(--dt-ease),
+                box-shadow 0.2s var(--dt-ease);
+  }
+
+  .chip:hover:not(.active) {
+    background: var(--color-separator);
+  }
+
+  .chip.active {
+    box-shadow: none;
+  }
+
+  /* Desktop chart container */
+  .chart-container {
+    border-radius: 14px;
+    box-shadow: var(--dt-shadow-sm);
+    transition: box-shadow 0.3s var(--dt-ease);
+  }
+
+  .chart-container:hover {
+    box-shadow: var(--dt-shadow-md);
+  }
+
+  /* Stats card hover */
+  .stat-card {
+    border-radius: 14px;
+    transition: box-shadow 0.25s var(--dt-ease);
+    box-shadow: var(--dt-shadow-sm);
+  }
+
+  .stat-card:hover {
+    box-shadow: var(--dt-shadow-md);
+  }
+
+  /* Ranking item hover */
+  .ranking-item {
+    transition: background 0.2s var(--dt-ease),
+                transform 0.15s var(--dt-ease);
+    border-radius: 0;
+  }
+
+  .ranking-item:hover {
+    background: var(--color-bg-secondary);
+  }
+
+  .ranking-item:active {
+    transform: scale(0.99);
+  }
+
+  /* Settings row hover */
+  .settings-row {
+    border-radius: 0;
+    transition: background 0.2s var(--dt-ease);
+  }
+
+  .settings-row:hover {
+    background: rgba(127, 127, 127, 0.06);
+  }
+
+  /* --- Map view: full width with side panel --- */
+  #view-map {
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+  }
+
+  #view-map.active {
+    display: flex;
+  }
+
+  /* Remove the dark bar above the map on desktop */
+  #map-container::before {
+    display: none;
+  }
+
+  #map-container {
+    flex: 1;
+    height: 100%;
+    min-height: unset;
+  }
+
+  /* Map search bar refinement */
+  #map-search-wrapper {
+    top: 16px;
+    left: 16px;
+    max-width: 400px;
+  }
+
+  #map-search-box {
+    border-radius: 12px;
+    box-shadow: var(--dt-shadow-md);
+    background: var(--color-bg);
+    transition: box-shadow 0.25s var(--dt-ease);
+    height: 46px;
+  }
+
+  #map-search-box:focus-within {
+    box-shadow: var(--dt-shadow-lg), 0 0 0 3px rgba(0, 122, 255, 0.2);
+  }
+
+  #map-search-results {
+    border-radius: 12px;
+    box-shadow: var(--dt-shadow-lg);
+    background: var(--color-bg);
+    margin-top: 6px;
+  }
+
+  .map-search-result-item {
+    transition: background 0.15s ease;
+  }
+
+  .map-search-result-item:hover {
+    background: var(--color-bg-secondary);
+  }
+
+  /* Map FAB refinement */
+  .map-fab {
+    border-radius: 12px;
+    box-shadow: var(--dt-shadow-md);
+    background: var(--color-bg);
+    transition: box-shadow 0.25s var(--dt-ease),
+                transform 0.2s var(--dt-ease);
+    width: 46px;
+    height: 46px;
+  }
+
+  .map-fab:hover {
+    box-shadow: var(--dt-shadow-lg);
+    transform: scale(1.05);
+  }
+
+  .map-fab:active {
+    transform: scale(0.94);
+    opacity: 1;
+  }
+
+  /* --- Station panel (right sidebar on map) --- */
+  .desktop-station-panel {
+    display: flex;
+    flex-direction: column;
+    width: var(--panel-w);
+    flex-shrink: 0;
+    height: 100%;
+    overflow-y: auto;
+    border-left: 1px solid var(--color-separator);
+    background: var(--color-bg);
+  }
+
+  .desktop-station-panel .station-sort-bar {
+    padding: 16px 16px 8px;
+    position: sticky;
+    top: 0;
+    background: var(--color-bg);
+    z-index: 2;
+    backdrop-filter: blur(var(--dt-blur));
+    -webkit-backdrop-filter: blur(var(--dt-blur));
+  }
+
+  .desktop-station-panel .station-list {
+    margin: 0;
+    border-radius: 0;
+    flex: 1;
+    background: transparent;
+  }
+
+  /* Station list item hover on desktop */
+  .station-item {
+    transition: background 0.2s var(--dt-ease),
+                transform 0.15s var(--dt-ease);
+    cursor: pointer;
+  }
+
+  .station-item:hover {
+    background: var(--color-bg-secondary);
+  }
+
+  .station-item:active {
+    transform: scale(0.99);
+  }
+
+  /* Station item stagger animation */
+  .station-item.anim-in {
+    animation: dt-station-slide 0.35s var(--dt-ease) both;
+  }
+
+  @keyframes dt-station-slide {
+    from {
+      opacity: 0;
+      transform: translateX(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  /* --- Bottom sheet becomes right side panel --- */
+  .bottom-sheet {
+    left: var(--sidebar-w);
+  }
+
+  .bottom-sheet-backdrop {
+    background: rgba(0, 0, 0, 0.25);
+    transition: opacity 0.35s var(--dt-ease);
+  }
+
+  .bottom-sheet-content {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: var(--sheet-w);
+    max-width: var(--sheet-w);
+    max-height: 100%;
+    border-radius: 0;
+    border-left: 1px solid var(--color-separator);
+    box-shadow: var(--dt-shadow-sheet);
+    transform: translateX(100%);
+    transition: transform 0.45s var(--dt-ease);
+    padding-bottom: 0;
+  }
+
+  .bottom-sheet:not(.hidden) .bottom-sheet-content {
+    transform: translateX(0);
+  }
+
+  .bottom-sheet-content.expanded {
+    max-height: 100%;
+    border-radius: 0;
+  }
+
+  .bottom-sheet-handle-area {
+    display: none;
+  }
+
+  /* Sheet station header spacing for desktop */
+  .sheet-station-header {
+    padding: 20px 20px 8px;
+    padding-right: 56px;
+  }
+
+  .sheet-station-name {
+    font-size: 20px;
+  }
+
+  .sheet-station-price {
+    font-size: 40px;
+    padding: 12px 20px;
+  }
+
+  /* Sheet chart container */
+  .sheet-chart-container {
+    height: 160px;
+    border-radius: 14px;
+    box-shadow: var(--dt-shadow-sm);
+  }
+
+  .bottom-sheet-content.expanded .sheet-chart-container {
+    height: 240px;
+  }
+
+  /* Sheet nav buttons */
+  .sheet-nav-btn {
+    border-radius: 12px;
+    transition: background 0.15s ease;
+  }
+
+  .sheet-nav-btn:hover {
+    background: var(--color-separator);
+  }
+
+  .sheet-nav-btn:active {
+    opacity: 0.7;
+  }
+
+  /* --- Desktop close button (Apple xmark.circle.fill style) --- */
+  .sheet-desktop-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: var(--color-bg-secondary);
+    color: var(--color-hint);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: background 0.2s ease,
+                color 0.2s ease,
+                opacity 0.2s ease;
+    opacity: 0.7;
+    line-height: 1;
+  }
+
+  .sheet-desktop-close:hover {
+    opacity: 1;
+    background: var(--color-separator);
+    color: var(--color-text);
+  }
+
+  .sheet-desktop-close:active {
+    opacity: 0.5;
+  }
+
+  /* --- Expand button refinement --- */
+  .sheet-expand-btn {
+    border-radius: 10px;
+    transition: background 0.2s var(--dt-ease),
+                transform 0.2s var(--dt-ease);
+  }
+
+  .sheet-expand-btn:hover {
+    background: var(--color-bg-secondary);
+    transform: scale(1.08);
+  }
+
+  /* --- Hide pull-to-refresh on desktop --- */
+  #ptr-container {
+    display: none;
+  }
+
+  /* --- PWA popup centers on desktop --- */
+  .pwa-popup {
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pwa-popup-sheet {
+    border-radius: 20px;
+    box-shadow: var(--dt-shadow-lg);
+    max-width: 440px;
+  }
+
+  /* --- Toast positioning (account for sidebar) --- */
+  .toast {
+    border-radius: 14px;
+    box-shadow: var(--dt-shadow-lg);
+    backdrop-filter: blur(var(--dt-blur));
+    -webkit-backdrop-filter: blur(var(--dt-blur));
+  }
+
+  .toast.visible {
+    left: calc(var(--sidebar-w) + 50%);
+    transform: translateX(-50%) translateX(calc(var(--sidebar-w) / -2));
+  }
+
+  /* --- About card refinements --- */
+  .about-card {
+    border-radius: 14px;
+    box-shadow: var(--dt-shadow-sm);
+    transition: box-shadow 0.25s var(--dt-ease);
+  }
+
+  .about-card:hover {
+    box-shadow: var(--dt-shadow-md);
+  }
+
+  .about-row {
+    transition: background 0.2s var(--dt-ease);
+  }
+
+  .about-row:hover {
+    background: rgba(127, 127, 127, 0.06);
+  }
+
+  /* Auth hero card */
+  .auth-hero-card {
+    border-radius: 20px;
+    box-shadow: var(--dt-shadow-md);
+    transition: box-shadow 0.3s var(--dt-ease);
+  }
+
+  .auth-hero-card:hover {
+    box-shadow: var(--dt-shadow-lg);
+  }
+
+  /* Section header subtle refinement */
+  .section-header {
+    padding-top: 20px;
+    font-size: 12px;
+    letter-spacing: 0.8px;
+  }
+
+  /* Location picker dropdown */
+  .location-picker {
+    border-radius: 10px;
+    transition: border-color 0.2s var(--dt-ease),
+                box-shadow 0.2s var(--dt-ease);
+  }
+
+  .location-picker:focus {
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+  }
+
+  /* Scrollbar styling for panels */
+  .desktop-station-panel::-webkit-scrollbar,
+  .bottom-sheet-content::-webkit-scrollbar,
+  #view-history::-webkit-scrollbar,
+  #view-stats::-webkit-scrollbar,
+  #view-settings::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .desktop-station-panel::-webkit-scrollbar-track,
+  .bottom-sheet-content::-webkit-scrollbar-track,
+  #view-history::-webkit-scrollbar-track,
+  #view-stats::-webkit-scrollbar-track,
+  #view-settings::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .desktop-station-panel::-webkit-scrollbar-thumb,
+  .bottom-sheet-content::-webkit-scrollbar-thumb,
+  #view-history::-webkit-scrollbar-thumb,
+  #view-stats::-webkit-scrollbar-thumb,
+  #view-settings::-webkit-scrollbar-thumb {
+    background: var(--color-separator);
+    border-radius: 3px;
+  }
+
+  .desktop-station-panel::-webkit-scrollbar-thumb:hover,
+  .bottom-sheet-content::-webkit-scrollbar-thumb:hover,
+  #view-history::-webkit-scrollbar-thumb:hover,
+  #view-stats::-webkit-scrollbar-thumb:hover,
+  #view-settings::-webkit-scrollbar-thumb:hover {
+    background: var(--color-hint);
+  }
+
+  /* Firefox scrollbar */
+  .desktop-station-panel,
+  .bottom-sheet-content,
+  #view-history,
+  #view-stats,
+  #view-settings {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-separator) transparent;
+  }
+
+  /* --- Slider refinement --- */
+  .slider::-webkit-slider-thumb {
+    width: 22px;
+    height: 22px;
+    box-shadow: var(--dt-shadow-md);
+    transition: box-shadow 0.2s var(--dt-ease),
+                transform 0.15s var(--dt-ease);
+  }
+
+  .slider::-webkit-slider-thumb:hover {
+    box-shadow: var(--dt-shadow-lg);
+    transform: scale(1.12);
+  }
+
+  /* Toggle switch hover */
+  .toggle-switch {
+    transition: opacity 0.2s ease;
+  }
+
+  .toggle-switch:hover {
+    opacity: 0.85;
+  }
+
+  /* --- Button hover refinements (Apple-style: subtle opacity, no lifts) --- */
+  .card-action {
+    transition: opacity 0.15s ease;
+  }
+
+  .card-action:hover {
+    opacity: 0.85;
+  }
+
+  .card-action:active {
+    opacity: 0.65;
+  }
+
+  .primary-btn {
+    transition: opacity 0.15s ease;
+  }
+
+  .primary-btn:hover {
+    opacity: 0.85;
+  }
+
+  .secondary-btn {
+    transition: background 0.2s ease;
+  }
+
+  .secondary-btn:hover {
+    background: var(--color-separator);
+  }
+
+  /* Sort button hover */
+  .station-sort-btn {
+    transition: background 0.2s ease;
+  }
+
+  .station-sort-btn:hover {
+    background: var(--color-separator);
+  }
+
+  .station-sort-btn:active {
+    opacity: 0.7;
+  }
+
+  /* Map location banner refinement */
+  #map-location-banner {
+    border-radius: 12px;
+    box-shadow: var(--dt-shadow-md);
+    backdrop-filter: blur(var(--dt-blur));
+    -webkit-backdrop-filter: blur(var(--dt-blur));
+  }
 }
