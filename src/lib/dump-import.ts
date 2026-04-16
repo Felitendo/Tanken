@@ -4,7 +4,7 @@
  * Flow:
  * 1. Download `history.dump.gz` (~8 GB) from creativecommons.tankerkoenig.de
  * 2. Decompress the gzip layer
- * 3. Parse the PostgreSQL custom dump format in pure TypeScript (no pg_restore needed)
+ * 3. Parse the PostgreSQL dump (custom binary or plain SQL text format, no pg_restore needed)
  * 4. Extract the `gas_station` table COPY data → seed station cache
  * 5. Stream `gas_station_information_history` table → import price history
  *
@@ -79,19 +79,30 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
     safeDelete(tempGz);
     console.log('[Import] Phase 2/5: Dekompress abgeschlossen');
 
-    // ─── 3. Extract station table from PostgreSQL custom dump ────
-    console.log('[Import] Phase 3/5: pg_dump parsen');
-    progress('extract', 0, 'Lese Dump-Verzeichnis...');
+    // ─── 3. Extract station table ─────────────────────────────────
+    console.log('[Import] Phase 3/5: Dump parsen');
+    progress('extract', 0, 'Erkenne Dump-Format...');
     if (shouldAbort()) throw new Error('Abgebrochen');
 
-    const reader = new PgDumpReader(tempDump);
-    try {
+    const format = detectDumpFormat(tempDump);
+    console.log(`[Import] Erkanntes Dump-Format: ${format}`);
+
+    let stations: CachedStation[];
+    let priceColumns: string[] = [];
+    let priceLineIterator: Iterable<string[]> | null = null;
+    let readerCleanup: () => void = () => {};
+
+    if (format === 'custom') {
+      // ── Custom binary format (pg_dump -Fc) ──
+      progress('extract', 5, 'Lese Custom-Dump-Verzeichnis...');
+      const reader = new PgDumpReader(tempDump);
+      readerCleanup = () => reader.close();
+
       reader.parseHeader();
       console.log('[Import] Dump-Header gelesen');
 
       const tocEntries = reader.parseToc();
       console.log(`[Import] TOC: ${tocEntries.length} Einträge gefunden`);
-      // Log all TABLE DATA entries for debugging
       for (const e of tocEntries) {
         if (e.desc === 'TABLE DATA') {
           console.log(`[Import]   TABLE DATA: "${e.tag}" offset=${e.dataOffset} copyStmt=${e.copyStmt ? 'ja' : 'nein'}`);
@@ -99,7 +110,7 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
       }
       progress('extract', 10, `${tocEntries.length} Einträge im Dump, suche Stationen...`);
 
-      // Find the gas_station TABLE DATA entry
+      // Find station table
       let stationEntry = tocEntries.find(
         e => e.desc === 'TABLE DATA' && /^gas_station$/i.test(e.tag || ''),
       );
@@ -108,32 +119,81 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
           e => e.desc === 'TABLE DATA' && /\bstation\b/i.test(e.tag || '') && !/history|price|info/i.test(e.tag || ''),
         );
       }
-      if (!stationEntry) {
-        throw new Error('Stations-Tabelle nicht im Dump gefunden');
-      }
+      if (!stationEntry) throw new Error('Stations-Tabelle nicht im Dump gefunden');
 
       progress('extract', 20, `Tabelle "${stationEntry.tag}" gefunden, lese Daten...`);
       console.log(`[Import] Stationstabelle: "${stationEntry.tag}" bei offset ${stationEntry.dataOffset}`);
+      if (stationEntry.dataOffset < 0) throw new Error('Kein Daten-Offset für Stations-Tabelle vorhanden');
 
-      if (stationEntry.dataOffset < 0) {
-        throw new Error('Kein Daten-Offset für Stations-Tabelle vorhanden');
-      }
-
-      // Read and decompress the COPY data
       const copyData = reader.readTableData(stationEntry.dataOffset);
       console.log(`[Import] COPY-Daten gelesen: ${(copyData.length / 1024).toFixed(0)} KB`);
       progress('extract', 60, 'Daten extrahiert, parse Stationen...');
 
-      // Parse columns from COPY statement
-      const stations = parseStationsFromCopy(copyData, stationEntry.copyStmt);
-      console.log(`[Import] ${stations.length} Stationen geparst`);
+      stations = parseStationsFromCopy(copyData, stationEntry.copyStmt);
 
-      if (stations.length === 0) {
-        throw new Error('Keine Stationen im Dump gefunden');
+      // Prepare price history iterator
+      const historyEntry = tocEntries.find(
+        e => e.desc === 'TABLE DATA' && /gas_station_information_history/i.test(e.tag || ''),
+      );
+      if (historyEntry && historyEntry.dataOffset >= 0) {
+        priceColumns = parseCopyColumns(historyEntry.copyStmt);
+        priceLineIterator = reader.iterateTableLines(historyEntry.dataOffset);
+        console.log(`[Import] Preishistorie: "${historyEntry.tag}" bei offset ${historyEntry.dataOffset}`);
       }
 
-      progress('extract', 80, `${stations.length.toLocaleString('de-DE')} Stationen extrahiert`);
+    } else if (format === 'sql') {
+      // ── Plain SQL text format (pg_dump -Fp) ──
+      progress('extract', 5, 'Lese SQL-Text-Dump...');
+      const sqlReader = new PlainSqlReader(tempDump);
+      readerCleanup = () => sqlReader.close();
 
+      // Find and read station COPY block
+      progress('extract', 10, 'Suche Stations-Tabelle im SQL-Dump...');
+      const stationCopyStmt = sqlReader.findCopyBlock(/gas_station\b(?!.*(?:history|price|info))/i);
+      if (!stationCopyStmt) throw new Error('Stations-Tabelle nicht im SQL-Dump gefunden');
+
+      console.log(`[Import] Stations-COPY gefunden: ${stationCopyStmt.slice(0, 100)}`);
+      progress('extract', 30, 'Stations-Tabelle gefunden, lese Daten...');
+
+      const copyData = sqlReader.readCopyData();
+      console.log(`[Import] COPY-Daten gelesen: ${(copyData.length / 1024).toFixed(0)} KB`);
+      progress('extract', 60, 'Daten extrahiert, parse Stationen...');
+
+      stations = parseStationsFromCopy(copyData, stationCopyStmt);
+
+      // Find price history COPY block (continues scanning from current position)
+      const priceCopyStmt = sqlReader.findCopyBlock(/gas_station_information_history/i);
+      if (priceCopyStmt) {
+        priceColumns = parseCopyColumns(priceCopyStmt);
+        priceLineIterator = sqlReader.iterateCopyLines();
+        console.log(`[Import] Preishistorie-COPY gefunden: ${priceCopyStmt.slice(0, 100)}`);
+      }
+
+    } else if (format === 'tar') {
+      const preview = Buffer.alloc(100);
+      const fd = openSync(tempDump, 'r');
+      try { readSync(fd, preview, 0, 100, 0); } finally { closeSync(fd); }
+      throw new Error(
+        `Dump ist ein Tar-Archiv (pg_dump -Ft). Dieses Format wird nicht unterstützt. ` +
+        `Bitte den Dump im Custom- (-Fc) oder SQL-Text-Format (-Fp) bereitstellen.`
+      );
+    } else {
+      const preview = Buffer.alloc(200);
+      const fd = openSync(tempDump, 'r');
+      try { readSync(fd, preview, 0, 200, 0); } finally { closeSync(fd); }
+      const text = preview.toString('utf8').replace(/[^\x20-\x7e]/g, '.').slice(0, 150);
+      const hex = [...preview.subarray(0, 16)].map(b => b.toString(16).padStart(2, '0')).join(' ');
+      throw new Error(
+        `Unbekanntes Dump-Format. Erwartet: PostgreSQL Custom (PGDMP) oder SQL-Text. ` +
+        `Erste Bytes (hex): ${hex}. Inhalt: ${text}`
+      );
+    }
+
+    console.log(`[Import] ${stations.length} Stationen geparst`);
+    if (stations.length === 0) throw new Error('Keine Stationen im Dump gefunden');
+    progress('extract', 80, `${stations.length.toLocaleString('de-DE')} Stationen extrahiert`);
+
+    try {
       // ─── 4. Seed station cache ───────────────────────────────────
       console.log('[Import] Phase 4/5: Cache befüllen');
       progress('seed', 0, 'Befülle Cache...');
@@ -149,25 +209,17 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
       progress('prices', 0, 'Suche Preishistorie im Dump...');
       if (shouldAbort()) throw new Error('Abgebrochen');
 
-      // Find the history table
-      const historyEntry = tocEntries.find(
-        e => e.desc === 'TABLE DATA' && /gas_station_information_history/i.test(e.tag || ''),
-      );
-
-      if (historyEntry && historyEntry.dataOffset >= 0) {
-        console.log(`[Import] Preishistorie: "${historyEntry.tag}" bei offset ${historyEntry.dataOffset}`);
-
-        // Build station ID → metadata lookup from parsed stations
+      if (priceLineIterator && priceColumns.length > 0) {
         const stationMap = new Map<string, { name: string; brand: string; lat: number; lng: number }>();
         for (const s of stations) {
           stationMap.set(s.id, { name: s.name, brand: s.brand, lat: s.lat, lng: s.lng });
         }
 
-        progress('prices', 5, `Tabelle "${historyEntry.tag}" gefunden, lese Preise...`);
+        progress('prices', 5, 'Preishistorie gefunden, lese Preise...');
 
-        pricesImported = await importPriceHistory(
-          reader,
-          historyEntry,
+        pricesImported = await importPriceHistoryFromLines(
+          priceLineIterator,
+          priceColumns,
           stationMap,
           fuelType,
           (pct, count) => {
@@ -181,12 +233,11 @@ export async function importStationsFromDump(params: ImportParams): Promise<numb
       } else {
         console.log('[Import] Keine Preishistorie-Tabelle im Dump gefunden');
         progress('prices', 100, 'Keine Preishistorie im Dump gefunden (übersprungen)');
-        console.log('[Import] No gas_station_information_history table found in dump');
       }
 
       return stationsImported;
     } finally {
-      reader.close();
+      readerCleanup();
     }
   } finally {
     safeDelete(tempGz);
@@ -285,7 +336,13 @@ class PgDumpReader {
   /** Parse the dump file header. Must be called first. */
   parseHeader(): void {
     const magic = this.readBytes(5).toString('ascii');
-    if (magic !== 'PGDMP') throw new Error('Keine PostgreSQL-Dump-Datei');
+    if (magic !== 'PGDMP') {
+      const hexStr = [...Buffer.from(magic, 'ascii')].map(b => b.toString(16).padStart(2, '0')).join(' ');
+      throw new Error(
+        `Keine PostgreSQL-Custom-Dump-Datei (erwartet: PGDMP, gefunden: ${hexStr} "${magic}"). ` +
+        `Das Dump-Format hat sich möglicherweise geändert.`
+      );
+    }
 
     const vmaj = this.readByte();
     const vmin = this.readByte();
@@ -478,6 +535,94 @@ class PgDumpReader {
   }
 }
 
+// ─── Plain SQL Dump Reader ─────────────────────────────────────────
+
+class PlainSqlReader {
+  private fd: number;
+  private fileSize: number;
+  private pos = 0;
+  private buf = Buffer.alloc(128 * 1024); // 128 KB read buffer
+  private bufPos = 0;
+  private bufLen = 0;
+
+  constructor(filePath: string) {
+    this.fd = openSync(filePath, 'r');
+    this.fileSize = statSync(filePath).size;
+  }
+
+  close(): void {
+    try { closeSync(this.fd); } catch { /* ignore */ }
+  }
+
+  private fillBuffer(): boolean {
+    if (this.pos >= this.fileSize) return false;
+    const toRead = Math.min(this.buf.length, this.fileSize - this.pos);
+    this.bufLen = readSync(this.fd, this.buf, 0, toRead, this.pos);
+    this.bufPos = 0;
+    this.pos += this.bufLen;
+    return this.bufLen > 0;
+  }
+
+  readLine(): string | null {
+    const parts: Buffer[] = [];
+    for (;;) {
+      if (this.bufPos >= this.bufLen) {
+        if (!this.fillBuffer()) {
+          return parts.length > 0 ? Buffer.concat(parts).toString('utf8') : null;
+        }
+      }
+
+      const start = this.bufPos;
+      while (this.bufPos < this.bufLen) {
+        if (this.buf[this.bufPos] === 0x0a) { // \n
+          parts.push(this.buf.subarray(start, this.bufPos));
+          this.bufPos++;
+          return Buffer.concat(parts).toString('utf8');
+        }
+        this.bufPos++;
+      }
+      // No newline found yet — save what we have and refill
+      parts.push(Buffer.from(this.buf.subarray(start, this.bufPos)));
+    }
+  }
+
+  findCopyBlock(tablePattern: RegExp): string | null {
+    for (;;) {
+      const line = this.readLine();
+      if (line === null) return null;
+      if (line.startsWith('COPY ') && line.includes('FROM stdin') && tablePattern.test(line)) {
+        return line;
+      }
+    }
+  }
+
+  readCopyData(): string {
+    const chunks: string[] = [];
+    for (;;) {
+      const line = this.readLine();
+      if (line === null || line === '\\.') break;
+      chunks.push(line);
+    }
+    return chunks.join('\n');
+  }
+
+  *iterateCopyLines(): Generator<string[], void, void> {
+    const BATCH = 10_000;
+    let batch: string[] = [];
+    for (;;) {
+      const line = this.readLine();
+      if (line === null || line === '\\.') break;
+      if (!line) continue;
+      batch.push(line);
+      if (batch.length >= BATCH) {
+        yield batch;
+        batch = [];
+      }
+    }
+    if (batch.length > 0) yield batch;
+  }
+}
+
 // ─── COPY data parsing ──────────────────────────────────────────────
 
 /** Parse the COPY text data into CachedStation objects. */
@@ -565,17 +710,12 @@ function getDb(): { query: (sql: string, params?: unknown[]) => Promise<{ rows: 
 }
 
 /**
- * Stream the gas_station_information_history table from the dump and write
- * price entries to the station_prices table.
- *
- * The history table typically has columns:
- *   id, stid (station UUID), e5, e10, diesel, date, changed
- *
- * We filter by the configured fuel type and only import the last 30 days.
+ * Import price history from a generic line iterator.
+ * Works with both PgDumpReader (custom format) and PlainSqlReader (SQL text format).
  */
-async function importPriceHistory(
-  reader: PgDumpReader,
-  entry: TocEntry,
+async function importPriceHistoryFromLines(
+  lineIterator: Iterable<string[]>,
+  columns: string[],
   stationMap: Map<string, { name: string; brand: string; lat: number; lng: number }>,
   fuelType: string,
   onProgress: (pct: number, count: number) => void,
@@ -585,15 +725,6 @@ async function importPriceHistory(
   if (!db) {
     console.log('[Import] No database available, skipping price history import');
     return 0;
-  }
-
-  // Parse column names from COPY statement
-  let columns: string[] = [];
-  if (entry.copyStmt) {
-    const colMatch = entry.copyStmt.match(/\(([^)]+)\)/);
-    if (colMatch) {
-      columns = colMatch[1].split(',').map(c => c.trim());
-    }
   }
 
   if (columns.length === 0) {
@@ -618,7 +749,7 @@ async function importPriceHistory(
   // Only import prices from the last 30 days
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
-  const cutoffStr = cutoff.toISOString().slice(0, 10); // "2026-03-17" — safe date-only comparison
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
 
   const BATCH_SIZE = 5000;
   let batch: unknown[] = [];
@@ -641,8 +772,7 @@ async function importPriceHistory(
     batchIdx = 1;
   };
 
-  // Stream block-by-block using generator — only one block's lines in memory at a time
-  for (const lines of reader.iterateTableLines(entry.dataOffset)) {
+  for (const lines of lineIterator) {
     if (shouldAbort()) throw new Error('Abgebrochen');
     blocksProcessed++;
 
@@ -929,6 +1059,37 @@ function seedCache(stations: CachedStation[], fuelType: string, onProgress: (pct
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
+
+type DumpFormat = 'custom' | 'sql' | 'tar' | 'unknown';
+
+function detectDumpFormat(filePath: string): DumpFormat {
+  const fd = openSync(filePath, 'r');
+  try {
+    const header = Buffer.alloc(300);
+    const bytesRead = readSync(fd, header, 0, 300, 0);
+    if (bytesRead < 5) return 'unknown';
+
+    // PostgreSQL custom dump: starts with "PGDMP"
+    if (header.subarray(0, 5).toString('ascii') === 'PGDMP') return 'custom';
+
+    // Tar archive: "ustar" at offset 257
+    if (bytesRead >= 262 && header.subarray(257, 262).toString('ascii') === 'ustar') return 'tar';
+
+    // Plain SQL text: starts with --, SET, CREATE, or contains COPY ... FROM stdin
+    const text = header.subarray(0, Math.min(bytesRead, 200)).toString('utf8');
+    if (/^(--|SET |CREATE |COPY |\\connect)/m.test(text)) return 'sql';
+
+    return 'unknown';
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function parseCopyColumns(copyStmt: string | null): string[] {
+  if (!copyStmt) return [];
+  const colMatch = copyStmt.match(/\(([^)]+)\)/);
+  return colMatch ? colMatch[1].split(',').map(c => c.trim()) : [];
+}
 
 function safeDelete(path: string): void {
   if (existsSync(path)) {
