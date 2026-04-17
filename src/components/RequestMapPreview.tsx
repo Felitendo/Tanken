@@ -83,15 +83,8 @@ export function RequestMapPreview({
       let m: PreviewLeafletMap;
       try {
         m = L.map(el, {
-          zoomControl: false,
+          zoomControl: true,
           attributionControl: false,
-          dragging: false,
-          scrollWheelZoom: false,
-          doubleClickZoom: false,
-          boxZoom: false,
-          keyboard: false,
-          touchZoom: false,
-          tap: false,
         });
         // Initial view first — without this, later operations that project
         // coordinates (fitBounds, layer renders) throw "layerPointToLatLng".
@@ -141,7 +134,7 @@ export function RequestMapPreview({
   return (
     <div
       ref={containerRef}
-      role="img"
+      role="application"
       aria-label={ariaLabel ?? `Kartenvorschau: ${lat.toFixed(4)}, ${lng.toFixed(4)} · Radius ${radiusKm} km`}
       className={`${heightClass} w-full rounded-md border border-border overflow-hidden bg-muted/40`}
     />
