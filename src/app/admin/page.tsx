@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings,
   UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, ChevronRight,
-  RotateCcw, Play, Square, Zap, Download, Check, ArrowRight, ArrowLeft,
-  Lock,
+  RotateCcw, Play, Square, Zap, Check, ArrowRight, ArrowLeft,
+  Lock, Plus, X, Pencil, Inbox,
 } from 'lucide-react';
+import { LocationPicker, type LocationPickerValue } from '@/components/LocationPicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -50,7 +51,7 @@ interface AdminStatus {
 
 interface CountryScanStatus {
   scanning: boolean;
-  mode: 'price-dump' | 'discovery' | null;
+  mode: 'location-scan' | 'discovery' | null;
   progress: string | null;
   currentPoint: { lat: number; lng: number } | null;
   stationsScanned: number;
@@ -61,15 +62,6 @@ interface CountryScanStatus {
   avgCallSec: number | null;
   errors: string[];
   log: Array<{ time: string; message: string; type: 'info' | 'success' | 'error' | 'warn' }>;
-}
-
-interface ImportStatus {
-  phase: 'idle' | 'download' | 'decompress' | 'extract' | 'seed' | 'prices' | 'done' | 'error';
-  percent: number;
-  detail: string;
-  stationsImported: number;
-  pricesImported: number;
-  error: string | null;
 }
 
 interface SchedulerStatus {
@@ -86,16 +78,51 @@ interface SchedulerStatus {
   };
   de: CountryScanStatus;
   at: CountryScanStatus;
-  import: ImportStatus;
+}
+
+interface ScanLocationDto {
+  id: string;
+  name: string;
+  country: 'de' | 'at';
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  fuelType: 'diesel' | 'e5' | 'e10';
+  enabled: boolean;
+  createdBy: string | null;
+  sourceRequestId: string | null;
+  lastScanAt: string | null;
+  lastScanStationCount: number | null;
+  lastScanError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface LocationRequestDto {
+  id: string;
+  userId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  note: string | null;
+  status: 'pending' | 'approved' | 'denied';
+  adminNote: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  resultingLocationId: string | null;
+  createdAt: string;
+  user: { id: string; displayName: string | null; email: string | null; photoUrl: string | null; authProvider: string | null };
 }
 
 type FeedbackType = 'success' | 'error' | 'info';
-type SidebarSection = 'config' | 'oidc' | 'smtp' | 'scanner';
+type SidebarSection = 'config' | 'oidc' | 'smtp' | 'locations' | 'scanner';
 
 const SECTIONS: { id: SidebarSection; label: string; icon: typeof Settings; description: string }[] = [
   { id: 'config', label: 'Konfiguration', icon: Settings, description: 'API-Keys, Kraftstoff und Intervalle' },
   { id: 'oidc', label: 'Authentifizierung', icon: Shield, description: 'OIDC Single Sign-On' },
   { id: 'smtp', label: 'E-Mail', icon: Mail, description: 'SMTP-Server für Benachrichtigungen' },
+  { id: 'locations', label: 'Standorte', icon: MapPin, description: 'Scan-Standorte und Nutzer-Anfragen' },
   { id: 'scanner', label: 'Scanner', icon: Radio, description: 'Tankstellen-Scanner steuern' },
 ];
 
@@ -326,7 +353,7 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
         </div>
         {cs.scanning ? (
           <Badge variant="success">
-            {cs.mode === 'discovery' ? `Grid-Discovery ${cs.progress}` : `Preis-Update ${cs.progress}`}
+            {cs.mode === 'discovery' ? `Grid-Discovery ${cs.progress}` : `Standort-Scan ${cs.progress}`}
           </Badge>
         ) : cs.lastCompletedAt ? (
           <Badge>{fmtRelative(cs.lastCompletedAt)}</Badge>
@@ -363,7 +390,7 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
 
       {/* Stats grid */}
       <div className="grid grid-cols-4 gap-4">
-        <StatCell label={cs.mode === 'price-dump' ? 'Batches' : 'Grid'} value={cs.gridPoints ? cs.gridPoints.toLocaleString('de-DE') : '—'} />
+        <StatCell label={cs.mode === 'discovery' ? 'Grid' : 'Standorte'} value={cs.gridPoints ? cs.gridPoints.toLocaleString('de-DE') : '—'} />
         <StatCell label="Stationen" value={cs.stationsScanned ? cs.stationsScanned.toLocaleString('de-DE') : '—'} />
         <StatCell label="Dauer" value={cs.lastDurationSec ? fmtDuration(cs.lastDurationSec) : '—'} />
         <StatCell label="Ø Call" value={cs.avgCallSec ? `${cs.avgCallSec}s` : '—'} />
@@ -411,6 +438,449 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
             <p key={i} className="px-3 py-1 text-[11px] text-muted-foreground font-mono break-all border-b border-destructive/5 last:border-0">{err}</p>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Locations Panel ───────────────────────────────────────────────
+
+function LocationEditorModal({
+  initial,
+  onClose,
+  onSaved,
+  showFeedback,
+}: {
+  initial: ScanLocationDto | null;
+  onClose: () => void;
+  onSaved: () => void;
+  showFeedback: (msg: string, type: FeedbackType) => void;
+}) {
+  const isEdit = !!initial;
+  const [name, setName] = useState(initial?.name ?? '');
+  const [fuelType, setFuelType] = useState<'diesel' | 'e5' | 'e10'>(initial?.fuelType ?? 'diesel');
+  const [country, setCountry] = useState<'de' | 'at'>(initial?.country ?? 'de');
+  const [enabled, setEnabled] = useState(initial?.enabled ?? true);
+  const [value, setValue] = useState<LocationPickerValue>({
+    lat: initial?.lat ?? 52.52,
+    lng: initial?.lng ?? 13.405,
+    radiusKm: initial?.radiusKm ?? 10,
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!name.trim()) {
+      showFeedback('Name erforderlich.', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = {
+        name: name.trim(),
+        country,
+        fuelType,
+        lat: value.lat,
+        lng: value.lng,
+        radiusKm: value.radiusKm,
+        enabled,
+      };
+      const url = isEdit ? `/api/admin/scan-locations/${initial!.id}` : '/api/admin/scan-locations';
+      const method = isEdit ? 'PUT' : 'POST';
+      await api(url, { method, body: JSON.stringify(body) });
+      showFeedback(isEdit ? 'Standort aktualisiert.' : 'Standort angelegt.', 'success');
+      onSaved();
+      onClose();
+    } catch (err) {
+      showFeedback((err as Error).message || 'Speichern fehlgeschlagen.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="admin-settings-group max-h-[90vh] w-full max-w-2xl overflow-auto p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">{isEdit ? 'Standort bearbeiten' : 'Neuer Standort'}</h3>
+          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="space-y-4">
+          <SettingsRow label="Name">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Berlin-Mitte" maxLength={80} />
+          </SettingsRow>
+          <div className="grid grid-cols-2 gap-3">
+            <SettingsRow label="Land">
+              <Select value={country} onValueChange={(v) => setCountry(v as 'de' | 'at')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="de">Deutschland</SelectItem>
+                  <SelectItem value="at">Österreich</SelectItem>
+                </SelectContent>
+              </Select>
+            </SettingsRow>
+            <SettingsRow label="Kraftstoff">
+              <Select value={fuelType} onValueChange={(v) => setFuelType(v as 'diesel' | 'e5' | 'e10')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="diesel">Diesel</SelectItem>
+                  <SelectItem value="e5">Super E5</SelectItem>
+                  <SelectItem value="e10">Super E10</SelectItem>
+                </SelectContent>
+              </Select>
+            </SettingsRow>
+          </div>
+          <LocationPicker value={value} onChange={setValue} heightClass="h-72" />
+          <SettingsRow label="Aktiv" inline>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="peer sr-only" />
+              <div className="h-6 w-11 rounded-full bg-muted peer-checked:bg-emerald-500 transition-colors after:content-[''] after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:after:translate-x-5" />
+            </label>
+          </SettingsRow>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" className="admin-btn" onClick={onClose}>Abbrechen</Button>
+          <Button type="button" size="sm" className="admin-btn admin-btn-primary" onClick={save} disabled={saving}>
+            <Save className="h-3.5 w-3.5" />
+            {saving ? 'Speichert…' : 'Speichern'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RequesterAvatar({
+  user,
+}: {
+  user: { displayName: string | null; email: string | null; photoUrl: string | null };
+}) {
+  const initials = (user.displayName || user.email || '?').trim().charAt(0).toUpperCase() || '?';
+  if (user.photoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={user.photoUrl}
+        alt=""
+        className="h-9 w-9 rounded-full object-cover border border-border/60 shrink-0"
+      />
+    );
+  }
+  return (
+    <div className="h-9 w-9 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-sm font-semibold shrink-0 border border-border/60">
+      {initials}
+    </div>
+  );
+}
+
+function DenyDialog({
+  requestName,
+  onClose,
+  onConfirm,
+}: {
+  requestName: string;
+  onClose: () => void;
+  onConfirm: (note: string) => void;
+}) {
+  const [note, setNote] = useState('');
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="admin-settings-group w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold mb-2">„{requestName}" ablehnen</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Begründung wird dem Nutzer angezeigt. Pflichtfeld.
+        </p>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          rows={4}
+          maxLength={1000}
+          placeholder="z.B. Zu nah an einem bestehenden Standort."
+        />
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" className="admin-btn" onClick={onClose}>Abbrechen</Button>
+          <Button
+            type="button"
+            size="sm"
+            className="admin-btn admin-btn-danger"
+            disabled={!note.trim()}
+            onClick={() => onConfirm(note.trim())}
+          >
+            Ablehnen
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: FeedbackType) => void }) {
+  const [locations, setLocations] = useState<ScanLocationDto[] | null>(null);
+  const [pending, setPending] = useState<LocationRequestDto[] | null>(null);
+  const [editing, setEditing] = useState<ScanLocationDto | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [denying, setDenying] = useState<LocationRequestDto | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const loadLocations = useCallback(async () => {
+    try {
+      const data = await api<{ locations: ScanLocationDto[] }>('/api/admin/scan-locations');
+      setLocations(data.locations);
+    } catch (err) {
+      showFeedback((err as Error).message || 'Standorte konnten nicht geladen werden.', 'error');
+    }
+  }, [showFeedback]);
+
+  const loadPending = useCallback(async () => {
+    try {
+      const data = await api<{ requests: LocationRequestDto[] }>('/api/admin/location-requests?status=pending');
+      setPending(data.requests);
+    } catch (err) {
+      showFeedback((err as Error).message || 'Anfragen konnten nicht geladen werden.', 'error');
+    }
+  }, [showFeedback]);
+
+  useEffect(() => {
+    loadLocations();
+    loadPending();
+  }, [loadLocations, loadPending]);
+
+  async function toggleEnabled(loc: ScanLocationDto) {
+    setBusyId(loc.id);
+    try {
+      await api(`/api/admin/scan-locations/${loc.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: !loc.enabled }),
+      });
+      loadLocations();
+    } catch (err) {
+      showFeedback((err as Error).message || 'Änderung fehlgeschlagen.', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function scanNow(loc: ScanLocationDto) {
+    setBusyId(loc.id);
+    try {
+      const res = await api<{ stationCount: number }>(`/api/admin/scan-locations/${loc.id}/scan`, { method: 'POST' });
+      showFeedback(`Scan "${loc.name}": ${res.stationCount} Stationen.`, 'success');
+      loadLocations();
+    } catch (err) {
+      showFeedback((err as Error).message || 'Scan fehlgeschlagen.', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function deleteLocation(loc: ScanLocationDto) {
+    if (!confirm(`Standort „${loc.name}" wirklich löschen?`)) return;
+    setBusyId(loc.id);
+    try {
+      await api(`/api/admin/scan-locations/${loc.id}`, { method: 'DELETE' });
+      showFeedback('Standort gelöscht.', 'success');
+      loadLocations();
+    } catch (err) {
+      showFeedback((err as Error).message || 'Löschen fehlgeschlagen.', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function approve(req: LocationRequestDto) {
+    setBusyId(req.id);
+    try {
+      await api(`/api/admin/location-requests/${req.id}`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'approve' }),
+      });
+      showFeedback('Anfrage genehmigt. Standort wurde angelegt.', 'success');
+      loadPending();
+      loadLocations();
+    } catch (err) {
+      showFeedback((err as Error).message || 'Genehmigung fehlgeschlagen.', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function deny(req: LocationRequestDto, note: string) {
+    setBusyId(req.id);
+    try {
+      await api(`/api/admin/location-requests/${req.id}`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'deny', note }),
+      });
+      showFeedback('Anfrage abgelehnt.', 'success');
+      setDenying(null);
+      loadPending();
+    } catch (err) {
+      showFeedback((err as Error).message || 'Ablehnen fehlgeschlagen.', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-5 admin-stagger">
+      {/* Pending requests */}
+      {pending && pending.length > 0 && (
+        <SettingsGroup title={`OFFENE ANFRAGEN (${pending.length})`}>
+          <div className="divide-y divide-border/60">
+            {pending.map((req) => (
+              <div key={req.id} className="p-4 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <RequesterAvatar user={req.user} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{req.name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        <span className="font-medium text-foreground/80">
+                          {req.user.displayName || req.user.email || req.userId}
+                        </span>
+                        {req.user.email && req.user.displayName ? ` · ${req.user.email}` : ''}
+                        {' · '}
+                        {fmtRelative(req.createdAt)}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                        {req.lat.toFixed(4)}, {req.lng.toFixed(4)} · {req.radiusKm} km
+                      </p>
+                      {req.note && <p className="text-xs mt-1.5 text-foreground/80">„{req.note}"</p>}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      className="admin-btn admin-btn-success"
+                      onClick={() => approve(req)}
+                      disabled={busyId === req.id}
+                    >
+                      <Check className="h-3.5 w-3.5" /> Genehmigen
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="admin-btn admin-btn-danger"
+                      onClick={() => setDenying(req)}
+                      disabled={busyId === req.id}
+                    >
+                      <X className="h-3.5 w-3.5" /> Ablehnen
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </SettingsGroup>
+      )}
+
+      {pending && pending.length === 0 && (
+        <div className="admin-settings-group p-4 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+          <Inbox className="h-4 w-4" />
+          Keine offenen Anfragen.
+        </div>
+      )}
+
+      {/* Scan locations list */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="admin-section-header">SCAN-STANDORTE</p>
+          <Button size="sm" className="admin-btn admin-btn-primary" onClick={() => setCreating(true)}>
+            <Plus className="h-3.5 w-3.5" /> Neuer Standort
+          </Button>
+        </div>
+        <div className="admin-settings-group">
+          {locations === null ? (
+            <div className="p-6 text-center text-sm text-muted-foreground animate-pulse">Lade…</div>
+          ) : locations.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              Noch keine Standorte angelegt. „Neuer Standort" klicken, um zu starten.
+            </div>
+          ) : (
+            <div className="divide-y divide-border/60">
+              {locations.map((loc) => (
+                <div key={loc.id} className="p-4 flex items-center gap-3">
+                  <Flag country={loc.country} className="h-4 w-6 rounded-sm shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold truncate">{loc.name}</p>
+                      {!loc.enabled && <Badge variant="warning">Deaktiviert</Badge>}
+                      {loc.lastScanError && <Badge variant="destructive">Fehler</Badge>}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground font-mono">
+                      {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)} · {loc.radiusKm} km · {loc.fuelType}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {loc.lastScanAt
+                        ? `Letzter Scan ${fmtRelative(loc.lastScanAt)} · ${loc.lastScanStationCount ?? 0} Stationen`
+                        : 'Noch nicht gescannt'}
+                    </p>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="admin-btn"
+                      onClick={() => toggleEnabled(loc)}
+                      disabled={busyId === loc.id}
+                      title={loc.enabled ? 'Deaktivieren' : 'Aktivieren'}
+                    >
+                      {loc.enabled ? <Square className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="admin-btn"
+                      onClick={() => scanNow(loc)}
+                      disabled={busyId === loc.id}
+                      title="Jetzt scannen"
+                    >
+                      <Zap className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="admin-btn"
+                      onClick={() => setEditing(loc)}
+                      disabled={busyId === loc.id}
+                      title="Bearbeiten"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="admin-btn admin-btn-danger"
+                      onClick={() => deleteLocation(loc)}
+                      disabled={busyId === loc.id}
+                      title="Löschen"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {(creating || editing) && (
+        <LocationEditorModal
+          initial={editing}
+          onClose={() => { setCreating(false); setEditing(null); }}
+          onSaved={loadLocations}
+          showFeedback={showFeedback}
+        />
+      )}
+      {denying && (
+        <DenyDialog
+          requestName={denying.name}
+          onClose={() => setDenying(null)}
+          onConfirm={(note) => deny(denying, note)}
+        />
       )}
     </div>
   );
@@ -512,61 +982,6 @@ function ScannerConsole() {
 
         <div className="h-px bg-border/60 mb-5" />
 
-        {/* Dump Import */}
-        <div className="rounded-xl bg-muted/40 px-4 py-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium flex items-center gap-1.5">Tankerkönig-Dump <Flag country="de" className="inline h-3" /></p>
-              <p className="text-[11px] text-muted-foreground">
-                Stationsliste (~15.000) herunterladen und importieren
-              </p>
-            </div>
-            {status.import.phase !== 'idle' && status.import.phase !== 'done' && status.import.phase !== 'error' ? (
-              <Button
-                size="sm"
-                className="admin-btn admin-btn-danger"
-                onClick={() => handleAction('abortImport')}
-              >
-                <Square className="h-3.5 w-3.5" />
-                Abbrechen
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                className="admin-btn admin-btn-primary"
-                onClick={() => {
-                  if (confirm('Tankerkönig-Dump importieren?\n\nLädt history.dump.gz (~8 GB) herunter.\nBenötigt ~16 GB freien Speicher.\nDauer: je nach Verbindung 10–60 Min.'))
-                    handleAction('importDump');
-                }}
-                disabled={status.import.phase !== 'idle' && status.import.phase !== 'done' && status.import.phase !== 'error'}
-              >
-                <Download className="h-3.5 w-3.5" />
-                Import starten
-              </Button>
-            )}
-          </div>
-
-          {status.import.phase !== 'idle' && (
-            <div className="space-y-1.5">
-              {status.import.phase !== 'done' && status.import.phase !== 'error' && (
-                <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-                  <div
-                    className="h-full admin-progress-bar admin-progress-bar--active"
-                    style={{ width: `${status.import.percent}%` }}
-                  />
-                </div>
-              )}
-              <p className={`text-xs ${
-                status.import.phase === 'error' ? 'text-destructive' :
-                status.import.phase === 'done' ? 'text-emerald-600 dark:text-emerald-400' :
-                'text-muted-foreground'
-              }`}>
-                {status.import.detail}
-              </p>
-            </div>
-          )}
-        </div>
-
         {/* Cache info */}
         <div className="flex items-center justify-between mt-4">
           <p className="text-[11px] text-muted-foreground">
@@ -589,7 +1004,7 @@ function ScannerConsole() {
 
       {/* Per-country cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <CountryScannerCard cs={status.de} flag={<Flag country="de" className="h-5 rounded-sm" />} label="Deutschland" api={status.de.scanning ? 'Tankerkönig prices.php (1s Delay)' : 'Tankerkönig prices.php + On-Demand list.php'} />
+        <CountryScannerCard cs={status.de} flag={<Flag country="de" className="h-5 rounded-sm" />} label="Deutschland" api="Tankerkönig list.php (Admin-Standorte)" />
         <CountryScannerCard cs={status.at} flag={<Flag country="at" className="h-5 rounded-sm" />} label="Österreich" api="E-Control (5x parallel)" />
       </div>
     </div>
@@ -980,6 +1395,7 @@ function DashboardPanel({
   testEmailRecipient,
   onTestEmailRecipientChange,
   user,
+  showFeedback,
 }: {
   config: AdminConfig;
   onChange: (patch: Partial<AdminConfig>) => void;
@@ -993,6 +1409,7 @@ function DashboardPanel({
   testEmailRecipient: string;
   onTestEmailRecipientChange: (v: string) => void;
   user?: { username?: string; displayName?: string };
+  showFeedback: (msg: string, type: FeedbackType) => void;
 }) {
   const [activeSection, setActiveSection] = useState<SidebarSection>('config');
   const [animKey, setAnimKey] = useState(0);
@@ -1007,6 +1424,7 @@ function DashboardPanel({
     config: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
     oidc: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
     smtp: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+    locations: 'bg-pink-500/10 text-pink-600 dark:text-pink-400',
     scanner: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   };
 
@@ -1100,7 +1518,7 @@ function DashboardPanel({
                 {SECTIONS.find((s) => s.id === activeSection)?.description}
               </p>
             </div>
-            {activeSection !== 'scanner' && (
+            {activeSection !== 'scanner' && activeSection !== 'locations' && (
               <Button
                 type="button"
                 size="sm"
@@ -1125,6 +1543,9 @@ function DashboardPanel({
               )}
               {activeSection === 'smtp' && (
                 <SmtpSection config={config} onChange={onChange} onTestEmail={onTestEmail} testingEmail={testingEmail} testEmailRecipient={testEmailRecipient} onTestEmailRecipientChange={onTestEmailRecipientChange} />
+              )}
+              {activeSection === 'locations' && (
+                <LocationsPanel showFeedback={showFeedback} />
               )}
               {activeSection === 'scanner' && (
                 <ScannerConsole />
@@ -1351,6 +1772,7 @@ export default function AdminPage() {
           testEmailRecipient={testEmailRecipient}
           onTestEmailRecipientChange={setTestEmailRecipient}
           user={status?.user}
+          showFeedback={showFeedback}
         />
       )}
     </div>

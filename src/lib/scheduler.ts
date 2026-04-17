@@ -1,12 +1,11 @@
 import { loadRepoConfig } from '@/config';
-import { fetchStationsEControl, fetchPricesByIds } from '@/lib/measure';
+import { fetchStationsEControl, fetchStationsLive } from '@/lib/measure';
 import {
-  setCachedStations, getAllCachedLocations, countUniqueStations, getAllUniqueStations,
+  setCachedStations, getAllCachedLocations, countUniqueStations,
   persistPriceSnapshot, clearAllCache,
-  updateCachedPrices,
 } from '@/lib/station-cache';
 import { generateAustriaGrid } from '@/lib/grid';
-import { importStationsFromDump, type ImportStatus } from '@/lib/dump-import';
+import { listScanLocations, recordScanResult, getScanLocation } from '@/lib/location-store';
 
 export interface ScanLogEntry {
   time: string;
@@ -14,9 +13,12 @@ export interface ScanLogEntry {
   type: 'info' | 'success' | 'error' | 'warn';
 }
 
+export type DeScanMode = 'location-scan';
+export type AtScanMode = 'discovery';
+
 export interface CountryScanStatus {
   scanning: boolean;
-  mode: 'price-dump' | 'discovery' | null;
+  mode: 'location-scan' | 'discovery' | null;
   progress: string | null;
   currentPoint: { lat: number; lng: number } | null;
   stationsScanned: number;
@@ -45,7 +47,6 @@ export interface SchedulerStatus {
   cache: CacheStats;
   de: CountryScanStatus;
   at: CountryScanStatus;
-  import: ImportStatus;
 }
 
 const MAX_ERRORS = 20;
@@ -56,10 +57,12 @@ const AT_CONCURRENCY = 5;
 /** Small pause between AT batches to avoid hammering. */
 const AT_BATCH_DELAY_MS = 500;
 
-/** Delay between prices.php calls during price dump. Start aggressive (1s). */
-const PRICE_DUMP_DELAY_MS = 1_000;
-/** Max IDs per prices.php call. */
-const PRICE_DUMP_BATCH_SIZE = 10;
+/** Base delay between list.php calls for admin-curated DE locations. */
+const DE_LOC_DELAY_MS = 2_000;
+/** Upper cap for adaptive backoff. */
+const DE_LOC_MAX_DELAY_MS = 60_000;
+/** Retries per location on rate-limit / transient errors. */
+const DE_LOC_MAX_RETRIES = 3;
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -89,7 +92,7 @@ function fmtDuration(totalSeconds: number): string {
 
 class CountryScan {
   scanning = false;
-  mode: 'price-dump' | 'discovery' | null = null;
+  mode: CountryScanStatus['mode'] = null;
   progress: string | null = null;
   currentPoint: { lat: number; lng: number } | null = null;
   stationsScanned = 0;
@@ -168,15 +171,11 @@ class ScanScheduler {
   private _nextCycleAt: Date | null = null;
   private _waitingCancel: (() => void) | null = null;
 
-  private _importAbort = false;
-  private _importStatus: ImportStatus = { phase: 'idle', percent: 0, detail: '', stationsImported: 0, pricesImported: 0, error: null };
-
   readonly de = new CountryScan();
   readonly at = new CountryScan();
 
   start(): void {
     if (this.timer) return;
-    this._importAbort = false;
     this.de.addLog('Scheduler gestartet', 'info');
     this.at.addLog('Scheduler gestartet', 'info');
     console.log('[Scheduler] Starting scan scheduler');
@@ -187,7 +186,6 @@ class ScanScheduler {
   stop(): void {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
     if (this._gridTimer) { clearTimeout(this._gridTimer); this._gridTimer = null; }
-    // Don't abort imports — they run independently. Use abortDumpImport() explicitly.
     this.de.reset();
     this.at.reset();
     this._scanStartedAt = null;
@@ -220,61 +218,6 @@ class ScanScheduler {
     this.at.addLog('Cache geleert', 'warn');
   }
 
-  // ─── Dump Import ────────────────────────────────────────────────
-
-  /** Start importing stations from the official Tankerkönig PostgreSQL dump. */
-  triggerDumpImport(): boolean {
-    if (this._importStatus.phase !== 'idle' && this._importStatus.phase !== 'done' && this._importStatus.phase !== 'error') {
-      return false; // Already running
-    }
-
-    const config = loadRepoConfig();
-    const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
-    if (!apiKey) {
-      this._importStatus = { phase: 'error', percent: 0, detail: 'Kein API-Key konfiguriert', stationsImported: 0, pricesImported: 0, error: 'Kein API-Key' };
-      return false;
-    }
-
-    this._importAbort = false;
-    const fuelType = config.fuel_type || 'diesel';
-    this._importStatus = { phase: 'download', percent: 0, detail: 'Starte...', stationsImported: 0, pricesImported: 0, error: null };
-    this.de.addLog('Tankerkönig-Dump Import gestartet', 'info');
-    console.log(`[Import] triggerDumpImport: _importAbort=${this._importAbort}, apiKey=${apiKey ? 'set' : 'empty'}`);
-
-    importStationsFromDump({
-      apiKey,
-      fuelType,
-      onProgress: (status) => { this._importStatus = status; },
-      shouldAbort: () => {
-        if (this._importAbort) console.log('[Import] shouldAbort() → true');
-        return this._importAbort;
-      },
-    }).then((count) => {
-      const prices = this._importStatus.pricesImported;
-      const detail = prices > 0
-        ? `${count.toLocaleString('de-DE')} Stationen + ${prices.toLocaleString('de-DE')} Preise importiert`
-        : `${count.toLocaleString('de-DE')} Stationen importiert`;
-      this._importStatus = { phase: 'done', percent: 100, detail, stationsImported: count, pricesImported: prices, error: null };
-      this.de.addLog(`Dump-Import fertig: ${detail}`, 'success');
-      console.log(`[Import] Complete: ${count} stations, ${prices} prices imported`);
-    }).catch((err) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      const stack = err instanceof Error ? err.stack : undefined;
-      const lastPhase = this._importStatus.phase;
-      const detail = `Fehler in Phase "${lastPhase}": ${msg}`;
-      this._importStatus = { phase: 'error', percent: 0, detail, stationsImported: 0, pricesImported: 0, error: detail };
-      this.de.addLog(`Dump-Import Fehler (${lastPhase}): ${msg}`, 'error');
-      console.error(`[Import] Error in phase "${lastPhase}":`, msg);
-      if (stack) console.error(`[Import] Stack:`, stack);
-    });
-
-    return true;
-  }
-
-  abortDumpImport(): void {
-    this._importAbort = true;
-  }
-
   getStatus(): SchedulerStatus {
     const cachedLocations = getAllCachedLocations();
     let oldestTs = Infinity, newestTs = 0;
@@ -297,17 +240,47 @@ class ScanScheduler {
       },
       de: this.de.getStatus(),
       at: this.at.getStatus(),
-      import: { ...this._importStatus },
     };
+  }
+
+  /** Run a one-off scan for a single admin location. Used by the admin "Jetzt scannen" button. */
+  async scanSingleLocation(locationId: string): Promise<{ ok: boolean; stationCount: number; error?: string }> {
+    const loc = await getScanLocation(locationId);
+    if (!loc) return { ok: false, stationCount: 0, error: 'Standort nicht gefunden' };
+
+    const config = loadRepoConfig();
+    const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
+    if (!apiKey) return { ok: false, stationCount: 0, error: 'Kein API-Key konfiguriert' };
+
+    try {
+      const stations = await fetchStationsLive({
+        apiKey,
+        lat: loc.lat,
+        lng: loc.lng,
+        radiusKm: loc.radiusKm,
+        fuelType: loc.fuelType,
+      });
+      setCachedStations(loc.id, {
+        stations,
+        lat: loc.lat,
+        lng: loc.lng,
+        radiusKm: loc.radiusKm,
+        fuelType: loc.fuelType,
+      });
+      await recordScanResult(loc.id, { stationCount: stations.length, error: null });
+      this.de.addLog(`Manueller Scan "${loc.name}": ${stations.length} Stationen`, 'success');
+      return { ok: true, stationCount: stations.length };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await recordScanResult(loc.id, { stationCount: 0, error: msg });
+      this.de.addLog(`Manueller Scan "${loc.name}" fehlgeschlagen: ${msg}`, 'error');
+      return { ok: false, stationCount: 0, error: msg };
+    }
   }
 
   // ─── Main loop ──────────────────────────────────────────────────
 
   private async startScanLoop(): Promise<void> {
-    const config = loadRepoConfig();
-    const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
-    const fuelType = config.fuel_type || 'diesel';
-
     while (this.timer) {
       // Wait until 12:01
       const waitMs = this.msUntilNext1201();
@@ -327,14 +300,18 @@ class ScanScheduler {
       this._scanStartedAt = new Date();
       this._cycleCount++;
 
-      // Run DE price dump and AT grid scan in parallel
+      // Reload config per cycle so admin API-key changes take effect without restart
+      const config = loadRepoConfig();
+      const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
+      const defaultFuel = config.fuel_type || 'diesel';
+
       const tasks: Promise<void>[] = [];
       if (apiKey) {
-        tasks.push(this.runDePriceDump(apiKey, fuelType));
+        tasks.push(this.runDeLocationScan(apiKey));
       } else {
-        this.de.addLog('Kein API-Key — übersprungen', 'warn');
+        this.de.addLog('Kein API-Key — DE-Scan übersprungen', 'warn');
       }
-      tasks.push(this.runAtGridCycle(fuelType));
+      tasks.push(this.runAtGridCycle(defaultFuel));
 
       await Promise.all(tasks);
 
@@ -377,80 +354,116 @@ class ScanScheduler {
     return Math.max(5 * 60_000, target.getTime() - now.getTime());
   }
 
-  // ─── Germany: Price Dump (daily via prices.php) ────────────────
+  // ─── Germany: Admin-curated locations (via list.php) ────────────
 
-  private async runDePriceDump(apiKey: string, fuelType: string): Promise<void> {
+  private async runDeLocationScan(apiKey: string): Promise<void> {
     const cs = this.de;
     cs.scanning = true;
-    cs.mode = 'price-dump';
+    cs.mode = 'location-scan';
     cs.resetCycle();
     cs.callDurations = [];
 
-    // Extract DE station IDs from in-memory cache (restored from DB on startup)
-    const allStations = getAllUniqueStations();
-    const ids = allStations.filter(s => !s.id.startsWith('at-')).map(s => s.id);
-
-    if (ids.length === 0) {
-      cs.addLog('Keine DE-Stationen im Cache — Stationen per Dump importieren oder Karte öffnen', 'warn');
+    let locs;
+    try {
+      locs = await listScanLocations({ enabledOnly: true, country: 'de' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      cs.addError(`Standorte konnten nicht geladen werden: ${msg}`);
+      cs.addLog(`Standortliste fehlgeschlagen: ${msg}`, 'error');
       cs.reset();
       return;
     }
 
-    const totalBatches = Math.ceil(ids.length / PRICE_DUMP_BATCH_SIZE);
-    cs.gridPoints = totalBatches;
-    cs.addLog(`Preis-Update gestartet: ${ids.length.toLocaleString('de-DE')} Stationen (${totalBatches} Batches)`, 'info');
-    console.log(`[DE] Price dump: ${ids.length} stations in ${totalBatches} batches, fuel: ${fuelType}`);
+    if (locs.length === 0) {
+      cs.addLog('Keine aktiven DE-Scan-Standorte — im Admin-Panel hinzufügen', 'warn');
+      cs.reset();
+      return;
+    }
+
+    cs.gridPoints = locs.length;
+    cs.addLog(`Standort-Scan gestartet: ${locs.length} Standort${locs.length === 1 ? '' : 'e'}`, 'info');
+    console.log(`[DE] Location scan: ${locs.length} locations`);
 
     const startTime = Date.now();
-    const allPrices = new Map<string, { price: number | null; isOpen: boolean }>();
+    let delay = DE_LOC_DELAY_MS;
     let errors = 0;
-    let delay = PRICE_DUMP_DELAY_MS;
+    let totalStations = 0;
 
     try {
-      for (let b = 0; b < totalBatches; b++) {
+      for (let i = 0; i < locs.length; i++) {
         if (!this.timer) break;
-        const batch = ids.slice(b * PRICE_DUMP_BATCH_SIZE, (b + 1) * PRICE_DUMP_BATCH_SIZE);
-        cs.progress = `${b + 1}/${totalBatches}`;
-        cs.estimatedEndAt = new Date(Date.now() + (totalBatches - b - 1) * delay);
+        const loc = locs[i];
+        cs.progress = `${i + 1}/${locs.length}`;
+        cs.currentPoint = { lat: loc.lat, lng: loc.lng };
+        cs.estimatedEndAt = new Date(Date.now() + (locs.length - i - 1) * delay);
 
-        try {
-          const t0 = Date.now();
-          const prices = await fetchPricesByIds({ apiKey, ids: batch, fuelType });
-          cs.callDurations.push(Date.now() - t0);
+        let attempt = 0;
+        let succeeded = false;
+        let lastErr: string | null = null;
 
-          for (const [id, data] of prices) {
-            allPrices.set(id, data);
+        while (attempt <= DE_LOC_MAX_RETRIES && this.timer) {
+          if (attempt > 0) {
+            cs.addLog(`"${loc.name}": Retry ${attempt}/${DE_LOC_MAX_RETRIES} in ${(delay / 1000).toFixed(1)}s`, 'warn');
+            await sleep(delay);
+            if (!this.timer) break;
           }
+          try {
+            const t0 = Date.now();
+            const stations = await fetchStationsLive({
+              apiKey,
+              lat: loc.lat,
+              lng: loc.lng,
+              radiusKm: loc.radiusKm,
+              fuelType: loc.fuelType,
+            });
+            cs.callDurations.push(Date.now() - t0);
 
-          // Reset delay on success (adaptive rate limiting)
-          if (delay > PRICE_DUMP_DELAY_MS) {
-            delay = PRICE_DUMP_DELAY_MS;
+            setCachedStations(loc.id, {
+              stations,
+              lat: loc.lat,
+              lng: loc.lng,
+              radiusKm: loc.radiusKm,
+              fuelType: loc.fuelType,
+            });
+            cs.addStations(stations);
+            totalStations += stations.length;
+            await recordScanResult(loc.id, { stationCount: stations.length, error: null });
+
+            // Soft decay — prevent ping-pong against rate limit
+            delay = Math.max(DE_LOC_DELAY_MS, Math.round(delay * 0.8));
+            succeeded = true;
+            cs.addLog(`"${loc.name}": ${stations.length} Stationen`, 'info');
+            break;
+          } catch (err) {
+            lastErr = err instanceof Error ? err.message : String(err);
+            const isRateLimit = /\b(503|429)\b|Rate Limit|Service Temporarily/i.test(lastErr);
+            delay = Math.min(
+              isRateLimit ? Math.max(delay * 3, 10_000) : delay * 2,
+              DE_LOC_MAX_DELAY_MS,
+            );
+            attempt++;
           }
-        } catch (err) {
-          errors++;
-          const msg = `Batch ${b + 1}: ${err instanceof Error ? err.message : String(err)}`;
-          console.error(`[DE] ${msg}`);
-          cs.addError(msg);
-
-          // Back off on errors (double delay, max 30s)
-          delay = Math.min(delay * 2, 30_000);
-          cs.addLog(`Fehler, Delay erhöht auf ${delay / 1000}s`, 'warn');
         }
 
-        if (b < totalBatches - 1 && this.timer) await sleep(delay);
-      }
+        if (!succeeded && lastErr) {
+          errors++;
+          const msg = `"${loc.name}" nach ${DE_LOC_MAX_RETRIES} Retries: ${lastErr}`;
+          console.error(`[DE] ${msg}`);
+          cs.addError(msg);
+          cs.addLog(`"${loc.name}" übersprungen, Delay jetzt ${(delay / 1000).toFixed(1)}s`, 'warn');
+          await recordScanResult(loc.id, { stationCount: 0, error: lastErr }).catch(() => {});
+        }
 
-      // Update in-memory cache with new prices
-      const updated = updateCachedPrices(allPrices);
+        if (i < locs.length - 1 && this.timer) await sleep(delay);
+      }
 
       const dur = (Date.now() - startTime) / 1000;
       cs.lastDurationSec = Math.round(dur);
       cs.lastCompletedAt = new Date();
-      cs.addStationCount(allPrices.size);
 
       const errStr = errors > 0 ? `, ${errors} Fehler` : '';
-      cs.addLog(`Preis-Update fertig: ${allPrices.size.toLocaleString('de-DE')} Preise, ${updated.toLocaleString('de-DE')} Cache-Updates in ${fmtDuration(dur)}${errStr}`, 'success');
-      console.log(`[DE] Price dump complete: ${allPrices.size} prices, ${updated} cache updates in ${fmtDuration(dur)}`);
+      cs.addLog(`Standort-Scan fertig: ${totalStations.toLocaleString('de-DE')} Stationen aus ${locs.length} Standorten in ${fmtDuration(dur)}${errStr}`, 'success');
+      console.log(`[DE] Location scan complete: ${totalStations} stations across ${locs.length} locations in ${fmtDuration(dur)}`);
     } finally {
       cs.reset();
     }

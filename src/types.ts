@@ -28,13 +28,52 @@ export interface RepoAuthConfig {
   oidc: RepoOidcConfig;
 }
 
+export type ScanCountry = 'de' | 'at';
+
 export interface ScanLocation {
   id: string;
   name: string;
+  country: ScanCountry;
   lat: number;
   lng: number;
-  radius_km: number;
-  fuel_type: FuelType;
+  radiusKm: number;
+  fuelType: FuelType;
+  enabled: boolean;
+  createdBy: string | null;
+  sourceRequestId: string | null;
+  lastScanAt: string | null;
+  lastScanStationCount: number | null;
+  lastScanError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type LocationRequestStatus = 'pending' | 'approved' | 'denied';
+
+export interface LocationRequest {
+  id: string;
+  userId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  note: string | null;
+  status: LocationRequestStatus;
+  adminNote: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  resultingLocationId: string | null;
+  createdAt: string;
+}
+
+export interface LocationRequestWithUser extends LocationRequest {
+  user: {
+    id: string;
+    displayName: string | null;
+    email: string | null;
+    photoUrl: string | null;
+    authProvider: string | null;
+  };
 }
 
 export interface RepoConfig {
@@ -48,7 +87,6 @@ export interface RepoConfig {
   smtp?: RepoSmtpConfig;
   session_secret?: string;
   session_ttl_days?: number;
-  locations?: ScanLocation[];
 }
 
 export interface RuntimeConfig {

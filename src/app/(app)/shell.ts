@@ -176,6 +176,21 @@ export const APP_SHELL = `
     </div>
 
     <div class="section">
+      <div class="section-header" data-i18n="scanLocations">SCAN-STANDORTE</div>
+      <div class="card" id="user-requests-card">
+        <div id="user-requests-list"></div>
+        <button id="btn-request-location" class="card-row" style="width:100%;padding:14px 16px;background:transparent;border:none;cursor:pointer;color:var(--color-accent);font-size:15px;font-weight:500;border-top:1px solid var(--color-separator)">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="flex-shrink:0"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          <span data-i18n="requestLocation">Standort anfragen</span>
+        </button>
+      </div>
+      <div class="cloud-sync-hint" id="user-requests-login-hint" style="display:none">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-6h2v6zm0-8h-2V7h2v4z"/></svg>
+        <span data-i18n="requestsLoginHint">Anmelden, um neue Scan-Standorte anzufragen.</span>
+      </div>
+    </div>
+
+    <div class="section">
       <div class="section-header" data-i18n="appearance">DARSTELLUNG</div>
       <div class="card">
         <div class="settings-row">

@@ -145,6 +145,33 @@ const i18n = {
     minutesAgo: 'Min.',
     hoursAgo: 'Std.',
     justNow: 'gerade eben',
+    // Scan-Standorte
+    scanLocations: 'SCAN-STANDORTE',
+    requestLocation: 'Standort anfragen',
+    requestsLoginHint: 'Mit FeloID anmelden, um neue Scan-Standorte anzufragen.',
+    requestsOidcOnly: 'Standort-Anfragen nur mit FeloID-Anmeldung möglich.',
+    requestsEmpty: 'Noch keine Anfragen. Neuen Standort über den Button unten anfragen.',
+    requestPending: 'Ausstehend',
+    requestApproved: 'Genehmigt',
+    requestDenied: 'Abgelehnt',
+    requestSent: 'Anfrage gesendet',
+    requestSheetTitle: 'Neuen Scan-Standort anfragen',
+    requestName: 'Name',
+    requestNamePlaceholder: 'z.B. Mein Heimatort',
+    requestAddress: 'Adresse oder Ort',
+    requestAddressPlaceholder: 'Adresse oder Ort suchen…',
+    requestRadius: 'Radius',
+    requestWhy: 'Begründung (optional)',
+    requestWhyPlaceholder: 'Warum sollte hier gescannt werden?',
+    requestSubmit: 'Anfrage senden',
+    requestCancel: 'Abbrechen',
+    requestSending: 'Wird gesendet…',
+    requestFailed: 'Anfrage fehlgeschlagen',
+    requestNameRequired: 'Bitte einen Namen eingeben.',
+    requestLocationRequired: 'Bitte einen Ort auf der Karte wählen.',
+    requestTooMany: 'Zu viele offene Anfragen. Warte bitte auf Bearbeitung.',
+    requestDeniedReason: 'Begründung',
+    requestSearchNoResults: 'Keine Treffer',
   },
   en: {
     tabMap: 'Map',
@@ -279,6 +306,33 @@ const i18n = {
     minutesAgo: 'min ago',
     hoursAgo: 'h ago',
     justNow: 'just now',
+    // Scan locations
+    scanLocations: 'SCAN LOCATIONS',
+    requestLocation: 'Request location',
+    requestsLoginHint: 'Sign in with FeloID to request new scan locations.',
+    requestsOidcOnly: 'Location requests require a FeloID login.',
+    requestsEmpty: 'No requests yet. Tap the button below to request a new location.',
+    requestPending: 'Pending',
+    requestApproved: 'Approved',
+    requestDenied: 'Denied',
+    requestSent: 'Request sent',
+    requestSheetTitle: 'Request a new scan location',
+    requestName: 'Name',
+    requestNamePlaceholder: 'e.g. My hometown',
+    requestAddress: 'Address or place',
+    requestAddressPlaceholder: 'Search address or place…',
+    requestRadius: 'Radius',
+    requestWhy: 'Reason (optional)',
+    requestWhyPlaceholder: 'Why should this area be scanned?',
+    requestSubmit: 'Send request',
+    requestCancel: 'Cancel',
+    requestSending: 'Sending…',
+    requestFailed: 'Request failed',
+    requestNameRequired: 'Please enter a name.',
+    requestLocationRequired: 'Please pick a location on the map.',
+    requestTooMany: 'Too many pending requests. Please wait for review.',
+    requestDeniedReason: 'Reason',
+    requestSearchNoResults: 'No matches',
   }
 };
 
@@ -409,8 +463,10 @@ async function init() {
   setupAccountUi();
   setupStationSort();
   setupPullToRefresh();
+  setupUserRequests();
   initLocation();
   refreshAlertUi();
+  renderUserRequests();
   fetchAppVersion();
 }
 
@@ -519,6 +575,7 @@ function setupAccountUi() {
       state.user = null;
       document.body.classList.remove('logged-in');
       renderAccountUi();
+      renderUserRequests();
       showToast(t('loggedOut'));
       return;
     }
@@ -691,12 +748,339 @@ async function loadTabData(tab, loadId) {
       else await reloadStats();
     }
     if (_tabLoadId !== loadId) return;
-    if (tab === 'settings') await refreshAlertUi();
+    if (tab === 'settings') {
+      await refreshAlertUi();
+      renderUserRequests();
+    }
   } catch (e) { console.error('Tab data load error:', e); }
 }
 
 function initLocation() {
   browserGeolocation();
+}
+
+// ---------------------------------------------------------------------------
+// Scan-Standorte — user requests
+// ---------------------------------------------------------------------------
+
+function setupUserRequests() {
+  const btn = document.getElementById('btn-request-location');
+  if (btn && !btn._setup) {
+    btn._setup = true;
+    btn.addEventListener('click', () => {
+      if (!state.user) {
+        showToast(t('requestsLoginHint'));
+        return;
+      }
+      if (state.user.authProvider !== 'oidc') {
+        showToast(t('requestsOidcOnly'));
+        return;
+      }
+      haptic('light');
+      openLocationRequestSheet();
+    });
+  }
+}
+
+async function renderUserRequests() {
+  const card = document.getElementById('user-requests-card');
+  const hint = document.getElementById('user-requests-login-hint');
+  const list = document.getElementById('user-requests-list');
+  const btn = document.getElementById('btn-request-location');
+  if (!card || !hint || !list || !btn) return;
+
+  if (!state.user) {
+    card.style.display = 'none';
+    hint.style.display = '';
+    hint.querySelector('span')?.setAttribute('data-i18n', 'requestsLoginHint');
+    const span = hint.querySelector('span');
+    if (span) span.textContent = t('requestsLoginHint');
+    return;
+  }
+  if (state.user.authProvider !== 'oidc') {
+    card.style.display = 'none';
+    hint.style.display = '';
+    const span = hint.querySelector('span');
+    if (span) { span.setAttribute('data-i18n', 'requestsOidcOnly'); span.textContent = t('requestsOidcOnly'); }
+    return;
+  }
+  card.style.display = '';
+  hint.style.display = 'none';
+
+  let requests = [];
+  try {
+    const res = await api('/api/location-requests');
+    requests = Array.isArray(res.requests) ? res.requests : [];
+  } catch {
+    requests = [];
+  }
+
+  if (!requests.length) {
+    list.innerHTML = `<div style="padding:14px 16px;font-size:13px;color:var(--color-hint);text-align:center">${t('requestsEmpty')}</div>`;
+    return;
+  }
+
+  const badgeColors = {
+    pending: { bg: 'rgba(255,159,10,0.15)', fg: '#ff9f0a' },
+    approved: { bg: 'rgba(52,199,89,0.15)', fg: '#34c759' },
+    denied: { bg: 'rgba(255,59,48,0.15)', fg: '#ff3b30' },
+  };
+  const badgeLabels = {
+    pending: t('requestPending'),
+    approved: t('requestApproved'),
+    denied: t('requestDenied'),
+  };
+
+  list.innerHTML = requests.map((r) => {
+    const color = badgeColors[r.status] || badgeColors.pending;
+    const label = badgeLabels[r.status] || r.status;
+    const radius = Number(r.radiusKm || 0).toFixed(1);
+    const when = r.createdAt ? new Date(r.createdAt).toLocaleDateString(state.lang === 'en' ? 'en-GB' : 'de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+    const denyNote = r.status === 'denied' && r.adminNote
+      ? `<div style="margin-top:6px;padding:8px 10px;border-radius:8px;background:rgba(255,59,48,0.08);color:var(--color-text);font-size:12px;line-height:1.4"><span style="color:#ff3b30;font-weight:500">${t('requestDeniedReason')}:</span> ${escapeHtml(r.adminNote)}</div>`
+      : '';
+    return `
+      <div class="card-row" style="flex-direction:column;align-items:stretch;padding:12px 16px;gap:6px;border-bottom:1px solid var(--color-separator)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:15px;font-weight:500;color:var(--color-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.name || '')}</div>
+            <div style="font-size:12px;color:var(--color-hint);margin-top:2px">${Number(r.lat).toFixed(4)}, ${Number(r.lng).toFixed(4)} · ${radius} km${when ? ' · ' + when : ''}</div>
+          </div>
+          <span style="padding:3px 10px;border-radius:999px;background:${color.bg};color:${color.fg};font-size:11px;font-weight:600;letter-spacing:0.3px">${label}</span>
+        </div>
+        ${denyNote}
+      </div>`;
+  }).join('');
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function openLocationRequestSheet() {
+  const sheet = document.getElementById('bottom-sheet');
+  const body = document.getElementById('bottom-sheet-body');
+  if (!sheet || !body) return;
+
+  const initialLat = Number.isFinite(state.userLat) ? state.userLat : 51.1657;
+  const initialLng = Number.isFinite(state.userLng) ? state.userLng : 10.4515;
+  const initialRadius = 10;
+
+  const reqState = {
+    lat: initialLat,
+    lng: initialLng,
+    radiusKm: initialRadius,
+    map: null,
+    marker: null,
+    circle: null,
+    searchTimer: null,
+    sending: false,
+  };
+
+  body.innerHTML = `
+    <div style="padding:4px 4px 20px">
+      <div style="font-size:18px;font-weight:600;margin-bottom:16px;color:var(--color-text)">${t('requestSheetTitle')}</div>
+
+      <label style="display:block;font-size:12px;font-weight:500;color:var(--color-hint);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px">${t('requestName')}</label>
+      <input id="req-name" type="text" maxlength="80" placeholder="${t('requestNamePlaceholder')}" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--color-separator);background:var(--color-bg-secondary);color:var(--color-text);font-size:15px;margin-bottom:14px;box-sizing:border-box">
+
+      <label style="display:block;font-size:12px;font-weight:500;color:var(--color-hint);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px">${t('requestAddress')}</label>
+      <div style="position:relative;margin-bottom:12px">
+        <input id="req-search" type="text" placeholder="${t('requestAddressPlaceholder')}" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--color-separator);background:var(--color-bg-secondary);color:var(--color-text);font-size:15px;box-sizing:border-box">
+        <div id="req-search-results" style="position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--color-bg);border:1px solid var(--color-separator);border-radius:10px;max-height:200px;overflow-y:auto;z-index:10;display:none;box-shadow:0 4px 16px rgba(0,0,0,0.1)"></div>
+      </div>
+
+      <div id="req-map" style="width:100%;height:240px;border-radius:10px;overflow:hidden;border:1px solid var(--color-separator);margin-bottom:14px"></div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="font-size:12px;font-weight:500;color:var(--color-hint);text-transform:uppercase;letter-spacing:0.3px">${t('requestRadius')}</label>
+        <span id="req-radius-label" style="font-size:13px;font-weight:500;color:var(--color-text);font-variant-numeric:tabular-nums">${initialRadius.toFixed(1)} km</span>
+      </div>
+      <input id="req-radius" type="range" min="1" max="25" step="0.5" value="${initialRadius}" style="width:100%;margin-bottom:14px">
+
+      <label style="display:block;font-size:12px;font-weight:500;color:var(--color-hint);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px">${t('requestWhy')}</label>
+      <textarea id="req-note" rows="3" maxlength="500" placeholder="${t('requestWhyPlaceholder')}" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--color-separator);background:var(--color-bg-secondary);color:var(--color-text);font-size:15px;margin-bottom:16px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea>
+
+      <div style="display:flex;gap:10px">
+        <button id="req-cancel" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--color-separator);background:transparent;color:var(--color-text);font-size:15px;font-weight:500;cursor:pointer">${t('requestCancel')}</button>
+        <button id="req-submit" style="flex:2;padding:12px;border-radius:10px;border:none;background:var(--color-accent);color:var(--color-accent-text);font-size:15px;font-weight:600;cursor:pointer">${t('requestSubmit')}</button>
+      </div>
+    </div>
+  `;
+
+  if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
+
+  sheet.classList.remove('hidden');
+  const backdrop = sheet.querySelector('.bottom-sheet-backdrop');
+  const content = sheet.querySelector('.bottom-sheet-content');
+  content.style.transform = '';
+  content.classList.remove('dragging', 'snapping', 'expanded');
+  state.sheetExpanded = false;
+  const handleArea = document.getElementById('sheet-handle-area');
+
+  content.querySelector('.sheet-expand-btn')?.remove();
+  const expandBtn = document.createElement('button');
+  expandBtn.className = 'sheet-expand-btn';
+  updateExpandBtnIcon(expandBtn, false);
+  expandBtn.addEventListener('click', () => toggleSheetExpanded(content));
+  content.appendChild(expandBtn);
+
+  const closeSheet = () => {
+    if (reqState.map) { try { reqState.map.remove(); } catch {} reqState.map = null; }
+    state.sheetExpanded = false;
+    content.style.transform = '';
+    content.classList.remove('dragging', 'snapping', 'expanded');
+    content.querySelector('.sheet-expand-btn')?.remove();
+    content.querySelector('.sheet-desktop-close')?.remove();
+    backdrop.style.opacity = '';
+    sheet.classList.add('hidden');
+    backdrop.removeEventListener('click', closeSheet);
+    if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
+  };
+  backdrop.addEventListener('click', closeSheet);
+
+  if (window.matchMedia('(min-width: 900px)').matches) {
+    content.querySelector('.sheet-desktop-close')?.remove();
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'sheet-desktop-close';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.addEventListener('click', closeSheet);
+    content.prepend(closeBtn);
+  }
+
+  setupSheetDrag(content, handleArea, backdrop, closeSheet);
+
+  document.getElementById('req-cancel').addEventListener('click', closeSheet);
+
+  // Initialise Leaflet map
+  const mapEl = document.getElementById('req-map');
+  if (mapEl && window.L) {
+    const L = window.L;
+    const map = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView([reqState.lat, reqState.lng], 11);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+      subdomains: 'abcd',
+    }).addTo(map);
+    const marker = L.marker([reqState.lat, reqState.lng], { draggable: true }).addTo(map);
+    const circle = L.circle([reqState.lat, reqState.lng], {
+      radius: reqState.radiusKm * 1000,
+      color: '#007aff',
+      fillColor: '#007aff',
+      fillOpacity: 0.12,
+      weight: 2,
+    }).addTo(map);
+    reqState.map = map;
+    reqState.marker = marker;
+    reqState.circle = circle;
+
+    marker.on('dragend', () => {
+      const p = marker.getLatLng();
+      reqState.lat = p.lat;
+      reqState.lng = p.lng;
+      circle.setLatLng(p);
+    });
+    map.on('click', (e) => {
+      reqState.lat = e.latlng.lat;
+      reqState.lng = e.latlng.lng;
+      marker.setLatLng(e.latlng);
+      circle.setLatLng(e.latlng);
+    });
+
+    setTimeout(() => map.invalidateSize(), 200);
+  }
+
+  // Radius slider
+  const rSlider = document.getElementById('req-radius');
+  const rLabel = document.getElementById('req-radius-label');
+  rSlider.addEventListener('input', () => {
+    reqState.radiusKm = Number(rSlider.value);
+    rLabel.textContent = reqState.radiusKm.toFixed(1) + ' km';
+    if (reqState.circle) reqState.circle.setRadius(reqState.radiusKm * 1000);
+  });
+
+  // Address search
+  const searchInput = document.getElementById('req-search');
+  const searchResults = document.getElementById('req-search-results');
+  const runSearch = async (q) => {
+    if (q.length < 2) { searchResults.style.display = 'none'; searchResults.innerHTML = ''; return; }
+    try {
+      const res = await api(`/api/geocode?q=${encodeURIComponent(q)}`);
+      const results = Array.isArray(res.results) ? res.results : [];
+      if (!results.length) {
+        searchResults.innerHTML = `<div style="padding:10px 12px;font-size:13px;color:var(--color-hint)">${t('requestSearchNoResults')}</div>`;
+        searchResults.style.display = '';
+        return;
+      }
+      searchResults.innerHTML = results.map((r, i) => `
+        <button type="button" data-idx="${i}" class="req-search-hit" style="display:block;width:100%;text-align:left;padding:10px 12px;border:none;background:transparent;color:var(--color-text);font-size:13px;cursor:pointer;border-bottom:1px solid var(--color-separator);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.name)}</button>
+      `).join('');
+      searchResults.style.display = '';
+      searchResults.querySelectorAll('.req-search-hit').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.dataset.idx);
+          const hit = results[idx];
+          if (!hit) return;
+          reqState.lat = Number(hit.lat);
+          reqState.lng = Number(hit.lng);
+          if (reqState.marker) reqState.marker.setLatLng([reqState.lat, reqState.lng]);
+          if (reqState.circle) reqState.circle.setLatLng([reqState.lat, reqState.lng]);
+          if (reqState.map) reqState.map.setView([reqState.lat, reqState.lng], 12);
+          searchInput.value = hit.name;
+          searchResults.style.display = 'none';
+        });
+      });
+    } catch {
+      searchResults.style.display = 'none';
+    }
+  };
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim();
+    clearTimeout(reqState.searchTimer);
+    reqState.searchTimer = setTimeout(() => runSearch(q), 400);
+  });
+
+  // Submit
+  const submitBtn = document.getElementById('req-submit');
+  const nameInput = document.getElementById('req-name');
+  const noteInput = document.getElementById('req-note');
+  submitBtn.addEventListener('click', async () => {
+    if (reqState.sending) return;
+    const name = nameInput.value.trim();
+    if (!name) { showToast(t('requestNameRequired')); nameInput.focus(); return; }
+    if (!Number.isFinite(reqState.lat) || !Number.isFinite(reqState.lng)) {
+      showToast(t('requestLocationRequired'));
+      return;
+    }
+    reqState.sending = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = t('requestSending');
+    try {
+      await api('/api/location-requests', {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          lat: reqState.lat,
+          lng: reqState.lng,
+          radiusKm: reqState.radiusKm,
+          note: noteInput.value.trim() || undefined,
+        }),
+      });
+      showToast(t('requestSent'));
+      closeSheet();
+      renderUserRequests();
+    } catch (err) {
+      if (err && err.status === 429) showToast(t('requestTooMany'));
+      else showToast((err && err.message) || t('requestFailed'));
+      reqState.sending = false;
+      submitBtn.disabled = false;
+      submitBtn.textContent = t('requestSubmit');
+    }
+  });
 }
 
 function browserGeolocation() {

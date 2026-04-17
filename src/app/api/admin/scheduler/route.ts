@@ -33,16 +33,6 @@ export async function POST(request: NextRequest) {
     await scheduler.clearCache();
   } else if (action === 'triggerNow') {
     scheduler.triggerNow();
-  } else if (action === 'importDump') {
-    const started = scheduler.triggerDumpImport();
-    if (!started) {
-      return NextResponse.json(
-        { error: 'Import läuft bereits oder kein API-Key konfiguriert.' },
-        { status: 409 },
-      );
-    }
-  } else if (action === 'abortImport') {
-    scheduler.abortDumpImport();
   } else {
     return NextResponse.json({ error: 'Ungültige Aktion.' }, { status: 400 });
   }
