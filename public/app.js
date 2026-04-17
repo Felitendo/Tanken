@@ -898,7 +898,7 @@ function openLocationRequestSheet() {
       <label style="display:block;font-size:12px;font-weight:500;color:var(--color-hint);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px">${t('requestAddress')}</label>
       <div style="position:relative;margin-bottom:12px">
         <input id="req-search" type="text" placeholder="${t('requestAddressPlaceholder')}" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--color-separator);background:var(--color-bg-secondary);color:var(--color-text);font-size:15px;box-sizing:border-box">
-        <div id="req-search-results" style="position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--color-bg);border:1px solid var(--color-separator);border-radius:10px;max-height:200px;overflow-y:auto;z-index:10;display:none;box-shadow:0 4px 16px rgba(0,0,0,0.1)"></div>
+        <div id="req-search-results" style="position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--color-bg);border:1px solid var(--color-separator);border-radius:10px;max-height:200px;overflow-y:auto;z-index:1000;display:none;box-shadow:0 4px 16px rgba(0,0,0,0.1)"></div>
       </div>
 
       <div id="req-map" style="width:100%;height:240px;border-radius:10px;overflow:hidden;border:1px solid var(--color-separator);margin-bottom:14px"></div>
