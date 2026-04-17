@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings,
   UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, ChevronRight,
@@ -497,57 +498,61 @@ function LocationEditorModal({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 py-8 sm:py-12" onClick={onClose}>
-      <div className="admin-settings-group w-full max-w-2xl p-5 my-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">{isEdit ? 'Standort bearbeiten' : 'Neuer Standort'}</h3>
-          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="space-y-4">
-          <SettingsRow label="Name">
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Berlin-Mitte" maxLength={80} />
-          </SettingsRow>
-          <div className="grid grid-cols-2 gap-3">
-            <SettingsRow label="Land">
-              <Select value={country} onValueChange={(v) => setCountry(v as 'de' | 'at')}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="de">Deutschland</SelectItem>
-                  <SelectItem value="at">Österreich</SelectItem>
-                </SelectContent>
-              </Select>
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50" onClick={onClose}>
+      <div className="flex min-h-full items-start justify-center p-4 py-8 sm:items-center sm:py-12">
+        <div className="admin-settings-group w-full max-w-2xl p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">{isEdit ? 'Standort bearbeiten' : 'Neuer Standort'}</h3>
+            <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="space-y-4">
+            <SettingsRow label="Name">
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Berlin-Mitte" maxLength={80} />
             </SettingsRow>
-            <SettingsRow label="Kraftstoff">
-              <Select value={fuelType} onValueChange={(v) => setFuelType(v as 'diesel' | 'e5' | 'e10')}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="diesel">Diesel</SelectItem>
-                  <SelectItem value="e5">Super E5</SelectItem>
-                  <SelectItem value="e10">Super E10</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <SettingsRow label="Land">
+                <Select value={country} onValueChange={(v) => setCountry(v as 'de' | 'at')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="de">Deutschland</SelectItem>
+                    <SelectItem value="at">Österreich</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingsRow>
+              <SettingsRow label="Kraftstoff">
+                <Select value={fuelType} onValueChange={(v) => setFuelType(v as 'diesel' | 'e5' | 'e10')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="diesel">Diesel</SelectItem>
+                    <SelectItem value="e5">Super E5</SelectItem>
+                    <SelectItem value="e10">Super E10</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingsRow>
+            </div>
+            <LocationPicker value={value} onChange={setValue} heightClass="h-72" />
+            <SettingsRow label="Aktiv" inline>
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="peer sr-only" />
+                <div className="h-6 w-11 rounded-full bg-muted peer-checked:bg-emerald-500 transition-colors after:content-[''] after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:after:translate-x-5" />
+              </label>
             </SettingsRow>
           </div>
-          <LocationPicker value={value} onChange={setValue} heightClass="h-72" />
-          <SettingsRow label="Aktiv" inline>
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="peer sr-only" />
-              <div className="h-6 w-11 rounded-full bg-muted peer-checked:bg-emerald-500 transition-colors after:content-[''] after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:after:translate-x-5" />
-            </label>
-          </SettingsRow>
-        </div>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" className="admin-btn" onClick={onClose}>Abbrechen</Button>
-          <Button type="button" size="sm" className="admin-btn admin-btn-primary" onClick={save} disabled={saving}>
-            <Save className="h-3.5 w-3.5" />
-            {saving ? 'Speichert…' : 'Speichern'}
-          </Button>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" className="admin-btn" onClick={onClose}>Abbrechen</Button>
+            <Button type="button" size="sm" className="admin-btn admin-btn-primary" onClick={save} disabled={saving}>
+              <Save className="h-3.5 w-3.5" />
+              {saving ? 'Speichert…' : 'Speichern'}
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -584,35 +589,39 @@ function DenyDialog({
   onConfirm: (note: string) => void;
 }) {
   const [note, setNote] = useState('');
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="admin-settings-group w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold mb-2">„{requestName}" ablehnen</h3>
-        <p className="text-xs text-muted-foreground mb-3">
-          Begründung wird dem Nutzer angezeigt. Pflichtfeld.
-        </p>
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-          rows={4}
-          maxLength={1000}
-          placeholder="z.B. Zu nah an einem bestehenden Standort."
-        />
-        <div className="mt-4 flex justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" className="admin-btn" onClick={onClose}>Abbrechen</Button>
-          <Button
-            type="button"
-            size="sm"
-            className="admin-btn admin-btn-danger"
-            disabled={!note.trim()}
-            onClick={() => onConfirm(note.trim())}
-          >
-            Ablehnen
-          </Button>
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50" onClick={onClose}>
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="admin-settings-group w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+          <h3 className="text-lg font-semibold mb-2">„{requestName}" ablehnen</h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            Begründung wird dem Nutzer angezeigt. Pflichtfeld.
+          </p>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            rows={4}
+            maxLength={1000}
+            placeholder="z.B. Zu nah an einem bestehenden Standort."
+          />
+          <div className="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" className="admin-btn" onClick={onClose}>Abbrechen</Button>
+            <Button
+              type="button"
+              size="sm"
+              className="admin-btn admin-btn-danger"
+              disabled={!note.trim()}
+              onClick={() => onConfirm(note.trim())}
+            >
+              Ablehnen
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
