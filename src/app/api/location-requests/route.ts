@@ -15,7 +15,7 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(80),
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
-  radiusKm: z.coerce.number().min(1).max(25),
+  radiusKm: z.coerce.number().min(1).max(25).optional(),
   note: z.string().trim().max(500).optional().nullable(),
 });
 
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     name: parsed.data.name,
     lat: parsed.data.lat,
     lng: parsed.data.lng,
-    radiusKm: parsed.data.radiusKm,
+    radiusKm: 25,
     note: parsed.data.note ?? null,
   });
   return NextResponse.json({ request: created }, { status: 201 });

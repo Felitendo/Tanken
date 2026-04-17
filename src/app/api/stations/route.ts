@@ -27,9 +27,7 @@ export async function GET(request: NextRequest) {
   const lng = Number.isFinite(rawLng) && rawLng >= -180 && rawLng <= 180 ? rawLng : 10.4515;
   const fuelCandidate = request.nextUrl.searchParams.get('fuel');
   const fuel = fuelTypeSchema.safeParse(fuelCandidate).success ? fuelCandidate! : runtimeConfig.repoConfig.fuel_type;
-  const rad = Math.max(1, Math.min(25, Number.parseFloat(
-    request.nextUrl.searchParams.get('rad') ?? ''
-  ) || runtimeConfig.repoConfig.radius_km));
+  const rad = 25;
   const orsKey = runtimeConfig.orsApiKey;
 
   // If a specific location ID is requested, return its cached data

@@ -13,7 +13,7 @@ const createSchema = z.object({
   country: countrySchema.optional(),
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
-  radiusKm: z.coerce.number().min(1).max(25),
+  radiusKm: z.coerce.number().min(1).max(25).optional(),
   fuelType: fuelSchema.optional(),
   enabled: z.boolean().optional(),
 });
@@ -39,6 +39,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Ungültige Eingabe.', issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const location = await createScanLocation(parsed.data, user?.id ?? null);
+  const location = await createScanLocation({ ...parsed.data, radiusKm: 25 }, user?.id ?? null);
   return NextResponse.json({ location }, { status: 201 });
 }

@@ -43,12 +43,11 @@ export interface LocationPickerValue {
 interface Props {
   value: LocationPickerValue;
   onChange: (v: LocationPickerValue) => void;
-  radiusMin?: number;
-  radiusMax?: number;
-  showRadiusControl?: boolean;
   heightClass?: string;
   showSearch?: boolean;
 }
+
+const FIXED_RADIUS_KM = 25;
 
 interface GeocodeResult {
   name: string;
@@ -59,9 +58,6 @@ interface GeocodeResult {
 export function LocationPicker({
   value,
   onChange,
-  radiusMin = 1,
-  radiusMax = 25,
-  showRadiusControl = true,
   heightClass = 'h-64',
   showSearch = true,
 }: Props) {
@@ -99,7 +95,7 @@ export function LocationPicker({
 
     const marker = L.marker([value.lat, value.lng], { draggable: true }).addTo(map);
     const circle = L.circle([value.lat, value.lng], {
-      radius: value.radiusKm * 1000,
+      radius: FIXED_RADIUS_KM * 1000,
       color: '#007aff',
       fillColor: '#007aff',
       fillOpacity: 0.12,
@@ -109,13 +105,13 @@ export function LocationPicker({
     marker.on('dragend', () => {
       const p = marker.getLatLng();
       circle.setLatLng(p);
-      onChangeRef.current({ lat: p.lat, lng: p.lng, radiusKm: circle.getRadius() / 1000 });
+      onChangeRef.current({ lat: p.lat, lng: p.lng, radiusKm: FIXED_RADIUS_KM });
     });
 
     map.on('click', (e: { latlng: { lat: number; lng: number } }) => {
       marker.setLatLng(e.latlng);
       circle.setLatLng(e.latlng);
-      onChangeRef.current({ lat: e.latlng.lat, lng: e.latlng.lng, radiusKm: circle.getRadius() / 1000 });
+      onChangeRef.current({ lat: e.latlng.lat, lng: e.latlng.lng, radiusKm: FIXED_RADIUS_KM });
     });
 
     mapRef.current = map;
@@ -138,10 +134,10 @@ export function LocationPicker({
       updatePosition(value.lat, value.lng);
       mapRef.current.panTo([value.lat, value.lng]);
     }
-    if (Math.abs(circleRef.current.getRadius() - value.radiusKm * 1000) > 1) {
-      circleRef.current.setRadius(value.radiusKm * 1000);
+    if (Math.abs(circleRef.current.getRadius() - FIXED_RADIUS_KM * 1000) > 1) {
+      circleRef.current.setRadius(FIXED_RADIUS_KM * 1000);
     }
-  }, [value.lat, value.lng, value.radiusKm, updatePosition]);
+  }, [value.lat, value.lng, updatePosition]);
 
   useEffect(() => {
     const q = query.trim();
@@ -175,7 +171,7 @@ export function LocationPicker({
   }, [query]);
 
   function pickResult(r: GeocodeResult) {
-    onChange({ lat: r.lat, lng: r.lng, radiusKm: value.radiusKm });
+    onChange({ lat: r.lat, lng: r.lng, radiusKm: FIXED_RADIUS_KM });
     if (mapRef.current) mapRef.current.setView([r.lat, r.lng], 12);
     setResults([]);
     setQuery(r.name);
@@ -186,7 +182,7 @@ export function LocationPicker({
       {showSearch && (
         <div className="relative">
           <div className="relative">
-            <svg viewBox="0 0 24 24" width="16" height="16" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" fill="currentColor">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" fill="currentColor">
               <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
             </svg>
             <input
@@ -195,32 +191,45 @@ export function LocationPicker({
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
               placeholder="Adresse oder Ort suchen…"
+              aria-label="Adresse oder Ort suchen"
+              aria-autocomplete="list"
+              aria-controls="location-picker-results"
               className="w-full rounded-md border border-border bg-background pl-9 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
             {searching && (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin" />
+              <span
+                role="status"
+                aria-label="Suche läuft"
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin"
+              />
             )}
             {!searching && query && (
               <button
                 type="button"
+                aria-label="Suche löschen"
                 onClick={() => { setQuery(''); setResults([]); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 ×
               </button>
             )}
           </div>
-          {searchError && <p className="mt-1 text-xs text-destructive">{searchError}</p>}
+          {searchError && <p role="alert" className="mt-1 text-xs text-destructive">{searchError}</p>}
           {results.length > 0 && (
-            <ul className="absolute left-0 right-0 top-full z-[1000] mt-1 max-h-60 overflow-auto rounded-md border border-border bg-background text-sm shadow-lg">
+            <ul
+              id="location-picker-results"
+              role="listbox"
+              aria-label="Suchergebnisse"
+              className="absolute left-0 right-0 top-full z-[2000] mt-1 max-h-60 overflow-auto rounded-md border border-border bg-background text-sm shadow-lg"
+            >
               {results.map((r, i) => (
-                <li key={i}>
+                <li key={i} role="option" aria-selected="false">
                   <button
                     type="button"
                     onClick={() => pickResult(r)}
-                    className="flex w-full items-center gap-2 truncate px-3 py-2 text-left hover:bg-muted"
+                    className="flex w-full items-center gap-2 truncate px-3 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:bg-muted"
                   >
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" className="text-muted-foreground shrink-0">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" className="text-muted-foreground shrink-0">
                       <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
                     </svg>
                     <span className="truncate">{r.name}</span>
@@ -231,25 +240,13 @@ export function LocationPicker({
           )}
         </div>
       )}
-      <div ref={containerRef} className={`${heightClass} w-full rounded-md border border-border overflow-hidden`} />
-      {showRadiusControl && (
-        <div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-            <span>Radius</span>
-            <span className="font-mono font-medium text-foreground">{value.radiusKm.toFixed(1)} km</span>
-          </div>
-          <input
-            type="range"
-            min={radiusMin}
-            max={radiusMax}
-            step={0.5}
-            value={value.radiusKm}
-            onChange={(e) => onChange({ ...value, radiusKm: Number(e.target.value) })}
-            className="admin-range w-full"
-          />
-        </div>
-      )}
-      <div className="text-xs text-muted-foreground font-mono">
+      <div
+        ref={containerRef}
+        role="application"
+        aria-label="Kartenauswahl — Marker ziehen oder Karte anklicken"
+        className={`${heightClass} w-full rounded-md border border-border overflow-hidden`}
+      />
+      <div className="text-xs text-muted-foreground font-mono tabular-nums" aria-live="polite">
         {value.lat.toFixed(5)}, {value.lng.toFixed(5)}
       </div>
     </div>

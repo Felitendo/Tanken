@@ -40,7 +40,7 @@ export function createStores(config: RuntimeConfig): {
 
   const defaultSettings = (): UserSettings => ({
     fuelType: config.repoConfig.fuel_type,
-    radiusKm: config.repoConfig.radius_km,
+    radiusKm: 25,
     currentTab: 'map'
   });
 

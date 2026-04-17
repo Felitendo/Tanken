@@ -31,10 +31,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Anmeldung erforderlich.' }, { status: 401 });
   }
 
-  const q = new URL(request.url).searchParams.get('q')?.trim() ?? '';
+  const params = new URL(request.url).searchParams;
+  const q = params.get('q')?.trim() ?? '';
   if (q.length < 2) {
     return NextResponse.json({ results: [] });
   }
+  const langParam = params.get('lang');
+  const lang = langParam === 'en' ? 'en' : 'de';
 
   await throttle();
 
@@ -42,7 +45,7 @@ export async function GET(request: NextRequest) {
   url.searchParams.set('q', q);
   url.searchParams.set('format', 'json');
   url.searchParams.set('limit', '5');
-  url.searchParams.set('accept-language', 'de');
+  url.searchParams.set('accept-language', lang);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);

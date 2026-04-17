@@ -131,7 +131,7 @@ const defaultConfig: AdminConfig = {
   apiKey: '',
   orsApiKey: '',
   fuelType: 'diesel',
-  radiusKm: 10,
+  radiusKm: 25,
   refreshIntervalMinutes: 60,
   sessionSecret: '',
   thresholds: { goodBelowAvgCents: 3, okayBelowAvgCents: 1 },
@@ -465,7 +465,7 @@ function LocationEditorModal({
   const [value, setValue] = useState<LocationPickerValue>({
     lat: initial?.lat ?? 52.52,
     lng: initial?.lng ?? 13.405,
-    radiusKm: initial?.radiusKm ?? 25,
+    radiusKm: 25,
   });
   const [saving, setSaving] = useState(false);
 
@@ -482,7 +482,7 @@ function LocationEditorModal({
         fuelType,
         lat: value.lat,
         lng: value.lng,
-        radiusKm: value.radiusKm,
+        radiusKm: 25,
         enabled,
       };
       const url = isEdit ? `/api/admin/scan-locations/${initial!.id}` : '/api/admin/scan-locations';
@@ -754,7 +754,7 @@ function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: Fe
                         {fmtRelative(req.createdAt)}
                       </p>
                       <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
-                        {req.lat.toFixed(4)}, {req.lng.toFixed(4)} · {req.radiusKm} km
+                        {req.lat.toFixed(4)}, {req.lng.toFixed(4)}
                       </p>
                       {req.note && <p className="text-xs mt-1.5 text-foreground/80">„{req.note}"</p>}
                     </div>
@@ -819,7 +819,7 @@ function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: Fe
                       {loc.lastScanError && <Badge variant="destructive">Fehler</Badge>}
                     </div>
                     <p className="text-[11px] text-muted-foreground font-mono">
-                      {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)} · {loc.radiusKm} km · {loc.fuelType}
+                      {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)} · {loc.fuelType}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
                       {loc.lastScanAt
@@ -1081,12 +1081,6 @@ function AppConfigSection({
               <SelectItem value="e10">Super E10</SelectItem>
             </SelectContent>
           </Select>
-        </SettingsRow>
-        <SettingsRow label="Radius" inline>
-          <div className="flex items-center gap-2">
-            <Input type="number" min={1} max={25} value={config.radiusKm} onChange={(e) => onChange({ radiusKm: Number(e.target.value) || 10 })} className="w-20 text-right" />
-            <span className="text-sm text-muted-foreground">km</span>
-          </div>
         </SettingsRow>
         <SettingsRow label="Scan-Intervall" inline>
           <div className="flex items-center gap-2">

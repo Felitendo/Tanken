@@ -11,33 +11,33 @@ export const APP_SHELL = `
       <div id="map-search-wrapper">
         <div id="map-search-box">
           <svg class="map-search-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-          <input type="text" id="map-search-input" data-i18n-placeholder="searchPlaceholder" placeholder="Ort suchen…" autocomplete="off" />
-          <button id="map-search-clear" class="map-search-clear hidden" type="button">&times;</button>
+          <input type="text" id="map-search-input" data-i18n-placeholder="searchPlaceholder" data-i18n-aria-label="searchPlaceholder" aria-label="Ort suchen" placeholder="Ort suchen…" autocomplete="off" />
+          <button id="map-search-clear" class="map-search-clear hidden" type="button" aria-label="Suche löschen" data-i18n-aria-label="clearSearch">&times;</button>
         </div>
-        <div id="map-search-results" class="hidden"></div>
+        <div id="map-search-results" class="hidden" role="listbox" aria-label="Suchergebnisse"></div>
       </div>
-      <div id="map-location-banner" class="hidden">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+      <div id="map-location-banner" class="hidden" role="status" aria-live="polite">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" style="flex-shrink:0"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
         <span id="map-location-banner-text" data-i18n="locationBanner">Standort konnte nicht ermittelt werden. Bitte suche einen Ort.</span>
-        <button id="map-location-banner-close" type="button">&times;</button>
+        <button id="map-location-banner-close" type="button" aria-label="Banner schließen" data-i18n-aria-label="closeBanner">&times;</button>
       </div>
-      <button id="btn-my-location" class="map-fab" data-i18n-title="myLocation" title="Mein Standort">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+      <button id="btn-my-location" class="map-fab" type="button" data-i18n-title="myLocation" data-i18n-aria-label="myLocation" title="Mein Standort" aria-label="Mein Standort">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
       </button>
       <button id="btn-search-here" class="map-search-here" type="button">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
         <span data-i18n="searchHere">Hier suchen</span>
       </button>
-      <div id="map-loading" class="map-overlay">
-        <div class="spinner"></div>
+      <div id="map-loading" class="map-overlay" role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
         <span data-i18n="loadingStations">Tankstellen laden…</span>
       </div>
     </div>
     <div class="desktop-station-panel">
       <div class="station-sort-bar">
         <span class="station-sort-label" id="station-count"></span>
-        <button class="station-sort-btn" id="station-sort">
-          <svg id="sort-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/></svg>
+        <button type="button" class="station-sort-btn" id="station-sort" aria-label="Sortierung ändern">
+          <svg id="sort-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/></svg>
           <span id="sort-label"></span>
         </button>
       </div>
@@ -47,21 +47,21 @@ export const APP_SHELL = `
 
   <div class="tab-view" id="view-history">
     <div class="section">
-      <select id="history-location-picker" class="location-picker" style="display:none;width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--color-hint);background:var(--color-bg-secondary);color:var(--color-text);font-size:14px;margin-bottom:8px;box-sizing:border-box">
+      <select id="history-location-picker" class="location-picker" aria-label="Standort filtern" style="display:none;margin-bottom:8px">
         <option value="">Alle Standorte</option>
       </select>
-      <div style="display:flex;align-items:center;justify-content:space-between">
+      <div class="section-header-row">
         <div class="section-header" data-i18n="timePeriod" style="margin:0">ZEITRAUM</div>
-        <button id="btn-measure" class="chip" style="display:none;font-size:11px;padding:4px 10px;gap:4px" data-i18n="measureNow">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        <button id="btn-measure" type="button" class="chip measure-chip" style="display:none" data-i18n="measureNow">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
           Jetzt messen
         </button>
       </div>
-      <div class="chip-row">
-        <button class="chip active" data-days="7" data-i18n="days7">7 Tage</button>
-        <button class="chip" data-days="14" data-i18n="days14">14 Tage</button>
-        <button class="chip" data-days="30" data-i18n="days30">30 Tage</button>
-        <button class="chip" data-days="0" data-i18n="all">Alles</button>
+      <div class="chip-row" role="tablist" aria-label="Zeitraum">
+        <button type="button" class="chip active" data-days="7" data-i18n="days7">7 Tage</button>
+        <button type="button" class="chip" data-days="14" data-i18n="days14">14 Tage</button>
+        <button type="button" class="chip" data-days="30" data-i18n="days30">30 Tage</button>
+        <button type="button" class="chip" data-days="0" data-i18n="all">Alles</button>
       </div>
     </div>
     <div class="section">
@@ -80,7 +80,7 @@ export const APP_SHELL = `
 
   <div class="tab-view" id="view-stats">
     <div class="section" style="padding-bottom:0">
-      <select id="stats-location-picker" class="location-picker" style="display:none;width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--color-hint);background:var(--color-bg-secondary);color:var(--color-text);font-size:14px;box-sizing:border-box">
+      <select id="stats-location-picker" class="location-picker" aria-label="Standort filtern" style="display:none">
         <option value="">Alle Standorte</option>
       </select>
     </div>
@@ -99,7 +99,7 @@ export const APP_SHELL = `
               <div class="card-subtitle" id="account-subline">Login optional, zum Sync deiner Einstellungen.</div>
             </div>
           </div>
-          <button id="account-login-btn" class="card-action">Login</button>
+          <button type="button" id="account-login-btn" class="card-action">Login</button>
         </div>
       </div>
     </div>
@@ -111,70 +111,60 @@ export const APP_SHELL = `
 
     <div class="section">
       <div class="section-header"><span data-i18n="fuelType">KRAFTSTOFF</span><span class="sync-badge" data-sync-key="fuelType" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg class="sync-icon-idle" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg><svg class="sync-icon-spin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg><svg class="sync-icon-ok" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.09-5.09L16.5 10.5 10 17z"/></svg></span></div>
-      <div class="chip-row" id="fuel-chips">
-        <button class="chip" data-fuel="diesel">Diesel</button>
-        <button class="chip" data-fuel="e5">Super E5</button>
-        <button class="chip" data-fuel="e10">Super E10</button>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-header"><span data-i18n="searchRadius">SUCHRADIUS</span><span class="sync-badge" data-sync-key="radiusKm" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg class="sync-icon-idle" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg><svg class="sync-icon-spin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg><svg class="sync-icon-ok" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.09-5.09L16.5 10.5 10 17z"/></svg></span></div>
-      <div class="card">
-        <div class="slider-row">
-          <span id="radius-label">10 km</span>
-          <input type="range" id="radius-slider" min="1" max="25" value="10" class="slider" />
-        </div>
+      <div class="chip-row" id="fuel-chips" role="tablist" aria-label="Kraftstoff">
+        <button type="button" class="chip" data-fuel="diesel">Diesel</button>
+        <button type="button" class="chip" data-fuel="e5">Super E5</button>
+        <button type="button" class="chip" data-fuel="e10">Super E10</button>
       </div>
     </div>
 
     <div class="section">
       <div class="section-header"><span data-i18n="priceAlert">PREISALARM</span><span class="sync-badge" data-sync-key="alert" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg class="sync-icon-idle" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg><svg class="sync-icon-spin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg><svg class="sync-icon-ok" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.09-5.09L16.5 10.5 10 17z"/></svg></span></div>
       <div class="card">
-        <div class="card-row" style="padding: 12px 16px;">
+        <div class="card-row card-toggle-row">
           <div class="card-row-left">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="color:var(--color-hint);flex-shrink:0"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
-            <span style="font-size:15px;font-weight:500" data-i18n="notification">Benachrichtigung</span>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" style="color:var(--color-hint);flex-shrink:0"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+            <span class="settings-row-label" data-i18n="notification">Benachrichtigung</span>
           </div>
           <label class="toggle-switch">
-            <input type="checkbox" id="alert-toggle" />
+            <input type="checkbox" id="alert-toggle" aria-label="Preisalarm aktivieren" />
             <span class="toggle-track"></span>
           </label>
         </div>
-        <div id="alert-config" style="display:none;border-top:1px solid var(--color-hint);padding:16px">
-          <div style="margin-bottom:14px">
-            <div style="font-size:12px;font-weight:600;color:var(--color-hint);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px" data-i18n="notificationChannel">Benachrichtigungskanal</div>
-            <div id="alert-channel-picker" style="display:flex;border-radius:10px;background:var(--color-separator);padding:2px;gap:2px">
-              <button class="alert-ch-seg active" data-channel="ntfy">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        <div id="alert-config" class="alert-config-body" style="display:none">
+          <div class="alert-config-group">
+            <div class="alert-config-label" data-i18n="notificationChannel">Benachrichtigungskanal</div>
+            <div id="alert-channel-picker" class="alert-channel-picker" role="tablist">
+              <button class="alert-ch-seg active" type="button" role="tab" aria-selected="true" data-channel="ntfy">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
                 ntfy.sh
               </button>
-              <button class="alert-ch-seg" data-channel="email" id="alert-ch-email" style="display:none">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+              <button class="alert-ch-seg" type="button" role="tab" aria-selected="false" data-channel="email" id="alert-ch-email" style="display:none">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
                 E-Mail
               </button>
             </div>
           </div>
-          <div id="alert-ntfy-config" style="margin-bottom:14px">
-            <input type="text" id="alert-ntfy-topic" data-i18n-placeholder="ntfyTopicPlaceholder" placeholder="ntfy Topic (z.B. mein-tankalarm)" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--color-hint);background:var(--color-bg-secondary);color:var(--color-text);font-size:14px;box-sizing:border-box" />
-            <div style="font-size:11px;color:var(--color-hint);margin-top:4px" id="alert-ntfy-hint" data-i18n-html="ntfyHint">Installiere die <a href="https://ntfy.sh" target="_blank" style="color:var(--color-accent)">ntfy App</a> und abonniere dein Topic.</div>
+          <div id="alert-ntfy-config" class="alert-config-group">
+            <input type="text" id="alert-ntfy-topic" class="alert-input" data-i18n-placeholder="ntfyTopicPlaceholder" placeholder="ntfy Topic (z.B. mein-tankalarm)" aria-label="ntfy Topic" />
+            <div class="alert-input-hint" id="alert-ntfy-hint" data-i18n-html="ntfyHint">Installiere die <a href="https://ntfy.sh" target="_blank" rel="noopener" style="color:var(--color-accent)">ntfy App</a> und abonniere dein Topic.</div>
           </div>
-          <div id="alert-email-config" style="display:none;margin-bottom:14px">
-            <input type="email" id="alert-email-address" data-i18n-placeholder="emailPlaceholder" placeholder="E-Mail-Adresse" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--color-hint);background:var(--color-bg-secondary);color:var(--color-text);font-size:14px;box-sizing:border-box" />
-            <div style="font-size:11px;color:var(--color-hint);margin-top:4px" data-i18n="emailHint">Preisalarme werden an diese Adresse gesendet.</div>
+          <div id="alert-email-config" class="alert-config-group" style="display:none">
+            <input type="email" id="alert-email-address" class="alert-input" data-i18n-placeholder="emailPlaceholder" placeholder="E-Mail-Adresse" aria-label="E-Mail-Adresse" />
+            <div class="alert-input-hint" data-i18n="emailHint">Preisalarme werden an diese Adresse gesendet.</div>
           </div>
-          <div style="text-align:center;margin-bottom:12px;font-size:13px;color:var(--color-hint)" id="alert-ref-price"></div>
-          <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px">
-            <button id="alert-minus" style="width:40px;height:40px;border-radius:50%;border:none;background:var(--color-bg-secondary);color:var(--color-text);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center">−</button>
+          <div class="alert-ref-price" id="alert-ref-price"></div>
+          <div class="alert-price-row">
+            <button id="alert-minus" type="button" class="alert-step-btn" aria-label="Schwellenwert verringern">−</button>
             <div style="text-align:center">
-              <div id="alert-price-display" style="font-size:32px;font-weight:700;color:var(--color-text);letter-spacing:-0.5px">2,00€</div>
-              <div style="font-size:12px;color:var(--color-hint);margin-top:2px" data-i18n="threshold">Schwellenwert</div>
+              <div id="alert-price-display" class="alert-price-display" aria-live="polite">2,00€</div>
+              <div class="alert-price-caption" data-i18n="threshold">Schwellenwert</div>
             </div>
-            <button id="alert-plus" style="width:40px;height:40px;border-radius:50%;border:none;background:var(--color-bg-secondary);color:var(--color-text);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center">+</button>
+            <button id="alert-plus" type="button" class="alert-step-btn" aria-label="Schwellenwert erhöhen">+</button>
           </div>
-          <button id="alert-save" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--color-accent);color:var(--color-accent-text);font-size:15px;font-weight:600;cursor:pointer" data-i18n="saveAlarm">Alarm speichern</button>
-          <button id="alert-test" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--color-hint);background:transparent;color:var(--color-text);font-size:13px;font-weight:500;cursor:pointer;margin-top:8px" data-i18n="sendTestNotification">Test-Benachrichtigung senden</button>
-          <div id="alert-active-info" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--color-bg-secondary);font-size:13px;color:var(--color-hint);text-align:center"></div>
+          <button id="alert-save" type="button" class="alert-save-btn" data-i18n="saveAlarm">Alarm speichern</button>
+          <button id="alert-test" type="button" class="alert-test-btn" data-i18n="sendTestNotification">Test-Benachrichtigung senden</button>
+          <div id="alert-active-info" class="alert-active-info" style="display:none"></div>
         </div>
       </div>
     </div>
@@ -183,8 +173,8 @@ export const APP_SHELL = `
       <div class="section-header" data-i18n="scanLocations">SCAN-STANDORTE</div>
       <div class="card" id="user-requests-card">
         <div id="user-requests-list"></div>
-        <button id="btn-request-location" class="card-row" style="width:100%;padding:14px 16px;background:transparent;border:none;cursor:pointer;color:var(--color-accent);font-size:15px;font-weight:500;border-top:1px solid var(--color-separator)">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="flex-shrink:0"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        <button type="button" id="btn-request-location" class="card-row request-location-btn">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true" style="flex-shrink:0"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
           <span data-i18n="requestLocation">Standort anfragen</span>
         </button>
       </div>
@@ -239,10 +229,10 @@ export const APP_SHELL = `
         </div>
       </div>
       <div class="card about-card about-links-card">
-        <button class="about-row" id="about-contributors-toggle">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" class="about-row-icon"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+        <button type="button" class="about-row" id="about-contributors-toggle" aria-expanded="false" aria-controls="about-contributors-list">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" class="about-row-icon"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
           <span class="about-row-label" data-i18n="contributors">Mitwirkende</span>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="about-row-chevron about-contributors-chevron"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" class="about-row-chevron about-contributors-chevron"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
         </button>
         <div class="about-contributors-list" id="about-contributors-list">
           <a href="https://github.com/Felitendo" target="_blank" rel="noopener" class="about-contributor">
@@ -270,17 +260,17 @@ export const APP_SHELL = `
   </div>
 </div>
 
-<div id="bottom-sheet" class="bottom-sheet hidden">
+<div id="bottom-sheet" class="bottom-sheet hidden" role="dialog" aria-modal="true" aria-hidden="true">
   <div class="bottom-sheet-backdrop"></div>
   <div class="bottom-sheet-content">
-    <div class="bottom-sheet-handle-area" id="sheet-handle-area">
+    <div class="bottom-sheet-handle-area" id="sheet-handle-area" aria-hidden="true">
       <div class="bottom-sheet-handle"></div>
     </div>
     <div id="bottom-sheet-body"></div>
   </div>
 </div>
 
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <div id="pwa-popup" class="pwa-popup hidden">
   <div class="pwa-popup-backdrop"></div>
@@ -291,9 +281,9 @@ export const APP_SHELL = `
     <h2 class="pwa-popup-title" data-i18n="pwaTitle">Tanken installieren</h2>
     <p class="pwa-popup-desc" data-i18n="pwaDesc">Füge Tanken zu deinem Startbildschirm hinzu für schnelleren Zugriff und ein App-ähnliches Erlebnis.</p>
 
-    <div class="pwa-popup-tabs">
-      <button class="pwa-popup-tab active" data-pwa-tab="android">Android</button>
-      <button class="pwa-popup-tab" data-pwa-tab="ios">iOS</button>
+    <div class="pwa-popup-tabs" role="tablist" aria-label="Plattform">
+      <button type="button" class="pwa-popup-tab active" role="tab" aria-selected="true" data-pwa-tab="android">Android</button>
+      <button type="button" class="pwa-popup-tab" role="tab" aria-selected="false" data-pwa-tab="ios">iOS</button>
     </div>
 
     <div class="pwa-popup-instructions">
@@ -343,25 +333,25 @@ export const APP_SHELL = `
       </div>
     </div>
 
-    <button id="pwa-popup-ok" class="pwa-popup-btn">Okay</button>
+    <button type="button" id="pwa-popup-ok" class="pwa-popup-btn">Okay</button>
   </div>
 </div>
 
-<nav class="tab-bar">
-  <button class="tab-item active" data-tab="map">
-    <svg class="tab-icon" viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+<nav class="tab-bar" role="tablist" aria-label="Hauptnavigation">
+  <button type="button" class="tab-item active" role="tab" aria-selected="true" data-tab="map">
+    <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
     <span data-i18n="tabMap">Karte</span>
   </button>
-  <button class="tab-item" data-tab="history">
-    <svg class="tab-icon" viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+  <button type="button" class="tab-item" role="tab" aria-selected="false" data-tab="history">
+    <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
     <span data-i18n="tabHistory">Verlauf</span>
   </button>
-  <button class="tab-item" data-tab="stats">
-    <svg class="tab-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+  <button type="button" class="tab-item" role="tab" aria-selected="false" data-tab="stats">
+    <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
     <span>Stats</span>
   </button>
-  <button class="tab-item" data-tab="settings">
-    <svg class="tab-icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.611 3.611 0 0112 15.6z"/></svg>
+  <button type="button" class="tab-item" role="tab" aria-selected="false" data-tab="settings">
+    <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.611 3.611 0 0112 15.6z"/></svg>
     <span data-i18n="tabSettings">Einstellungen</span>
   </button>
 </nav>

@@ -3,7 +3,7 @@
   "ors_api_key": "",
   "session_secret": "CHANGE_ME_LONG_RANDOM_SECRET",
   "fuel_type": "diesel",
-  "radius_km": 10,
+  "radius_km": 25,
   "thresholds": { "good_below_avg_cents": 3, "okay_below_avg_cents": 1 },
   "auth": {
     "oidc": {

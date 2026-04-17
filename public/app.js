@@ -50,7 +50,6 @@ const i18n = {
     dayNames: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'],
     // Settings
     fuelType: 'KRAFTSTOFF',
-    searchRadius: 'SUCHRADIUS',
     location: 'STANDORT',
     priceAlert: 'PREISALARM',
     notification: 'Benachrichtigung',
@@ -160,7 +159,6 @@ const i18n = {
     requestNamePlaceholder: 'z.B. Mein Heimatort',
     requestAddress: 'Adresse oder Ort',
     requestAddressPlaceholder: 'Adresse oder Ort suchen…',
-    requestRadius: 'Radius',
     requestWhy: 'Begründung (optional)',
     requestWhyPlaceholder: 'Warum sollte hier gescannt werden?',
     requestSubmit: 'Anfrage senden',
@@ -220,7 +218,6 @@ const i18n = {
     oclock: '',
     dayNames: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     fuelType: 'FUEL TYPE',
-    searchRadius: 'SEARCH RADIUS',
     location: 'LOCATION',
     priceAlert: 'PRICE ALERT',
     notification: 'Notification',
@@ -324,7 +321,6 @@ const i18n = {
     requestNamePlaceholder: 'e.g. My hometown',
     requestAddress: 'Address or place',
     requestAddressPlaceholder: 'Search address or place…',
-    requestRadius: 'Radius',
     requestWhy: 'Reason (optional)',
     requestWhyPlaceholder: 'Why should this area be scanned?',
     requestSubmit: 'Send request',
@@ -356,6 +352,25 @@ function t(key) {
   if (lang && key in lang) return lang[key];
   if (key in i18n.de) return i18n.de[key];
   return key;
+}
+
+function getTileUrl(lang) {
+  return lang === 'en'
+    ? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+    : 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png';
+}
+
+function getTileOptions(lang) {
+  return lang === 'en'
+    ? { maxZoom: 19, attribution: '© OpenStreetMap' }
+    : { maxZoom: 19, attribution: '© OpenStreetMap · Deutschland', subdomains: 'abc' };
+}
+
+function refreshMapTiles() {
+  if (state.map && state.tileLayer) {
+    try { state.map.removeLayer(state.tileLayer); } catch {}
+    state.tileLayer = L.tileLayer(getTileUrl(state.lang), getTileOptions(state.lang)).addTo(state.map);
+  }
 }
 
 function applyLanguage() {
@@ -390,6 +405,8 @@ function applyLanguage() {
   document.querySelectorAll('[data-i18n-option]').forEach(el => {
     el.textContent = t(el.getAttribute('data-i18n-option'));
   });
+
+  refreshMapTiles();
 }
 
 const state = {
@@ -398,7 +415,7 @@ const state = {
   history: [],
   stats: null,
   fuelType: 'diesel',
-  radiusKm: 10,
+  radiusKm: 25,
   activeLocation: 'gps',
   userLat: null,
   userLng: null,
@@ -454,7 +471,7 @@ const haptic = (type = 'light') => {
 async function init() {
   state.config = await api('/api/config');
   state.fuelType = state.config.fuel_type;
-  state.radiusKm = state.config.radius_km;
+  state.radiusKm = 25;
   state.smtpConfigured = !!state.config.smtpConfigured;
 
   await refreshMe();
@@ -726,7 +743,11 @@ function switchTab(tab, { initial = false } = {}) {
   _tabLoadId++;
 
   // Immediate visual switch — no async blocking
-  document.querySelectorAll('.tab-item').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.tab-item').forEach(t => {
+    const active = t.dataset.tab === tab;
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
   document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + tab)?.classList.add('active');
 
@@ -840,7 +861,6 @@ async function renderUserRequests() {
   list.innerHTML = requests.map((r) => {
     const color = badgeColors[r.status] || badgeColors.pending;
     const label = badgeLabels[r.status] || r.status;
-    const radius = Number(r.radiusKm || 0).toFixed(1);
     const when = r.createdAt ? new Date(r.createdAt).toLocaleDateString(state.lang === 'en' ? 'en-GB' : 'de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
     const denyNote = r.status === 'denied' && r.adminNote
       ? `<div style="margin-top:6px;padding:8px 10px;border-radius:8px;background:rgba(255,59,48,0.08);color:var(--color-text);font-size:12px;line-height:1.4"><span style="color:#ff3b30;font-weight:500">${t('requestDeniedReason')}:</span> ${escapeHtml(r.adminNote)}</div>`
@@ -850,7 +870,7 @@ async function renderUserRequests() {
         <div style="display:flex;align-items:center;gap:10px">
           <div style="flex:1;min-width:0">
             <div style="font-size:15px;font-weight:500;color:var(--color-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.name || '')}</div>
-            <div style="font-size:12px;color:var(--color-hint);margin-top:2px">${Number(r.lat).toFixed(4)}, ${Number(r.lng).toFixed(4)} · ${radius} km${when ? ' · ' + when : ''}</div>
+            <div style="font-size:12px;color:var(--color-hint);margin-top:2px">${Number(r.lat).toFixed(4)}, ${Number(r.lng).toFixed(4)}${when ? ' · ' + when : ''}</div>
           </div>
           <span style="padding:3px 10px;border-radius:999px;background:${color.bg};color:${color.fg};font-size:11px;font-weight:600;letter-spacing:0.3px">${label}</span>
         </div>
@@ -898,16 +918,10 @@ function openLocationRequestSheet() {
       <label style="display:block;font-size:12px;font-weight:500;color:var(--color-hint);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px">${t('requestAddress')}</label>
       <div style="position:relative;margin-bottom:12px">
         <input id="req-search" type="text" placeholder="${t('requestAddressPlaceholder')}" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--color-separator);background:var(--color-bg-secondary);color:var(--color-text);font-size:15px;box-sizing:border-box">
-        <div id="req-search-results" style="position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--color-bg);border:1px solid var(--color-separator);border-radius:10px;max-height:200px;overflow-y:auto;z-index:1000;display:none;box-shadow:0 4px 16px rgba(0,0,0,0.1)"></div>
+        <div id="req-search-results" style="position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--color-bg);border:1px solid var(--color-separator);border-radius:10px;max-height:200px;overflow-y:auto;z-index:2000;display:none;box-shadow:0 4px 16px rgba(0,0,0,0.1)"></div>
       </div>
 
       <div id="req-map" style="width:100%;height:240px;border-radius:10px;overflow:hidden;border:1px solid var(--color-separator);margin-bottom:14px"></div>
-
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <label style="font-size:12px;font-weight:500;color:var(--color-hint);text-transform:uppercase;letter-spacing:0.3px">${t('requestRadius')}</label>
-        <span id="req-radius-label" style="font-size:13px;font-weight:500;color:var(--color-text);font-variant-numeric:tabular-nums">${initialRadius.toFixed(1)} km</span>
-      </div>
-      <input id="req-radius" type="range" min="1" max="25" step="0.5" value="${initialRadius}" style="width:100%;margin-bottom:14px">
 
       <label style="display:block;font-size:12px;font-weight:500;color:var(--color-hint);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px">${t('requestWhy')}</label>
       <textarea id="req-note" rows="3" maxlength="500" placeholder="${t('requestWhyPlaceholder')}" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--color-separator);background:var(--color-bg-secondary);color:var(--color-text);font-size:15px;margin-bottom:16px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea>
@@ -922,6 +936,7 @@ function openLocationRequestSheet() {
   if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
 
   sheet.classList.remove('hidden');
+  sheet.setAttribute('aria-hidden', 'false');
   const backdrop = sheet.querySelector('.bottom-sheet-backdrop');
   const content = sheet.querySelector('.bottom-sheet-content');
   content.style.transform = '';
@@ -945,6 +960,7 @@ function openLocationRequestSheet() {
     content.querySelector('.sheet-desktop-close')?.remove();
     backdrop.style.opacity = '';
     sheet.classList.add('hidden');
+    sheet.setAttribute('aria-hidden', 'true');
     backdrop.removeEventListener('click', closeSheet);
     if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
   };
@@ -968,10 +984,7 @@ function openLocationRequestSheet() {
   if (mapEl && window.L) {
     const L = window.L;
     const map = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView([reqState.lat, reqState.lng], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      subdomains: 'abc',
-    }).addTo(map);
+    L.tileLayer(getTileUrl(state.lang), getTileOptions(state.lang)).addTo(map);
     const marker = L.marker([reqState.lat, reqState.lng], { draggable: true }).addTo(map);
     const circle = L.circle([reqState.lat, reqState.lng], {
       radius: reqState.radiusKm * 1000,
@@ -1000,22 +1013,13 @@ function openLocationRequestSheet() {
     setTimeout(() => map.invalidateSize(), 200);
   }
 
-  // Radius slider
-  const rSlider = document.getElementById('req-radius');
-  const rLabel = document.getElementById('req-radius-label');
-  rSlider.addEventListener('input', () => {
-    reqState.radiusKm = Number(rSlider.value);
-    rLabel.textContent = reqState.radiusKm.toFixed(1) + ' km';
-    if (reqState.circle) reqState.circle.setRadius(reqState.radiusKm * 1000);
-  });
-
   // Address search
   const searchInput = document.getElementById('req-search');
   const searchResults = document.getElementById('req-search-results');
   const runSearch = async (q) => {
     if (q.length < 2) { searchResults.style.display = 'none'; searchResults.innerHTML = ''; return; }
     try {
-      const res = await api(`/api/geocode?q=${encodeURIComponent(q)}`);
+      const res = await api(`/api/geocode?q=${encodeURIComponent(q)}&lang=${encodeURIComponent(state.lang || 'de')}`);
       const results = Array.isArray(res.results) ? res.results : [];
       if (!results.length) {
         searchResults.innerHTML = `<div style="padding:10px 12px;font-size:13px;color:var(--color-hint)">${t('requestSearchNoResults')}</div>`;
@@ -1157,9 +1161,7 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
       tapHold: false
     }).setView([coords.lat, coords.lng], 12);
 
-    state.tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '© OpenStreetMap · Deutschland', subdomains: 'abc'
-    }).addTo(state.map);
+    state.tileLayer = L.tileLayer(getTileUrl(state.lang), getTileOptions(state.lang)).addTo(state.map);
 
     setupMapZoomGesture();
     setupMapSearch();
@@ -2002,6 +2004,7 @@ function showStationSheet(station) {
   if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
 
   sheet.classList.remove('hidden');
+  sheet.setAttribute('aria-hidden', 'false');
   const backdrop = sheet.querySelector('.bottom-sheet-backdrop');
   const content = sheet.querySelector('.bottom-sheet-content');
   content.style.transform = '';
@@ -2026,6 +2029,7 @@ function showStationSheet(station) {
     content.querySelector('.sheet-desktop-close')?.remove();
     backdrop.style.opacity = '';
     sheet.classList.add('hidden');
+    sheet.setAttribute('aria-hidden', 'true');
     backdrop.removeEventListener('click', closeSheet);
     if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
     if (state.defaultBounds) showResetViewBtn();
@@ -2855,27 +2859,6 @@ function setupSettings() {
     });
   });
 
-  const slider = document.getElementById('radius-slider');
-  const label = document.getElementById('radius-label');
-  slider.value = state.radiusKm;
-  label.textContent = state.radiusKm + ' km';
-  let lastRadiusHaptic = parseInt(slider.value, 10);
-  slider.addEventListener('input', () => {
-    label.textContent = slider.value + ' km';
-    const current = parseInt(slider.value, 10);
-    if (current !== lastRadiusHaptic) {
-      lastRadiusHaptic = current;
-      haptic('selection');
-    }
-  });
-  slider.addEventListener('change', async () => {
-    haptic('light');
-    state.radiusKm = parseInt(slider.value, 10);
-    state.loaded.map = false;
-    await persistStateSettings({ radiusKm: state.radiusKm });
-    if (state.currentTab === 'map') loadMapTab();
-  });
-
   initAlertUI();
 
   // Contributors collapsible
@@ -2890,10 +2873,12 @@ function setupSettings() {
       contribList.classList.add('open');
       if (chevron) chevron.classList.add('open');
     }
+    contribToggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
     contribToggle.addEventListener('click', () => {
       haptic('light');
       const isOpen = contribList.classList.toggle('open');
       if (chevron) chevron.classList.toggle('open', isOpen);
+      contribToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
       state.contributorsOpen = isOpen;
       persistStateSettings({ contributorsOpen: isOpen });
     });
@@ -3020,8 +3005,9 @@ function initAlertUI() {
     seg.addEventListener('click', () => {
       haptic('light');
       const ch = seg.dataset.channel;
-      channelSegs.forEach(s => s.classList.remove('active'));
+      channelSegs.forEach(s => { s.classList.remove('active'); s.setAttribute('aria-selected', 'false'); });
       seg.classList.add('active');
+      seg.setAttribute('aria-selected', 'true');
       state.alertChannel = ch;
       document.getElementById('alert-ntfy-config').style.display = ch === 'ntfy' ? 'block' : 'none';
       document.getElementById('alert-email-config').style.display = ch === 'email' ? 'block' : 'none';
@@ -3084,7 +3070,11 @@ async function refreshAlertUi() {
 
       // Restore channel picker UI
       const channelSegs = document.querySelectorAll('#alert-channel-picker .alert-ch-seg');
-      channelSegs.forEach(s => s.classList.toggle('active', s.dataset.channel === state.alertChannel));
+      channelSegs.forEach(s => {
+        const active = s.dataset.channel === state.alertChannel;
+        s.classList.toggle('active', active);
+        s.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
       document.getElementById('alert-ntfy-config').style.display = state.alertChannel === 'ntfy' ? 'block' : 'none';
       document.getElementById('alert-email-config').style.display = state.alertChannel === 'email' ? 'block' : 'none';
       const ntfyInput = document.getElementById('alert-ntfy-topic');
@@ -3402,17 +3392,13 @@ function loadFromLocal() {
 
 function applySettingsToState(settings = {}) {
   if (settings.fuelType) state.fuelType = settings.fuelType;
-  if (settings.radiusKm) state.radiusKm = parseInt(settings.radiusKm, 10);
   if (settings.activeLocation) state.activeLocation = settings.activeLocation;
 
   if (settings.theme) state.theme = settings.theme;
   if (settings.lang) state.lang = settings.lang;
   if (typeof settings.contributorsOpen === 'boolean') state.contributorsOpen = settings.contributorsOpen;
 
-  const slider = document.getElementById('radius-slider');
-  const label = document.getElementById('radius-label');
-  if (slider) slider.value = state.radiusKm;
-  if (label) label.textContent = state.radiusKm + ' km';
+  state.radiusKm = 25;
 
   applyTheme(state.theme);
   const themeSelect = document.getElementById('theme-picker');
@@ -3457,7 +3443,7 @@ function setSyncBadgeState(s, keys) {
 
 async function saveSettingsRemote() {
   // Theme is intentionally excluded — it stays device-local
-  const next = { fuelType: state.fuelType, radiusKm: state.radiusKm, activeLocation: state.activeLocation, lang: state.lang, contributorsOpen: state.contributorsOpen };
+  const next = { fuelType: state.fuelType, activeLocation: state.activeLocation, lang: state.lang, contributorsOpen: state.contributorsOpen };
   try { await api('/api/settings', { method: 'POST', body: JSON.stringify(next) }); } catch {}
 }
 
@@ -3465,7 +3451,6 @@ function saveSettingsLocal() {
   try {
     localStorage.setItem(localSettingsKey, JSON.stringify({
       fuelType: state.fuelType,
-      radiusKm: state.radiusKm,
       activeLocation: state.activeLocation,
       theme: state.theme,
       lang: state.lang,
@@ -3539,7 +3524,9 @@ if ('serviceWorker' in navigator) {
 
   function activateTab(name) {
     popup.querySelectorAll('.pwa-popup-tab').forEach(function(t) {
-      t.classList.toggle('active', t.getAttribute('data-pwa-tab') === name);
+      var active = t.getAttribute('data-pwa-tab') === name;
+      t.classList.toggle('active', active);
+      t.setAttribute('aria-selected', active ? 'true' : 'false');
     });
     popup.querySelectorAll('.pwa-popup-panel').forEach(function(p) {
       p.classList.toggle('active', p.getAttribute('data-pwa-panel') === name);

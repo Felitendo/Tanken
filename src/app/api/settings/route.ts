@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getRequestContext } from '@/lib/request-context';
-import { runtimeConfig, stores } from '@/lib/server-runtime';
+import { stores } from '@/lib/server-runtime';
 
 export const runtime = 'nodejs';
 
@@ -10,7 +10,6 @@ const themeSchema = z.enum(['auto', 'light', 'dark']);
 const settingsSchema = z
   .object({
     fuelType: fuelTypeSchema.optional(),
-    radiusKm: z.union([z.number(), z.string()]).optional(),
     currentTab: z.string().min(1).optional(),
     theme: themeSchema.optional(),
     activeLocation: z.string().min(1).optional(),
@@ -18,11 +17,6 @@ const settingsSchema = z
     contributorsOpen: z.boolean().optional()
   })
   .partial();
-
-function parseRadius(value: string | number | undefined, fallback: number): number {
-  const parsed = Number.parseFloat(String(value ?? fallback));
-  return Number.isFinite(parsed) ? Math.max(1, Math.min(25, Math.round(parsed))) : fallback;
-}
 
 export async function GET(request: NextRequest) {
   const { user } = await getRequestContext(request);
@@ -41,15 +35,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Ungültige Settings' }, { status: 400 });
   }
 
-  const nextSettings = { ...user.settings };
+  const nextSettings = { ...user.settings, radiusKm: 25 };
   const updates = parsed.data;
 
   if (updates.fuelType !== undefined) {
     nextSettings.fuelType = updates.fuelType;
-  }
-
-  if (updates.radiusKm !== undefined) {
-    nextSettings.radiusKm = parseRadius(updates.radiusKm, runtimeConfig.repoConfig.radius_km);
   }
 
   if (updates.currentTab) {

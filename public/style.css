@@ -57,6 +57,30 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* === Accessibility: Focus-visible === */
+:where(button, a, [role="button"], input, select, textarea):focus { outline: none; }
+
+:where(button, a, [role="button"]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+:where(input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* === Accessibility: Reduced motion === */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* === App Container === */
 #app {
   position: fixed;
@@ -325,6 +349,12 @@ body.logged-in .cloud-sync-hint {
   transition: width 0.3s, height 0.3s, opacity 0.3s;
 }
 
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 /* === Chips === */
 .chip-row {
   display: flex;
@@ -355,6 +385,12 @@ body.logged-in .cloud-sync-hint {
 .chip.active {
   background: var(--color-accent);
   color: var(--color-accent-text);
+}
+
+.chip.measure-chip {
+  font-size: 11px;
+  padding: 4px 10px;
+  gap: 4px;
 }
 
 /* === Map === */
@@ -457,9 +493,19 @@ body.logged-in .cloud-sync-hint {
   color: var(--color-hint);
   font-size: 20px;
   cursor: pointer;
-  padding: 0 2px;
   line-height: 1;
   flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.15s;
+}
+.map-search-clear:hover,
+.map-search-clear:focus-visible {
+  background: var(--color-bg-secondary);
 }
 
 .map-search-clear.hidden {
@@ -538,9 +584,21 @@ body.logged-in .cloud-sync-hint {
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
-  padding: 0 0 0 2px;
   flex-shrink: 0;
   opacity: 0.7;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+#map-location-banner-close:hover,
+#map-location-banner-close:focus-visible {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.08);
 }
 
 #map-location-banner-close:active {
@@ -1782,6 +1840,194 @@ body.logged-in .cloud-sync-hint {
 }
 .toggle-switch input:checked + .toggle-track { background: #34c759; }
 .toggle-switch input:checked + .toggle-track:before { transform: translateX(20px); }
+
+/* === Price Alert Config === */
+.alert-config-body {
+  border-top: 1px solid var(--color-hint);
+  padding: 16px;
+}
+
+.alert-config-group {
+  margin-bottom: 14px;
+}
+
+.alert-config-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-hint);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.alert-channel-picker {
+  display: flex;
+  border-radius: 10px;
+  background: var(--color-separator);
+  padding: 2px;
+  gap: 2px;
+}
+
+.alert-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-hint);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  font-size: 14px;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.alert-input:focus-visible {
+  border-color: var(--color-accent);
+  outline: none;
+}
+
+.alert-input-hint {
+  font-size: 11px;
+  color: var(--color-hint);
+  margin-top: 4px;
+}
+
+.alert-ref-price {
+  text-align: center;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--color-hint);
+}
+
+.alert-price-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.alert-step-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, transform 0.12s;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.alert-step-btn:hover {
+  background: var(--color-separator);
+}
+.alert-step-btn:active {
+  transform: scale(0.92);
+}
+
+.alert-price-display {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.alert-price-caption {
+  font-size: 12px;
+  color: var(--color-hint);
+  margin-top: 2px;
+}
+
+.alert-save-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.12s;
+}
+.alert-save-btn:hover { opacity: 0.9; }
+.alert-save-btn:active { transform: scale(0.98); }
+
+.alert-test-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--color-hint);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: background 0.15s;
+}
+.alert-test-btn:hover {
+  background: var(--color-bg-secondary);
+}
+
+.alert-active-info {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+  font-size: 13px;
+  color: var(--color-hint);
+  text-align: center;
+}
+
+.settings-row-label {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.card-toggle-row {
+  padding: 12px 16px;
+}
+
+/* === Location picker select === */
+.location-picker {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-hint);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  font-size: 14px;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.location-picker:focus-visible {
+  border-color: var(--color-accent);
+  outline: none;
+}
+
+.request-location-btn {
+  width: 100%;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-accent);
+  font-size: 15px;
+  font-weight: 500;
+  border-top: 1px solid var(--color-separator);
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.request-location-btn:hover {
+  background: var(--color-separator);
+}
 
 .account-card {
   display: grid;

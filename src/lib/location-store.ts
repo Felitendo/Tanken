@@ -92,9 +92,8 @@ function newId(prefix: 'loc' | 'req'): string {
   return `${prefix}-${crypto.randomBytes(8).toString('hex')}`;
 }
 
-function clampRadius(value: number): number {
-  if (!Number.isFinite(value)) return 10;
-  return Math.max(1, Math.min(25, Math.round(value * 10) / 10));
+function clampRadius(_value: number): number {
+  return 25;
 }
 
 export interface ScanLocationInput {

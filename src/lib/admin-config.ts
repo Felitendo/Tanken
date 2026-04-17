@@ -7,7 +7,7 @@ export const adminConfigSchema = z.object({
   apiKey: z.string().default(''),
   orsApiKey: z.string().default(''),
   fuelType: z.enum(['diesel', 'e5', 'e10']).default('diesel'),
-  radiusKm: z.coerce.number().min(1).max(25).default(10),
+  radiusKm: z.coerce.number().min(1).max(25).default(25),
   refreshIntervalMinutes: z.coerce.number().min(1).default(60),
   sessionSecret: z.string().optional().default(''),
   thresholds: z.object({
