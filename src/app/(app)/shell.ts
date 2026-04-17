@@ -170,7 +170,15 @@ export const APP_SHELL = `
     </div>
 
     <div class="section">
-      <div class="section-header" data-i18n="scanLocations">SCAN-STANDORTE</div>
+      <div class="section-header" data-i18n="historyLocations">STANDORTE MIT VERLAUFSDATEN</div>
+      <p class="section-hint" data-i18n="historyLocationsHint">
+        Für diese Standorte sammeln wir täglich Preise für Verlaufscharts. Den aktuellen Preis kannst du jederzeit für jeden beliebigen Ort auf der Karte abrufen.
+      </p>
+      <div class="card" id="history-locations-card">
+        <div id="history-locations-list" aria-live="polite"></div>
+      </div>
+
+      <div class="section-sub-header" data-i18n="myRequests">MEINE ANFRAGEN</div>
       <div class="card" id="user-requests-card">
         <div id="user-requests-list"></div>
         <button type="button" id="btn-request-location" class="card-row request-location-btn">

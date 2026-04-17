@@ -146,6 +146,10 @@ const i18n = {
     justNow: 'gerade eben',
     // Scan-Standorte
     scanLocations: 'SCAN-STANDORTE',
+    historyLocations: 'STANDORTE MIT VERLAUFSDATEN',
+    historyLocationsHint: 'Für diese Standorte sammeln wir täglich Preise für Verlaufscharts. Den aktuellen Preis kannst du jederzeit für jeden beliebigen Ort auf der Karte abrufen.',
+    historyLocationsEmpty: 'Noch keine Standorte mit Verlaufsdaten.',
+    myRequests: 'MEINE ANFRAGEN',
     requestLocation: 'Standort anfragen',
     requestsLoginHint: 'Mit FeloID anmelden, um neue Scan-Standorte anzufragen.',
     requestsOidcOnly: 'Standort-Anfragen nur mit FeloID-Anmeldung möglich.',
@@ -308,6 +312,10 @@ const i18n = {
     justNow: 'just now',
     // Scan locations
     scanLocations: 'SCAN LOCATIONS',
+    historyLocations: 'LOCATIONS WITH HISTORY DATA',
+    historyLocationsHint: 'We collect daily prices for these locations so you can see trends on the history charts. For the current price you can search any location on the map at any time.',
+    historyLocationsEmpty: 'No locations with history data yet.',
+    myRequests: 'MY REQUESTS',
     requestLocation: 'Request location',
     requestsLoginHint: 'Sign in with FeloID to request new scan locations.',
     requestsOidcOnly: 'Location requests require a FeloID login.',
@@ -472,6 +480,7 @@ async function init() {
   initLocation();
   refreshAlertUi();
   renderUserRequests();
+  renderHistoryLocations();
   fetchAppVersion();
 }
 
@@ -760,6 +769,7 @@ async function loadTabData(tab, loadId) {
     if (tab === 'settings') {
       await refreshAlertUi();
       renderUserRequests();
+      renderHistoryLocations();
     }
   } catch (e) { console.error('Tab data load error:', e); }
 }
@@ -789,6 +799,44 @@ function setupUserRequests() {
       openLocationRequestSheet();
     });
   }
+}
+
+const COUNTRY_FLAGS = { de: '🇩🇪', at: '🇦🇹' };
+
+async function renderHistoryLocations() {
+  const list = document.getElementById('history-locations-list');
+  if (!list) return;
+
+  let locations = [];
+  try {
+    const res = await api('/api/scan-locations');
+    locations = Array.isArray(res.locations) ? res.locations : [];
+  } catch {
+    locations = [];
+  }
+
+  if (!locations.length) {
+    list.innerHTML = `<div style="padding:14px 16px;font-size:13px;color:var(--color-hint);text-align:center">${t('historyLocationsEmpty')}</div>`;
+    return;
+  }
+
+  const sorted = locations.slice().sort((a, b) => {
+    if (a.country !== b.country) return a.country.localeCompare(b.country);
+    return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
+  });
+
+  list.innerHTML = sorted.map((loc) => {
+    const flag = COUNTRY_FLAGS[loc.country] || '';
+    const coords = `${Number(loc.lat).toFixed(3)}, ${Number(loc.lng).toFixed(3)}`;
+    return `
+      <div class="card-row" style="padding:12px 16px;gap:10px;border-bottom:1px solid var(--color-separator)">
+        <span aria-hidden="true" style="font-size:18px;line-height:1;flex-shrink:0">${flag}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:500;color:var(--color-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(loc.name || '')}</div>
+          <div style="font-size:11px;color:var(--color-hint);margin-top:2px;font-variant-numeric:tabular-nums">${coords}</div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
 async function renderUserRequests() {
