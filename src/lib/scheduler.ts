@@ -58,10 +58,10 @@ const AT_CONCURRENCY = 5;
 /** Small pause between AT batches to avoid hammering. */
 const AT_BATCH_DELAY_MS = 500;
 
-/** Base delay between list.php calls for admin-curated DE locations. */
-const DE_LOC_DELAY_MS = 2_000;
+/** Base delay between list.php calls for admin-curated DE locations (2.5 min). */
+const DE_LOC_DELAY_MS = 150_000;
 /** Upper cap for adaptive backoff. */
-const DE_LOC_MAX_DELAY_MS = 60_000;
+const DE_LOC_MAX_DELAY_MS = 600_000;
 /** Retries per location on rate-limit / transient errors. */
 const DE_LOC_MAX_RETRIES = 3;
 

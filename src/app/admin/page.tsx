@@ -801,7 +801,7 @@ function LocationsQueue({
                 <p className="text-xs text-muted-foreground">
                   {enabledDe.length === 0
                     ? 'Aktiviere mindestens einen Standort, um ihn in die tägliche Warteschlange aufzunehmen.'
-                    : `${enabledDe.length} DE-Standort${enabledDe.length === 1 ? '' : 'e'} werden täglich um 12:01 Uhr nacheinander gescannt (≈ 2 Sek. Pause je Standort).`}
+                    : `${enabledDe.length} DE-Standort${enabledDe.length === 1 ? '' : 'e'} werden täglich um 12:01 Uhr nacheinander gescannt (2,5 Min. Pause je Standort).`}
                 </p>
               </div>
             </>
