@@ -150,22 +150,28 @@ export function LocationPicker({
       setSearchError(null);
       return;
     }
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       setSearching(true);
       setSearchError(null);
       try {
-        const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&accept-language=de`;
+        const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error(`Suche fehlgeschlagen (${res.status})`);
-        const data = await res.json();
-        setResults(Array.isArray(data.results) ? data.results : []);
+        const data = (await res.json()) as Array<{ display_name: string; lat: string; lon: string }>;
+        const mapped: GeocodeResult[] = data
+          .map((r) => ({ name: r.display_name, lat: Number(r.lat), lng: Number(r.lon) }))
+          .filter((r) => Number.isFinite(r.lat) && Number.isFinite(r.lng));
+        setResults(mapped);
       } catch (err) {
+        if ((err as { name?: string }).name === 'AbortError') return;
         setSearchError(err instanceof Error ? err.message : String(err));
         setResults([]);
       } finally {
         setSearching(false);
       }
     }, 400);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); controller.abort(); };
   }, [query]);
 
   function pickResult(r: GeocodeResult) {

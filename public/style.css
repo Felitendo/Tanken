@@ -1623,7 +1623,14 @@ body.logged-in .cloud-sync-hint {
 }
 .map-search-here:active { opacity: 0.85; transform: translateX(-50%) scale(0.96); }
 .map-search-here.hidden { display: none; }
-.map-search-here[disabled] { opacity: 0.7; cursor: default; }
+.map-search-here[disabled] {
+  background: var(--color-hint);
+  color: var(--color-bg);
+  opacity: 0.75;
+  cursor: not-allowed;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+}
+.map-search-here[disabled]:active { transform: translateX(-50%); opacity: 0.75; }
 
 @keyframes searchHerePopIn {
   from { opacity: 0; transform: translateX(-50%) translateY(-4px); }

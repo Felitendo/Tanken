@@ -1225,7 +1225,6 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     renderStationsOnMap(stations, { skipFitBounds });
     renderStationList(stations);
     state._searchHereAnchor = { lat: coords.lat, lng: coords.lng };
-    document.getElementById('btn-search-here')?.classList.add('hidden');
     // Mark initial bounds so moveend doesn't immediately re-fetch
     if (state.map) {
       const b = state.map.getBounds();
@@ -1255,17 +1254,21 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
   }
 }
 
+const SEARCH_HERE_COOLDOWN_SEC = 30;
+
 function setupSearchHereButton() {
   const btn = document.getElementById('btn-search-here');
   if (!btn || btn._setup) return;
   btn._setup = true;
+  btn.classList.remove('hidden');
+
   btn.addEventListener('click', async () => {
     if (!state.map || btn.disabled) return;
     haptic('light');
     const c = state.map.getCenter();
-    btn.disabled = true;
     const labelEl = btn.querySelector('span');
-    const originalLabel = labelEl?.textContent;
+    const originalLabel = labelEl?.textContent || t('searchHere');
+    btn.disabled = true;
     if (labelEl) labelEl.textContent = t('searchingHere');
     try {
       const result = await api(`/api/stations?lat=${c.lat}&lng=${c.lng}&rad=25&fuel=${state.fuelType}`);
@@ -1278,32 +1281,38 @@ function setupSearchHereButton() {
       renderStationsOnMap(stations, { skipFitBounds: true });
       renderStationList(stations);
       state._searchHereAnchor = { lat: c.lat, lng: c.lng };
-      btn.classList.add('hidden');
       if (!stations.length) showToast(t('noStationsHere'));
     } catch {
       showToast(t('errorLoading'));
     } finally {
-      btn.disabled = false;
-      if (labelEl && originalLabel) labelEl.textContent = originalLabel;
+      startSearchHereCooldown(labelEl, originalLabel);
     }
   });
 }
 
-function showSearchHereIfMoved() {
+function startSearchHereCooldown(labelEl, restoreLabel) {
   const btn = document.getElementById('btn-search-here');
-  if (!btn || !state.map) return;
-  const c = state.map.getCenter();
-  const anchor = state._searchHereAnchor || (Number.isFinite(state.userLat) && Number.isFinite(state.userLng)
-    ? { lat: state.userLat, lng: state.userLng }
-    : null);
-  if (!anchor) { btn.classList.remove('hidden'); return; }
-  const dLat = c.lat - anchor.lat;
-  const dLng = c.lng - anchor.lng;
-  const kmPerDegLat = 111;
-  const kmPerDegLng = 111 * Math.cos((anchor.lat * Math.PI) / 180);
-  const distKm = Math.sqrt((dLat * kmPerDegLat) ** 2 + (dLng * kmPerDegLng) ** 2);
-  if (distKm > 2) btn.classList.remove('hidden');
-  else btn.classList.add('hidden');
+  if (!btn) return;
+  if (state._searchHereCooldownTimer) clearInterval(state._searchHereCooldownTimer);
+  let remaining = SEARCH_HERE_COOLDOWN_SEC;
+  btn.disabled = true;
+  if (labelEl) labelEl.textContent = `${restoreLabel} (${remaining})`;
+  state._searchHereCooldownTimer = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(state._searchHereCooldownTimer);
+      state._searchHereCooldownTimer = null;
+      btn.disabled = false;
+      if (labelEl) labelEl.textContent = restoreLabel;
+      return;
+    }
+    if (labelEl) labelEl.textContent = `${restoreLabel} (${remaining})`;
+  }, 1000);
+}
+
+function showSearchHereIfMoved() {
+  // Button is always visible now; kept as a no-op hook so loadMapTab's
+  // moveend handler can still call it without breaking.
 }
 
 function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter = false } = {}) {
