@@ -2690,7 +2690,20 @@ function renderHourChart(entries, dayKey) {
           backgroundColor: 'rgba(0,0,0,0.8)',
           titleFont: { size: 13 },
           bodyFont: { size: 13 },
-          callbacks: { label: (c) => `${c.dataset.label}: ${formatPrice(c.parsed.y)}` }
+          callbacks: {
+            title: (items) => {
+              if (!items.length) return '';
+              const d = sorted[items[0].dataIndex];
+              if (!d) return '';
+              const dt = new Date(d.timestamp);
+              const hh = String(dt.getHours()).padStart(2, '0');
+              const mm = String(dt.getMinutes()).padStart(2, '0');
+              const ss = String(dt.getSeconds()).padStart(2, '0');
+              const suffix = t('oclock');
+              return suffix ? `${hh}:${mm}:${ss} ${suffix}` : `${hh}:${mm}:${ss}`;
+            },
+            label: (c) => `${c.dataset.label}: ${formatPrice(c.parsed.y)}`
+          }
         }
       },
       scales: {
