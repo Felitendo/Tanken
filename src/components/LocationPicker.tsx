@@ -143,24 +143,30 @@ export function LocationPicker({
     }
   }, [value.lat, value.lng, value.radiusKm, updatePosition]);
 
-  async function runSearch(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) return;
-    setSearching(true);
-    setSearchError(null);
-    try {
-      const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
-      if (!res.ok) throw new Error(`Suche fehlgeschlagen (${res.status})`);
-      const data = await res.json();
-      setResults(Array.isArray(data.results) ? data.results : []);
-    } catch (err) {
-      setSearchError(err instanceof Error ? err.message : String(err));
+    if (q.length < 2) {
       setResults([]);
-    } finally {
-      setSearching(false);
+      setSearchError(null);
+      return;
     }
-  }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      setSearchError(null);
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
+        if (!res.ok) throw new Error(`Suche fehlgeschlagen (${res.status})`);
+        const data = await res.json();
+        setResults(Array.isArray(data.results) ? data.results : []);
+      } catch (err) {
+        setSearchError(err instanceof Error ? err.message : String(err));
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   function pickResult(r: GeocodeResult) {
     onChange({ lat: r.lat, lng: r.lng, radiusKm: value.radiusKm });
@@ -172,34 +178,46 @@ export function LocationPicker({
   return (
     <div className="space-y-3">
       {showSearch && (
-        <div>
-          <form onSubmit={runSearch} className="flex gap-2">
+        <div className="relative">
+          <div className="relative">
+            <svg viewBox="0 0 24 24" width="16" height="16" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" fill="currentColor">
+              <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            </svg>
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
               placeholder="Adresse oder Ort suchen…"
-              className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border bg-background pl-9 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
-            <button
-              type="submit"
-              disabled={searching || query.trim().length < 2}
-              className="rounded-md border border-border bg-muted px-3 py-2 text-sm disabled:opacity-50"
-            >
-              {searching ? 'Suche…' : 'Suchen'}
-            </button>
-          </form>
+            {searching && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin" />
+            )}
+            {!searching && query && (
+              <button
+                type="button"
+                onClick={() => { setQuery(''); setResults([]); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+              >
+                ×
+              </button>
+            )}
+          </div>
           {searchError && <p className="mt-1 text-xs text-destructive">{searchError}</p>}
           {results.length > 0 && (
-            <ul className="mt-2 max-h-40 overflow-auto rounded-md border border-border bg-background text-sm">
+            <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-60 overflow-auto rounded-md border border-border bg-background text-sm shadow-lg">
               {results.map((r, i) => (
                 <li key={i}>
                   <button
                     type="button"
                     onClick={() => pickResult(r)}
-                    className="block w-full truncate px-3 py-2 text-left hover:bg-muted"
+                    className="flex w-full items-center gap-2 truncate px-3 py-2 text-left hover:bg-muted"
                   >
-                    {r.name}
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" className="text-muted-foreground shrink-0">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                    </svg>
+                    <span className="truncate">{r.name}</span>
                   </button>
                 </li>
               ))}
@@ -210,9 +228,9 @@ export function LocationPicker({
       <div ref={containerRef} className={`${heightClass} w-full rounded-md border border-border overflow-hidden`} />
       {showRadiusControl && (
         <div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+          <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
             <span>Radius</span>
-            <span className="font-mono">{value.radiusKm.toFixed(1)} km</span>
+            <span className="font-mono font-medium text-foreground">{value.radiusKm.toFixed(1)} km</span>
           </div>
           <input
             type="range"
@@ -221,7 +239,7 @@ export function LocationPicker({
             step={0.5}
             value={value.radiusKm}
             onChange={(e) => onChange({ ...value, radiusKm: Number(e.target.value) })}
-            className="w-full"
+            className="admin-range w-full"
           />
         </div>
       )}

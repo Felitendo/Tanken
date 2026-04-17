@@ -464,7 +464,7 @@ function LocationEditorModal({
   const [value, setValue] = useState<LocationPickerValue>({
     lat: initial?.lat ?? 52.52,
     lng: initial?.lng ?? 13.405,
-    radiusKm: initial?.radiusKm ?? 10,
+    radiusKm: initial?.radiusKm ?? 25,
   });
   const [saving, setSaving] = useState(false);
 
@@ -498,8 +498,8 @@ function LocationEditorModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="admin-settings-group max-h-[90vh] w-full max-w-2xl overflow-auto p-5" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 py-8 sm:py-12" onClick={onClose}>
+      <div className="admin-settings-group w-full max-w-2xl p-5 my-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">{isEdit ? 'Standort bearbeiten' : 'Neuer Standort'}</h3>
           <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -1533,25 +1533,29 @@ function DashboardPanel({
           </div>
 
           {/* Section content with animation */}
-          <form onSubmit={onSubmit}>
-            <div key={animKey} className="admin-section-enter">
-              {activeSection === 'config' && (
+          <div key={animKey} className="admin-section-enter">
+            {activeSection === 'config' && (
+              <form onSubmit={onSubmit}>
                 <AppConfigSection config={config} onChange={onChange} onTestApiKey={onTestApiKey} testingApiKey={testingApiKey} />
-              )}
-              {activeSection === 'oidc' && (
+              </form>
+            )}
+            {activeSection === 'oidc' && (
+              <form onSubmit={onSubmit}>
                 <OidcSection config={config} onChange={onChange} />
-              )}
-              {activeSection === 'smtp' && (
+              </form>
+            )}
+            {activeSection === 'smtp' && (
+              <form onSubmit={onSubmit}>
                 <SmtpSection config={config} onChange={onChange} onTestEmail={onTestEmail} testingEmail={testingEmail} testEmailRecipient={testEmailRecipient} onTestEmailRecipientChange={onTestEmailRecipientChange} />
-              )}
-              {activeSection === 'locations' && (
-                <LocationsPanel showFeedback={showFeedback} />
-              )}
-              {activeSection === 'scanner' && (
-                <ScannerConsole />
-              )}
-            </div>
-          </form>
+              </form>
+            )}
+            {activeSection === 'locations' && (
+              <LocationsPanel showFeedback={showFeedback} />
+            )}
+            {activeSection === 'scanner' && (
+              <ScannerConsole />
+            )}
+          </div>
         </div>
       </main>
     </div>

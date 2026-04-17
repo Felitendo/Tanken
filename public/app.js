@@ -172,6 +172,9 @@ const i18n = {
     requestTooMany: 'Zu viele offene Anfragen. Warte bitte auf Bearbeitung.',
     requestDeniedReason: 'Begründung',
     requestSearchNoResults: 'Keine Treffer',
+    searchHere: 'Hier suchen',
+    searchingHere: 'Suche läuft…',
+    noStationsHere: 'Keine Tankstellen in der Nähe gefunden.',
   },
   en: {
     tabMap: 'Map',
@@ -333,6 +336,9 @@ const i18n = {
     requestTooMany: 'Too many pending requests. Please wait for review.',
     requestDeniedReason: 'Reason',
     requestSearchNoResults: 'No matches',
+    searchHere: 'Search here',
+    searchingHere: 'Searching…',
+    noStationsHere: 'No petrol stations nearby.',
   }
 };
 
@@ -869,7 +875,7 @@ function openLocationRequestSheet() {
 
   const initialLat = Number.isFinite(state.userLat) ? state.userLat : 51.1657;
   const initialLng = Number.isFinite(state.userLng) ? state.userLng : 10.4515;
-  const initialRadius = 10;
+  const initialRadius = 25;
 
   const reqState = {
     lat: initialLat,
@@ -1157,11 +1163,15 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
 
     setupMapZoomGesture();
     setupMapSearch();
+    setupSearchHereButton();
 
     // Reload stations from cache when user pans/zooms the map
     const MIN_ZOOM_FOR_STATIONS = 10;
     let moveEndTimer = null;
     state.map.on('moveend', () => {
+      // Show the "search here" pill whenever the map center moved from the
+      // last fetched anchor. Button is only shown if moved ≥2 km away.
+      showSearchHereIfMoved();
       clearTimeout(moveEndTimer);
       moveEndTimer = setTimeout(async () => {
         if (!state.map) return;
@@ -1214,6 +1224,8 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     state.dataTimestamp = result._dataTimestamp || null;
     renderStationsOnMap(stations, { skipFitBounds });
     renderStationList(stations);
+    state._searchHereAnchor = { lat: coords.lat, lng: coords.lng };
+    document.getElementById('btn-search-here')?.classList.add('hidden');
     // Mark initial bounds so moveend doesn't immediately re-fetch
     if (state.map) {
       const b = state.map.getBounds();
@@ -1241,6 +1253,57 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
       loader.innerHTML = `<span>${t('errorLoading')}</span>`;
     }
   }
+}
+
+function setupSearchHereButton() {
+  const btn = document.getElementById('btn-search-here');
+  if (!btn || btn._setup) return;
+  btn._setup = true;
+  btn.addEventListener('click', async () => {
+    if (!state.map || btn.disabled) return;
+    haptic('light');
+    const c = state.map.getCenter();
+    btn.disabled = true;
+    const labelEl = btn.querySelector('span');
+    const originalLabel = labelEl?.textContent;
+    if (labelEl) labelEl.textContent = t('searchingHere');
+    try {
+      const result = await api(`/api/stations?lat=${c.lat}&lng=${c.lng}&rad=25&fuel=${state.fuelType}`);
+      const stations = Array.isArray(result) ? result : [];
+      state.userLat = c.lat;
+      state.userLng = c.lng;
+      state.activeLocation = 'gps';
+      state.stations = stations;
+      state.dataTimestamp = result._dataTimestamp || null;
+      renderStationsOnMap(stations, { skipFitBounds: true });
+      renderStationList(stations);
+      state._searchHereAnchor = { lat: c.lat, lng: c.lng };
+      btn.classList.add('hidden');
+      if (!stations.length) showToast(t('noStationsHere'));
+    } catch {
+      showToast(t('errorLoading'));
+    } finally {
+      btn.disabled = false;
+      if (labelEl && originalLabel) labelEl.textContent = originalLabel;
+    }
+  });
+}
+
+function showSearchHereIfMoved() {
+  const btn = document.getElementById('btn-search-here');
+  if (!btn || !state.map) return;
+  const c = state.map.getCenter();
+  const anchor = state._searchHereAnchor || (Number.isFinite(state.userLat) && Number.isFinite(state.userLng)
+    ? { lat: state.userLat, lng: state.userLng }
+    : null);
+  if (!anchor) { btn.classList.remove('hidden'); return; }
+  const dLat = c.lat - anchor.lat;
+  const dLng = c.lng - anchor.lng;
+  const kmPerDegLat = 111;
+  const kmPerDegLng = 111 * Math.cos((anchor.lat * Math.PI) / 180);
+  const distKm = Math.sqrt((dLat * kmPerDegLat) ** 2 + (dLng * kmPerDegLng) ** 2);
+  if (distKm > 2) btn.classList.remove('hidden');
+  else btn.classList.add('hidden');
 }
 
 function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter = false } = {}) {

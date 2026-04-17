@@ -1596,6 +1596,40 @@ body.logged-in .cloud-sync-hint {
 }
 .map-fab:active { opacity: 0.7; transform: scale(0.92); }
 
+/* "Search here" pill — appears after panning */
+.map-search-here {
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: none;
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  animation: searchHerePopIn 0.22s ease-out;
+  white-space: nowrap;
+}
+.map-search-here:active { opacity: 0.85; transform: translateX(-50%) scale(0.96); }
+.map-search-here.hidden { display: none; }
+.map-search-here[disabled] { opacity: 0.7; cursor: default; }
+
+@keyframes searchHerePopIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 /* Brighten dark map labels for readability */
 .bright-labels {
   filter: brightness(1.8) contrast(1.1);
