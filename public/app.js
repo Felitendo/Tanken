@@ -1197,49 +1197,23 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     setupMapSearch();
     setupSearchHereButton();
 
-    // Reload stations from cache when user pans/zooms the map
+    // The station list is pinned to the last explicit search (initial location
+    // or "Hier suchen" click). Pan and zoom only change the map view — they
+    // never silently replace the list. Markers are hidden when zoomed out
+    // past the world-view threshold so we don't draw thousands of pins.
     const MIN_ZOOM_FOR_STATIONS = 10;
-    let moveEndTimer = null;
-    state.map.on('moveend', () => {
-      // Show the "search here" pill whenever the map center moved from the
-      // last fetched anchor. Button is only shown if moved ≥2 km away.
-      showSearchHereIfMoved();
-      clearTimeout(moveEndTimer);
-      moveEndTimer = setTimeout(async () => {
-        if (!state.map) return;
-        // Don't show stations when zoomed out too far
-        if (state.map.getZoom() < MIN_ZOOM_FOR_STATIONS) {
-          if (state.clusterGroup) { state.map.removeLayer(state.clusterGroup); state.clusterGroup = null; }
-          state.markers.forEach(m => state.map.removeLayer(m));
-          state.markers = [];
-          state._lastBounds = null;
-          return;
-        }
-        const bounds = state.map.getBounds();
-        const south = bounds.getSouth();
-        const west = bounds.getWest();
-        const north = bounds.getNorth();
-        const east = bounds.getEast();
-        // Skip if bounds haven't changed significantly
-        if (state._lastBounds) {
-          const lb = state._lastBounds;
-          const delta = Math.abs(south - lb.s) + Math.abs(west - lb.w)
-            + Math.abs(north - lb.n) + Math.abs(east - lb.e);
-          if (delta < 0.005) return;
-        }
-        state._lastBounds = { s: south, w: west, n: north, e: east };
-        try {
-          const result = await api(`/api/stations?bounds=${south},${west},${north},${east}&fuel=${state.fuelType}`);
-          const stations = Array.isArray(result) ? result : [];
-          if (stations.length) {
-            state.stations = stations;
-            state.dataTimestamp = result._dataTimestamp || null;
-            renderStationsOnMap(stations, { skipFitBounds: true, skipRadiusFilter: true });
-            renderStationList(stations);
-          }
-        } catch {}
-      }, 400);
+    state.map.on('zoomend', () => {
+      if (!state.map) return;
+      if (state.map.getZoom() < MIN_ZOOM_FOR_STATIONS) {
+        if (state.clusterGroup) { state.map.removeLayer(state.clusterGroup); state.clusterGroup = null; }
+        state.markers.forEach(m => state.map.removeLayer(m));
+        state.markers = [];
+      } else if (state.stations.length && state.markers.length === 0) {
+        // Re-draw markers when zooming back in after they were cleared.
+        renderStationsOnMap(state.stations, { skipFitBounds: true, skipRadiusFilter: true });
+      }
     });
+    state.map.on('moveend', () => { showSearchHereIfMoved(); });
   }
 
   const loader = document.getElementById('map-loading');
@@ -1257,11 +1231,6 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     renderStationsOnMap(stations, { skipFitBounds });
     renderStationList(stations);
     state._searchHereAnchor = { lat: coords.lat, lng: coords.lng };
-    // Mark initial bounds so moveend doesn't immediately re-fetch
-    if (state.map) {
-      const b = state.map.getBounds();
-      state._lastBounds = { s: b.getSouth(), w: b.getWest(), n: b.getNorth(), e: b.getEast() };
-    }
     if (!stations.length) {
       loader.innerHTML = `<span style="font-size:13px;opacity:0.6">${t('noStationsYet')}</span>`;
     } else {
