@@ -6,9 +6,10 @@ import {
   Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings,
   UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, ChevronRight,
   RotateCcw, Play, Square, Zap, Check, ArrowRight, ArrowLeft,
-  Lock, Plus, X, Pencil, Inbox,
+  Lock, Plus, X, Pencil, Inbox, ListOrdered, Loader2,
 } from 'lucide-react';
 import { LocationPicker, type LocationPickerValue } from '@/components/LocationPicker';
+import { RequestMapPreview } from '@/components/RequestMapPreview';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -55,6 +56,7 @@ interface CountryScanStatus {
   mode: 'location-scan' | 'discovery' | null;
   progress: string | null;
   currentPoint: { lat: number; lng: number } | null;
+  currentLocation: { id: string; name: string } | null;
   stationsScanned: number;
   gridPoints: number;
   estimatedEndAt: string | null;
@@ -372,9 +374,15 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
               style={{ width: `${pct}%` }}
             />
           </div>
+          {cs.currentLocation && (
+            <div className="flex items-start gap-2 text-xs">
+              <span className="mt-0.5 text-muted-foreground shrink-0">Aktueller Standort:</span>
+              <span className="font-semibold truncate">{cs.currentLocation.name}</span>
+            </div>
+          )}
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
             {cs.currentPoint && (
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 font-mono">
                 <MapPin className="h-3 w-3" />
                 {cs.currentPoint.lat.toFixed(2)}°N, {cs.currentPoint.lng.toFixed(2)}°E
               </span>
@@ -625,6 +633,235 @@ function DenyDialog({
   );
 }
 
+function fmtNextScanTime(iso: string | null): string {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    const time = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    if (sameDay) return `heute ${time} Uhr`;
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (d.toDateString() === tomorrow.toDateString()) return `morgen ${time} Uhr`;
+    return d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  } catch { return iso; }
+}
+
+function LocationsQueue({
+  locations, schedStatus, busyId,
+  onCreate, onEdit, onScanNow, onToggle, onDelete,
+}: {
+  locations: ScanLocationDto[] | null;
+  schedStatus: SchedulerStatus | null;
+  busyId: string | null;
+  onCreate: () => void;
+  onEdit: (loc: ScanLocationDto) => void;
+  onScanNow: (loc: ScanLocationDto) => void;
+  onToggle: (loc: ScanLocationDto) => void;
+  onDelete: (loc: ScanLocationDto) => void;
+}) {
+  const enabledDe = (locations ?? []).filter((l) => l.enabled && l.country === 'de');
+  const enabledAt = (locations ?? []).filter((l) => l.enabled && l.country === 'at');
+  const disabled = (locations ?? []).filter((l) => !l.enabled);
+
+  const deScanning = !!schedStatus?.de.scanning;
+  const currentDeId = schedStatus?.de.currentLocation?.id ?? null;
+  const deProgress = schedStatus?.de.progress ?? null;
+  const nextAt = schedStatus?.nextCycleAt ?? null;
+
+  const renderRow = (loc: ScanLocationDto, idx: number | null, status: 'current' | 'upcoming' | 'done' | 'idle') => {
+    const isCurrent = status === 'current';
+    const rowClass = [
+      'p-4 flex items-center gap-3 transition-colors',
+      isCurrent ? 'bg-emerald-500/5' : '',
+    ].filter(Boolean).join(' ');
+
+    return (
+      <div key={loc.id} className={rowClass}>
+        {idx !== null ? (
+          <div
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${
+              isCurrent
+                ? 'bg-emerald-500 text-white'
+                : status === 'done'
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-secondary text-secondary-foreground'
+            }`}
+            aria-label={`Position ${idx} in der Warteschlange`}
+          >
+            {isCurrent ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : idx}
+          </div>
+        ) : (
+          <div className="h-8 w-8 shrink-0" />
+        )}
+        <Flag country={loc.country} className="h-4 w-6 rounded-sm shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-semibold truncate">{loc.name}</p>
+            {isCurrent && <Badge variant="success">Wird jetzt gescannt</Badge>}
+            {!loc.enabled && <Badge variant="warning">Deaktiviert</Badge>}
+            {loc.lastScanError && <Badge variant="destructive">Fehler</Badge>}
+          </div>
+          <p className="text-[11px] text-muted-foreground font-mono">
+            {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)} · {loc.fuelType}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {loc.lastScanAt
+              ? `Letzter Scan ${fmtRelative(loc.lastScanAt)} · ${loc.lastScanStationCount ?? 0} Stationen`
+              : 'Noch nicht gescannt'}
+          </p>
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="admin-btn"
+            onClick={() => onToggle(loc)}
+            disabled={busyId === loc.id}
+            title={loc.enabled ? 'Deaktivieren (aus Warteschlange entfernen)' : 'Aktivieren (zur Warteschlange hinzufügen)'}
+          >
+            {loc.enabled ? <Square className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="admin-btn"
+            onClick={() => onScanNow(loc)}
+            disabled={busyId === loc.id}
+            title="Einzeln sofort scannen"
+          >
+            <Zap className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="admin-btn"
+            onClick={() => onEdit(loc)}
+            disabled={busyId === loc.id}
+            title="Bearbeiten"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="admin-btn admin-btn-danger"
+            onClick={() => onDelete(loc)}
+            disabled={busyId === loc.id}
+            title="Löschen"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const currentIdx = currentDeId ? enabledDe.findIndex((l) => l.id === currentDeId) : -1;
+
+  return (
+    <div className="space-y-5">
+      {/* Queue header + next-scan banner */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="admin-section-header flex items-center gap-2">
+            <ListOrdered className="h-3.5 w-3.5" />
+            SCAN-WARTESCHLANGE
+          </p>
+          <Button size="sm" className="admin-btn admin-btn-primary" onClick={onCreate}>
+            <Plus className="h-3.5 w-3.5" /> Neuer Standort
+          </Button>
+        </div>
+
+        <div className="admin-settings-group p-4 mb-2 flex flex-wrap items-center gap-3 text-sm">
+          {deScanning ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium">
+                  Scan läuft {deProgress ? <span className="font-mono text-muted-foreground">({deProgress})</span> : null}
+                </p>
+                {schedStatus?.de.currentLocation && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    Aktuell: <span className="font-semibold text-foreground">{schedStatus.de.currentLocation.name}</span>
+                  </p>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium">
+                  {enabledDe.length === 0
+                    ? 'Keine Standorte in der Warteschlange'
+                    : <>Nächster Scan: <span className="tabular-nums">{fmtNextScanTime(nextAt)}</span></>}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {enabledDe.length === 0
+                    ? 'Aktiviere mindestens einen Standort, um ihn in die tägliche Warteschlange aufzunehmen.'
+                    : `${enabledDe.length} DE-Standort${enabledDe.length === 1 ? '' : 'e'} werden täglich um 12:01 Uhr nacheinander gescannt (≈ 2 Sek. Pause je Standort).`}
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="admin-settings-group">
+          {locations === null ? (
+            <div className="p-6 text-center text-sm text-muted-foreground animate-pulse">Lade…</div>
+          ) : enabledDe.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              Keine aktiven DE-Standorte in der Warteschlange. „Neuer Standort" klicken, um zu starten.
+            </div>
+          ) : (
+            <div className="divide-y divide-border/60">
+              {enabledDe.map((loc, i) => {
+                const position = i + 1;
+                let status: 'current' | 'upcoming' | 'done' | 'idle' = 'idle';
+                if (deScanning && currentIdx >= 0) {
+                  if (i === currentIdx) status = 'current';
+                  else if (i < currentIdx) status = 'done';
+                  else status = 'upcoming';
+                }
+                return renderRow(loc, position, status);
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Austria grid-discovery locations (non-queued) */}
+      {enabledAt.length > 0 && (
+        <div>
+          <p className="admin-section-header mb-2">ÖSTERREICH (GRID-DISCOVERY)</p>
+          <div className="admin-settings-group">
+            <p className="px-4 pt-3 text-[11px] text-muted-foreground">
+              AT-Standorte werden nicht einzeln angefragt — der Scanner durchläuft ein festes Grid über das gesamte Land.
+            </p>
+            <div className="divide-y divide-border/60 mt-2">
+              {enabledAt.map((loc) => renderRow(loc, null, 'idle'))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Disabled (not in queue) */}
+      {disabled.length > 0 && (
+        <div>
+          <p className="admin-section-header mb-2">DEAKTIVIERT — NICHT IN DER WARTESCHLANGE</p>
+          <div className="admin-settings-group">
+            <div className="divide-y divide-border/60">
+              {disabled.map((loc) => renderRow(loc, null, 'idle'))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: FeedbackType) => void }) {
   const [locations, setLocations] = useState<ScanLocationDto[] | null>(null);
   const [pending, setPending] = useState<LocationRequestDto[] | null>(null);
@@ -632,6 +869,7 @@ function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: Fe
   const [creating, setCreating] = useState(false);
   const [denying, setDenying] = useState<LocationRequestDto | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [schedStatus, setSchedStatus] = useState<SchedulerStatus | null>(null);
 
   const loadLocations = useCallback(async () => {
     try {
@@ -655,6 +893,27 @@ function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: Fe
     loadLocations();
     loadPending();
   }, [loadLocations, loadPending]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const data = await api<SchedulerStatus>('/api/admin/scheduler');
+        if (!cancelled) setSchedStatus(data);
+      } catch { /* ignore */ }
+    }
+    load();
+    const interval = setInterval(load, 3_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  useEffect(() => {
+    const scanning = schedStatus?.de.scanning || schedStatus?.at.scanning;
+    if (scanning) {
+      const interval = setInterval(() => loadLocations(), 5_000);
+      return () => clearInterval(interval);
+    }
+  }, [schedStatus?.de.scanning, schedStatus?.at.scanning, loadLocations]);
 
   async function toggleEnabled(loc: ScanLocationDto) {
     setBusyId(loc.id);
@@ -739,7 +998,7 @@ function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: Fe
         <SettingsGroup title={`OFFENE ANFRAGEN (${pending.length})`}>
           <div className="divide-y divide-border/60">
             {pending.map((req) => (
-              <div key={req.id} className="p-4 space-y-2">
+              <div key={req.id} className="p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 min-w-0">
                     <RequesterAvatar user={req.user} />
@@ -754,7 +1013,7 @@ function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: Fe
                         {fmtRelative(req.createdAt)}
                       </p>
                       <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
-                        {req.lat.toFixed(4)}, {req.lng.toFixed(4)}
+                        {req.lat.toFixed(4)}, {req.lng.toFixed(4)} · Radius {req.radiusKm} km
                       </p>
                       {req.note && <p className="text-xs mt-1.5 text-foreground/80">„{req.note}"</p>}
                     </div>
@@ -779,6 +1038,13 @@ function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: Fe
                     </Button>
                   </div>
                 </div>
+                <RequestMapPreview
+                  lat={req.lat}
+                  lng={req.lng}
+                  radiusKm={req.radiusKm}
+                  heightClass="h-48"
+                  ariaLabel={`Kartenvorschau für „${req.name}": ${req.lat.toFixed(4)}, ${req.lng.toFixed(4)}, Radius ${req.radiusKm} km`}
+                />
               </div>
             ))}
           </div>
@@ -792,89 +1058,17 @@ function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: Fe
         </div>
       )}
 
-      {/* Scan locations list */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <p className="admin-section-header">SCAN-STANDORTE</p>
-          <Button size="sm" className="admin-btn admin-btn-primary" onClick={() => setCreating(true)}>
-            <Plus className="h-3.5 w-3.5" /> Neuer Standort
-          </Button>
-        </div>
-        <div className="admin-settings-group">
-          {locations === null ? (
-            <div className="p-6 text-center text-sm text-muted-foreground animate-pulse">Lade…</div>
-          ) : locations.length === 0 ? (
-            <div className="p-6 text-center text-sm text-muted-foreground">
-              Noch keine Standorte angelegt. „Neuer Standort" klicken, um zu starten.
-            </div>
-          ) : (
-            <div className="divide-y divide-border/60">
-              {locations.map((loc) => (
-                <div key={loc.id} className="p-4 flex items-center gap-3">
-                  <Flag country={loc.country} className="h-4 w-6 rounded-sm shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold truncate">{loc.name}</p>
-                      {!loc.enabled && <Badge variant="warning">Deaktiviert</Badge>}
-                      {loc.lastScanError && <Badge variant="destructive">Fehler</Badge>}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground font-mono">
-                      {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)} · {loc.fuelType}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {loc.lastScanAt
-                        ? `Letzter Scan ${fmtRelative(loc.lastScanAt)} · ${loc.lastScanStationCount ?? 0} Stationen`
-                        : 'Noch nicht gescannt'}
-                    </p>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="admin-btn"
-                      onClick={() => toggleEnabled(loc)}
-                      disabled={busyId === loc.id}
-                      title={loc.enabled ? 'Deaktivieren' : 'Aktivieren'}
-                    >
-                      {loc.enabled ? <Square className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="admin-btn"
-                      onClick={() => scanNow(loc)}
-                      disabled={busyId === loc.id}
-                      title="Jetzt scannen"
-                    >
-                      <Zap className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="admin-btn"
-                      onClick={() => setEditing(loc)}
-                      disabled={busyId === loc.id}
-                      title="Bearbeiten"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="admin-btn admin-btn-danger"
-                      onClick={() => deleteLocation(loc)}
-                      disabled={busyId === loc.id}
-                      title="Löschen"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Scan queue */}
+      <LocationsQueue
+        locations={locations}
+        schedStatus={schedStatus}
+        busyId={busyId}
+        onCreate={() => setCreating(true)}
+        onEdit={(loc) => setEditing(loc)}
+        onScanNow={scanNow}
+        onToggle={toggleEnabled}
+        onDelete={deleteLocation}
+      />
 
       {(creating || editing) && (
         <LocationEditorModal

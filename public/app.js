@@ -354,24 +354,8 @@ function t(key) {
   return key;
 }
 
-function getTileUrl(lang) {
-  return lang === 'en'
-    ? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-    : 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png';
-}
-
-function getTileOptions(lang) {
-  return lang === 'en'
-    ? { maxZoom: 19, attribution: '© OpenStreetMap' }
-    : { maxZoom: 19, attribution: '© OpenStreetMap · Deutschland', subdomains: 'abc' };
-}
-
-function refreshMapTiles() {
-  if (state.map && state.tileLayer) {
-    try { state.map.removeLayer(state.tileLayer); } catch {}
-    state.tileLayer = L.tileLayer(getTileUrl(state.lang), getTileOptions(state.lang)).addTo(state.map);
-  }
-}
+const TILE_URL = 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png';
+const TILE_OPTIONS = { maxZoom: 19, attribution: '© OpenStreetMap · Deutschland', subdomains: 'abc' };
 
 function applyLanguage() {
   document.documentElement.lang = state.lang;
@@ -405,8 +389,6 @@ function applyLanguage() {
   document.querySelectorAll('[data-i18n-option]').forEach(el => {
     el.textContent = t(el.getAttribute('data-i18n-option'));
   });
-
-  refreshMapTiles();
 }
 
 const state = {
@@ -984,7 +966,7 @@ function openLocationRequestSheet() {
   if (mapEl && window.L) {
     const L = window.L;
     const map = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView([reqState.lat, reqState.lng], 11);
-    L.tileLayer(getTileUrl(state.lang), getTileOptions(state.lang)).addTo(map);
+    L.tileLayer(TILE_URL, TILE_OPTIONS).addTo(map);
     const marker = L.marker([reqState.lat, reqState.lng], { draggable: true }).addTo(map);
     const circle = L.circle([reqState.lat, reqState.lng], {
       radius: reqState.radiusKm * 1000,
@@ -1161,7 +1143,7 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
       tapHold: false
     }).setView([coords.lat, coords.lng], 12);
 
-    state.tileLayer = L.tileLayer(getTileUrl(state.lang), getTileOptions(state.lang)).addTo(state.map);
+    state.tileLayer = L.tileLayer(TILE_URL, TILE_OPTIONS).addTo(state.map);
 
     setupMapZoomGesture();
     setupMapSearch();

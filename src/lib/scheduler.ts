@@ -21,6 +21,7 @@ export interface CountryScanStatus {
   mode: 'location-scan' | 'discovery' | null;
   progress: string | null;
   currentPoint: { lat: number; lng: number } | null;
+  currentLocation: { id: string; name: string } | null;
   stationsScanned: number;
   gridPoints: number;
   estimatedEndAt: string | null;
@@ -95,6 +96,7 @@ class CountryScan {
   mode: CountryScanStatus['mode'] = null;
   progress: string | null = null;
   currentPoint: { lat: number; lng: number } | null = null;
+  currentLocation: { id: string; name: string } | null = null;
   stationsScanned = 0;
   private _uniqueStationIds = new Set<string>();
   gridPoints = 0;
@@ -136,6 +138,7 @@ class CountryScan {
     this.mode = null;
     this.progress = null;
     this.currentPoint = null;
+    this.currentLocation = null;
     this.estimatedEndAt = null;
   }
 
@@ -148,6 +151,7 @@ class CountryScan {
       mode: this.mode,
       progress: this.progress,
       currentPoint: this.currentPoint,
+      currentLocation: this.currentLocation,
       stationsScanned: this.stationsScanned,
       gridPoints: this.gridPoints,
       estimatedEndAt: this.estimatedEndAt?.toISOString() ?? null,
@@ -395,6 +399,7 @@ class ScanScheduler {
         const loc = locs[i];
         cs.progress = `${i + 1}/${locs.length}`;
         cs.currentPoint = { lat: loc.lat, lng: loc.lng };
+        cs.currentLocation = { id: loc.id, name: loc.name };
         cs.estimatedEndAt = new Date(Date.now() + (locs.length - i - 1) * delay);
 
         let attempt = 0;
