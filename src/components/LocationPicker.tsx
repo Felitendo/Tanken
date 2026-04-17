@@ -92,9 +92,9 @@ export function LocationPicker({
       attributionControl: false,
     }).setView([value.lat, value.lng], 11);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      subdomains: 'abcd',
+      subdomains: 'abc',
     }).addTo(map);
 
     const marker = L.marker([value.lat, value.lng], { draggable: true }).addTo(map);

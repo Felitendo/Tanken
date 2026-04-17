@@ -968,9 +968,9 @@ function openLocationRequestSheet() {
   if (mapEl && window.L) {
     const L = window.L;
     const map = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView([reqState.lat, reqState.lng], 11);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      subdomains: 'abcd',
+      subdomains: 'abc',
     }).addTo(map);
     const marker = L.marker([reqState.lat, reqState.lng], { draggable: true }).addTo(map);
     const circle = L.circle([reqState.lat, reqState.lng], {
@@ -1157,8 +1157,8 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
       tapHold: false
     }).setView([coords.lat, coords.lng], 12);
 
-    state.tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19, attribution: '© OSM · CARTO', subdomains: 'abcd'
+    state.tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OpenStreetMap · Deutschland', subdomains: 'abc'
     }).addTo(state.map);
 
     setupMapZoomGesture();
