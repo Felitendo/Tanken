@@ -212,7 +212,7 @@ export function LocationPicker({
           </div>
           {searchError && <p className="mt-1 text-xs text-destructive">{searchError}</p>}
           {results.length > 0 && (
-            <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-60 overflow-auto rounded-md border border-border bg-background text-sm shadow-lg">
+            <ul className="absolute left-0 right-0 top-full z-[1000] mt-1 max-h-60 overflow-auto rounded-md border border-border bg-background text-sm shadow-lg">
               {results.map((r, i) => (
                 <li key={i}>
                   <button
