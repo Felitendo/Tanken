@@ -398,6 +398,43 @@ function refreshMapTiles() {
     ...cfg.options,
     className: cfg.className || '',
   }).addTo(state.map);
+  refreshCoverageMaskStyle();
+}
+
+// Translucent gray polygon covering the world with cut-outs for DE and AT,
+// signalling that those are the only countries the app currently covers.
+function getCoverageMaskStyle() {
+  const dark = isDarkTheme();
+  return {
+    color: 'transparent',
+    weight: 0,
+    fill: true,
+    fillColor: dark ? '#000000' : '#1f2937',
+    fillOpacity: dark ? 0.55 : 0.38,
+    interactive: false,
+  };
+}
+
+function ensureCoverageMask() {
+  if (!state.map || state.coverageMask) return;
+  const outlines = window.COVERAGE_OUTLINES;
+  if (!outlines || !outlines.de || !outlines.at) return;
+  // Outer ring: a generous world rectangle. Subsequent rings act as holes.
+  const worldRing = [
+    [-85, -180],
+    [-85, 180],
+    [85, 180],
+    [85, -180],
+  ];
+  state.coverageMask = L.polygon(
+    [worldRing, outlines.de, outlines.at],
+    getCoverageMaskStyle(),
+  ).addTo(state.map);
+}
+
+function refreshCoverageMaskStyle() {
+  if (!state.coverageMask) return;
+  try { state.coverageMask.setStyle(getCoverageMaskStyle()); } catch {}
 }
 
 function applyLanguage() {
@@ -1296,6 +1333,7 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     }).setView([coords.lat, coords.lng], 12);
 
     refreshMapTiles();
+    ensureCoverageMask();
 
     setupMapZoomGesture();
     setupMapSearch();

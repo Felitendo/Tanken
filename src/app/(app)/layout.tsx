@@ -51,6 +51,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <Script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" strategy="beforeInteractive" />
       <Script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" strategy="beforeInteractive" />
       <Script src="/web-haptics.js" strategy="beforeInteractive" />
+      <Script src="/coverage-outlines.js" strategy="beforeInteractive" />
       <Script src="/app.js" strategy="afterInteractive" />
     </>
   );
