@@ -183,6 +183,7 @@ const i18n = {
     stationNotScannedHint: 'Du kannst einen Scan-Standort dafür in den Einstellungen anfragen.',
     requestScanLocation: 'Standort anfragen',
     historyAccumulating: 'Noch keine Preisverlaufsdaten – sammelt sich mit der Zeit.',
+    manualScanValidFor: 'Manueller Scan – gültig noch',
   },
   en: {
     tabMap: 'Map',
@@ -355,6 +356,7 @@ const i18n = {
     stationNotScannedHint: 'You can request a scan location for it from the settings.',
     requestScanLocation: 'Request location',
     historyAccumulating: 'No price history yet – it builds up over time.',
+    manualScanValidFor: 'Manual scan – valid for',
   }
 };
 
@@ -515,6 +517,7 @@ const state = {
   lang: detectLanguage(),
   activeCountry: null,
   viewCountry: null,
+  manualScans: [],
   loaded: { map: false, history: false, stats: false, settings: false },
   toastTimer: null,
   me: null,
@@ -558,6 +561,17 @@ async function init() {
 
   await refreshMe();
   await loadSettings();
+
+  // Restore manual-scan results that haven't expired yet so the markers
+  // come back after a refresh.
+  state.manualScans = loadStoredManualScans();
+  // Drop and re-render every 30 s so countdowns never overshoot their TTL.
+  setInterval(() => {
+    if (pruneManualScans() && state.map) {
+      renderStationsOnMap(state.stations || [], { skipFitBounds: true, skipRadiusFilter: true });
+      renderStationList(state.stations || []);
+    }
+  }, 30 * 1000);
 
   applyLanguage();
   setupTabs();
@@ -1544,6 +1558,70 @@ async function loadAtStationsInViewport({ silent = true } = {}) {
   }
 }
 
+// ─── Manual-scan persistence ───────────────────────────────────────
+//
+// Results from the "Hier suchen" picker are kept in localStorage for 15 min
+// so the markers come back after a refresh. Each station from such a scan
+// carries an _expiresAt timestamp the sheet UI uses to render a countdown.
+
+const MANUAL_SCAN_TTL_MS = 15 * 60 * 1000;
+const MANUAL_SCANS_KEY = 'tank_manual_scans';
+
+function loadStoredManualScans() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MANUAL_SCANS_KEY) || '[]');
+    if (!Array.isArray(raw)) return [];
+    const now = Date.now();
+    return raw.filter(s => s && Number(s.expiresAt) > now && Array.isArray(s.stations));
+  } catch { return []; }
+}
+
+function persistManualScans() {
+  try {
+    localStorage.setItem(MANUAL_SCANS_KEY, JSON.stringify(state.manualScans || []));
+  } catch { /* quota exhausted — ignore */ }
+}
+
+function pruneManualScans() {
+  const now = Date.now();
+  const before = (state.manualScans || []).length;
+  state.manualScans = (state.manualScans || []).filter(s => Number(s.expiresAt) > now);
+  if (state.manualScans.length !== before) {
+    persistManualScans();
+    return true;
+  }
+  return false;
+}
+
+function recordManualScan(lat, lng, stations) {
+  if (!Array.isArray(state.manualScans)) state.manualScans = [];
+  const expiresAt = Date.now() + MANUAL_SCAN_TTL_MS;
+  state.manualScans.push({ lat, lng, stations, expiresAt });
+  persistManualScans();
+}
+
+// Merge active manual-scan stations into the given list. Stations already
+// present in `primary` keep their fresh data (no _expiresAt). Stations only
+// available via the manual scan get tagged with the scan's expiresAt so the
+// detail sheet can show the countdown.
+function withManualScans(primary) {
+  const out = new Map();
+  const list = Array.isArray(primary) ? primary : [];
+  for (const s of list) {
+    const key = s.id || `${s.lat},${s.lng}`;
+    out.set(key, s);
+  }
+  for (const scan of state.manualScans || []) {
+    if (Number(scan.expiresAt) <= Date.now()) continue;
+    for (const s of scan.stations || []) {
+      const key = s.id || `${s.lat},${s.lng}`;
+      if (out.has(key)) continue;
+      out.set(key, { ...s, _expiresAt: scan.expiresAt });
+    }
+  }
+  return Array.from(out.values());
+}
+
 const SEARCH_HERE_COOLDOWN_SEC = 30;
 const SCAN_RADIUS_KM = 25;
 const SCAN_ANIMATION_DURATION = 1300;
@@ -1697,6 +1775,10 @@ async function runScanAt(lat, lng) {
     state._searchHereAnchor = { lat, lng };
     applyCountryUi();
 
+    // Persist the manual scan so the markers and a 15 min "valid for"
+    // countdown survive a refresh.
+    if (stations.length) recordManualScan(lat, lng, stations);
+
     await animPromise;
     renderStationsOnMap(stations, { skipFitBounds: true });
     renderStationList(stations);
@@ -1845,6 +1927,10 @@ function showSearchHereIfMoved() {
 }
 
 function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter = false } = {}) {
+  // Layer in active manual scans so the markers persist for 15 min after
+  // a refresh / pan-away. Stations already in the primary list keep their
+  // fresh data and get no countdown.
+  stations = withManualScans(stations);
   // Remove previous cluster group or individual markers
   if (state.clusterGroup) {
     state.map.removeLayer(state.clusterGroup);
@@ -2016,6 +2102,8 @@ function rankColor(ratio) {
 }
 
 function renderStationList(stations) {
+  // Same merge as renderStationsOnMap — list and markers stay in sync.
+  stations = withManualScans(stations);
   const list = document.getElementById('station-list');
   const countLabel = document.getElementById('station-count');
   const radiusKm = state.radiusKm || 25;
@@ -2497,6 +2585,10 @@ function showStationSheet(station) {
       <svg class="sheet-info-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
       <span>${formatDataAge(state.dataTimestamp)}</span>
     </div>` : ''}
+    ${station._expiresAt ? `<div class="sheet-manual-scan-banner" data-expires-at="${station._expiresAt}">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm.5 5h-1v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg>
+      <span>${t('manualScanValidFor')} <strong class="sheet-manual-scan-countdown">–:––</strong></span>
+    </div>` : ''}
     <div class="sheet-hours-section" id="sheet-hours-section"></div>
     <div class="sheet-nav-buttons${isAndroid ? ' android-only' : ''}">
       <a href="${gmapsUrl}" target="_blank" class="sheet-nav-btn gmaps">
@@ -2549,6 +2641,10 @@ function showStationSheet(station) {
 
   const closeSheet = () => {
     if (state.sheetChart) { state.sheetChart.destroy(); state.sheetChart = null; }
+    if (state._manualScanCountdownTimer) {
+      clearInterval(state._manualScanCountdownTimer);
+      state._manualScanCountdownTimer = null;
+    }
     state.sheetExpanded = false;
     content.style.transform = '';
     content.classList.remove('dragging', 'snapping', 'expanded');
@@ -2561,6 +2657,37 @@ function showStationSheet(station) {
     if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
     if (state.defaultBounds) showResetViewBtn();
   };
+
+  // Tick the "valid for" countdown if the station came from a manual scan.
+  const manualBanner = body.querySelector('.sheet-manual-scan-banner');
+  if (manualBanner) {
+    const expiresAt = Number(manualBanner.dataset.expiresAt);
+    const tick = () => {
+      const remainingMs = expiresAt - Date.now();
+      const el = manualBanner.querySelector('.sheet-manual-scan-countdown');
+      if (!el) return;
+      if (remainingMs <= 0) {
+        el.textContent = '0:00';
+        manualBanner.classList.add('expired');
+        if (state._manualScanCountdownTimer) {
+          clearInterval(state._manualScanCountdownTimer);
+          state._manualScanCountdownTimer = null;
+        }
+        // Drop the now-expired scan from cache + map.
+        pruneManualScans();
+        renderStationsOnMap(state.stations || [], { skipFitBounds: true, skipRadiusFilter: true });
+        renderStationList(state.stations || []);
+        return;
+      }
+      const totalSec = Math.ceil(remainingMs / 1000);
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      el.textContent = `${m}:${String(s).padStart(2, '0')}`;
+    };
+    if (state._manualScanCountdownTimer) clearInterval(state._manualScanCountdownTimer);
+    tick();
+    state._manualScanCountdownTimer = setInterval(tick, 1000);
+  }
   backdrop.addEventListener('click', closeSheet);
 
   // --- Desktop: add close button for side panel ---

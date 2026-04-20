@@ -1267,6 +1267,30 @@ body.logged-in .cloud-sync-hint {
 }
 .sheet-chart-empty-btn:active { opacity: 0.85; transform: scale(0.97); }
 
+/* Banner shown for stations that came from a manual scan — the data is
+   only kept locally for 15 min, so we surface a live countdown. */
+.sheet-manual-scan-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  margin: 6px 0 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+}
+.sheet-manual-scan-banner.expired {
+  background: rgba(255, 59, 48, 0.14);
+  color: #ff3b30;
+}
+.sheet-manual-scan-countdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .sheet-expand-btn {
   display: none;
   position: absolute;
