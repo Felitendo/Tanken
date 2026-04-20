@@ -179,6 +179,10 @@ const i18n = {
     scanConfirm: 'Scannen',
     scanCancel: 'Abbrechen',
     noStationsHere: 'Keine Tankstellen in der Nähe gefunden.',
+    stationNotScanned: 'Diese Tankstelle wird aktuell nicht regelmäßig erfasst.',
+    stationNotScannedHint: 'Du kannst einen Scan-Standort dafür in den Einstellungen anfragen.',
+    requestScanLocation: 'Standort anfragen',
+    historyAccumulating: 'Noch keine Preisverlaufsdaten – sammelt sich mit der Zeit.',
   },
   en: {
     tabMap: 'Map',
@@ -347,6 +351,10 @@ const i18n = {
     scanConfirm: 'Scan',
     scanCancel: 'Cancel',
     noStationsHere: 'No petrol stations nearby.',
+    stationNotScanned: 'This station isn\'t scanned regularly yet.',
+    stationNotScannedHint: 'You can request a scan location for it from the settings.',
+    requestScanLocation: 'Request location',
+    historyAccumulating: 'No price history yet – it builds up over time.',
   }
 };
 
@@ -1010,13 +1018,23 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
-function openLocationRequestSheet() {
+function openLocationRequestSheet(opts = {}) {
   const sheet = document.getElementById('bottom-sheet');
   const body = document.getElementById('bottom-sheet-body');
   if (!sheet || !body) return;
 
-  const initialLat = Number.isFinite(state.userLat) ? state.userLat : 51.1657;
-  const initialLng = Number.isFinite(state.userLng) ? state.userLng : 10.4515;
+  // Optional pre-fill: caller can pass {lat, lng, name} so e.g. the
+  // station-detail "Anfragen" button drops the user straight onto the
+  // station's coordinates with the name pre-populated.
+  const presetLat = Number(opts.lat);
+  const presetLng = Number(opts.lng);
+  const presetName = typeof opts.name === 'string' ? opts.name : '';
+  const initialLat = Number.isFinite(presetLat) ? presetLat
+    : Number.isFinite(state.userLat) ? state.userLat
+    : 51.1657;
+  const initialLng = Number.isFinite(presetLng) ? presetLng
+    : Number.isFinite(state.userLng) ? state.userLng
+    : 10.4515;
   const initialRadius = 25;
 
   const reqState = {
@@ -1184,6 +1202,7 @@ function openLocationRequestSheet() {
   const submitBtn = document.getElementById('req-submit');
   const nameInput = document.getElementById('req-name');
   const noteInput = document.getElementById('req-note');
+  if (presetName && nameInput) nameInput.value = presetName;
   submitBtn.addEventListener('click', async () => {
     if (reqState.sending) return;
     const name = nameInput.value.trim();
@@ -2512,6 +2531,7 @@ function showStationSheet(station) {
   setupSheetDrag(content, handleArea, backdrop, closeSheet);
 
   state.sheetStationName = station.name;
+  state.sheetStation = station;
   loadSheetChart(station.name, 1);
   if (station.id) refreshStationStatus(station);
 
@@ -2695,6 +2715,40 @@ async function refreshStationStatus(station) {
   }
 }
 
+// Render the empty state for the per-station price chart. In Austria we just
+// say "data is accumulating"; in Germany we point users to the request flow
+// because the station isn't covered by the scanner.
+function renderSheetChartEmptyState(loadingEl, station) {
+  if (!loadingEl) return;
+  const inAustria = station && Number.isFinite(station.lat) && Number.isFinite(station.lng)
+    ? isInAustria(station.lat, station.lng)
+    : false;
+
+  if (inAustria) {
+    loadingEl.innerHTML = `<span style="opacity:0.75">${t('historyAccumulating')}</span>`;
+    return;
+  }
+
+  // Germany: explain why and offer the location request flow.
+  loadingEl.innerHTML = `
+    <div class="sheet-chart-empty-msg">
+      <div class="sheet-chart-empty-title">${t('stationNotScanned')}</div>
+      <div class="sheet-chart-empty-hint">${t('stationNotScannedHint')}</div>
+      <button type="button" class="sheet-chart-empty-btn" id="sheet-chart-request-btn">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        <span>${t('requestScanLocation')}</span>
+      </button>
+    </div>`;
+  const btn = document.getElementById('sheet-chart-request-btn');
+  if (btn && station) {
+    btn.addEventListener('click', () => {
+      haptic('light');
+      const label = [station.name || station.brand, station.place].filter(Boolean).join(' · ');
+      openLocationRequestSheet({ lat: station.lat, lng: station.lng, name: label });
+    });
+  }
+}
+
 async function loadSheetChart(stationName, days = 1) {
   if (state.sheetChart) { state.sheetChart.destroy(); state.sheetChart = null; }
   const loading = document.getElementById('sheet-chart-loading');
@@ -2706,8 +2760,11 @@ async function loadSheetChart(stationName, days = 1) {
 
   try {
     const data = await api(`/api/history?station=${encodeURIComponent(stationName)}`);
-    if (!data || !data.length || data.length < 2) {
-      loading.innerHTML = `<span>${t('noHistory')}</span>`;
+    // Backend returns an array of station entries when ≥ 2 rows exist; an
+    // object {entries, extremes} otherwise. Treat both "no rows" cases the same.
+    const hasSeries = Array.isArray(data) && data.length >= 2;
+    if (!hasSeries) {
+      renderSheetChartEmptyState(loading, state.sheetStation);
       return;
     }
 

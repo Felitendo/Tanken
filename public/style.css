@@ -1226,6 +1226,47 @@ body.logged-in .cloud-sync-hint {
   font-size: 13px;
 }
 
+/* Friendly empty-state for German stations that aren't in the scanner — points
+   the user at the location-request flow. */
+.sheet-chart-empty-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: 12px 16px;
+  height: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+}
+.sheet-chart-empty-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.sheet-chart-empty-hint {
+  font-size: 12px;
+  color: var(--color-hint);
+  line-height: 1.4;
+}
+.sheet-chart-empty-btn {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: none;
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.sheet-chart-empty-btn:active { opacity: 0.85; transform: scale(0.97); }
+
 .sheet-expand-btn {
   display: none;
   position: absolute;

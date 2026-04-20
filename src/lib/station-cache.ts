@@ -216,8 +216,14 @@ export async function persistPriceSnapshot(): Promise<number> {
   if (!stations.length) return 0;
 
   const timestamp = new Date().toISOString();
-  const BATCH_SIZE = 5000; // ~4 params each → well within PG's 65535 param limit
+  const BATCH_SIZE = 5000; // ~5 params each → well within PG's 65535 param limit
   let written = 0;
+
+  // Tag every snapshot row with a country sentinel so country-scoped history
+  // queries can include them. Austrian rows ALWAYS get an `at-…` location_id
+  // (matched by `LIKE 'at-%'`); German rows get `de-snapshot`.
+  const isAustria = (lat: number, lng: number) =>
+    lat >= 46.3 && lat <= 49.1 && lng >= 9.4 && lng <= 17.2;
 
   for (let i = 0; i < stations.length; i += BATCH_SIZE) {
     const batch = stations.slice(i, i + BATCH_SIZE);
@@ -225,11 +231,12 @@ export async function persistPriceSnapshot(): Promise<number> {
     const params: unknown[] = [];
     let idx = 1;
     for (const s of batch) {
-      values.push(`($${idx++}::timestamptz, $${idx++}, $${idx++}, $${idx++})`);
-      params.push(timestamp, s.name, s.brand, s.price);
+      const locationId = isAustria(s.lat, s.lng) ? 'at-snapshot' : 'de-snapshot';
+      values.push(`($${idx++}::timestamptz, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
+      params.push(timestamp, locationId, s.name, s.brand, s.price);
     }
     await db.query(
-      `INSERT INTO station_prices (timestamp, station_name, station_brand, price) VALUES ${values.join(', ')}`,
+      `INSERT INTO station_prices (timestamp, location_id, station_name, station_brand, price) VALUES ${values.join(', ')}`,
       params
     );
     written += batch.length;
