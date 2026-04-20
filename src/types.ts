@@ -126,6 +126,8 @@ export interface UserSettings {
   activeLocation?: string;
   lang?: string;
   contributorsOpen?: boolean;
+  /** Default range for the per-station price chart: 1 = 24 h, 7 = 7 days. */
+  historyDefaultDays?: 1 | 7;
 }
 
 export interface PriceAlert {

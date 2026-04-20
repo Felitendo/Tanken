@@ -7,6 +7,7 @@ export const runtime = 'nodejs';
 
 const fuelTypeSchema = z.enum(['diesel', 'e5', 'e10']);
 const themeSchema = z.enum(['auto', 'light', 'dark']);
+const historyDaysSchema = z.union([z.literal(1), z.literal(7)]);
 const settingsSchema = z
   .object({
     fuelType: fuelTypeSchema.optional(),
@@ -14,7 +15,8 @@ const settingsSchema = z
     theme: themeSchema.optional(),
     activeLocation: z.string().min(1).optional(),
     lang: z.string().min(1).max(10).optional(),
-    contributorsOpen: z.boolean().optional()
+    contributorsOpen: z.boolean().optional(),
+    historyDefaultDays: historyDaysSchema.optional()
   })
   .partial();
 
@@ -60,6 +62,10 @@ export async function POST(request: NextRequest) {
 
   if (typeof updates.contributorsOpen === 'boolean') {
     nextSettings.contributorsOpen = updates.contributorsOpen;
+  }
+
+  if (updates.historyDefaultDays === 1 || updates.historyDefaultDays === 7) {
+    nextSettings.historyDefaultDays = updates.historyDefaultDays;
   }
 
   await stores.userStore.updateUser(user.id, (currentUser) => {

@@ -184,6 +184,10 @@ const i18n = {
     requestScanLocation: 'Standort anfragen',
     historyAccumulating: 'Noch keine Preisverlaufsdaten – sammelt sich mit der Zeit.',
     manualScanValidFor: 'Manueller Scan – gültig noch',
+    historyDefault: 'PREISVERLAUF',
+    historyDefaultLabel: 'Standard-Ansicht',
+    historyDefault24h: '24 Stunden',
+    historyDefault7d: '7 Tage',
   },
   en: {
     tabMap: 'Map',
@@ -357,6 +361,10 @@ const i18n = {
     requestScanLocation: 'Request location',
     historyAccumulating: 'No price history yet – it builds up over time.',
     manualScanValidFor: 'Manual scan – valid for',
+    historyDefault: 'PRICE HISTORY',
+    historyDefaultLabel: 'Default range',
+    historyDefault24h: '24 hours',
+    historyDefault7d: '7 days',
   }
 };
 
@@ -513,6 +521,8 @@ const state = {
   sheetExpanded: false,
   stationSort: 'price',
   historyDays: 7,
+  // Default range for the per-station price chart (1 = 24 h, 7 = 7 days).
+  historyDefaultDays: 1,
   theme: 'auto',
   lang: detectLanguage(),
   activeCountry: null,
@@ -578,6 +588,7 @@ async function init() {
   setupSettings();
   setupTheme();
   setupLangPicker();
+  setupHistoryDefaultPicker();
   setupMyLocationBtn();
   setupAccountUi();
   setupStationSort();
@@ -764,6 +775,17 @@ function setupTheme() {
     applyTheme(select.value);
     // Theme is device-local only — don't trigger cloud sync
     saveSettingsLocal();
+  });
+}
+
+function setupHistoryDefaultPicker() {
+  const select = document.getElementById('history-default-picker');
+  if (!select) return;
+  select.value = String(state.historyDefaultDays || 1);
+  select.addEventListener('change', () => {
+    haptic('light');
+    const v = parseInt(select.value, 10);
+    persistStateSettings({ historyDefaultDays: v === 7 ? 7 : 1 });
   });
 }
 
@@ -2604,8 +2626,8 @@ function showStationSheet(station) {
       <div class="sheet-chart-header-row">
         <div class="sheet-chart-header">${t('priceHistory')}</div>
         <div class="sheet-chart-toggle">
-          <button class="sheet-toggle-btn active" data-range="1" id="sheet-range-24h">${t('sheet24h')}</button>
-          <button class="sheet-toggle-btn" data-range="7" id="sheet-range-7d">${t('sheet7d')}</button>
+          <button class="sheet-toggle-btn${state.historyDefaultDays === 7 ? '' : ' active'}" data-range="1" id="sheet-range-24h">${t('sheet24h')}</button>
+          <button class="sheet-toggle-btn${state.historyDefaultDays === 7 ? ' active' : ''}" data-range="7" id="sheet-range-7d">${t('sheet7d')}</button>
         </div>
       </div>
       <div class="sheet-chart-container">
@@ -2705,7 +2727,7 @@ function showStationSheet(station) {
 
   state.sheetStationName = station.name;
   state.sheetStation = station;
-  loadSheetChart(station.name, 1);
+  loadSheetChart(station.name, state.historyDefaultDays || 1);
   if (station.id) refreshStationStatus(station);
 
   document.querySelectorAll('.sheet-toggle-btn').forEach(btn => {
@@ -4191,12 +4213,17 @@ function applySettingsToState(settings = {}) {
   if (settings.theme) state.theme = settings.theme;
   if (settings.lang) state.lang = settings.lang;
   if (typeof settings.contributorsOpen === 'boolean') state.contributorsOpen = settings.contributorsOpen;
+  if (settings.historyDefaultDays === 1 || settings.historyDefaultDays === 7) {
+    state.historyDefaultDays = settings.historyDefaultDays;
+  }
 
   state.radiusKm = 25;
 
   applyTheme(state.theme);
   const themeSelect = document.getElementById('theme-picker');
   if (themeSelect) themeSelect.value = state.theme;
+  const histSelect = document.getElementById('history-default-picker');
+  if (histSelect) histSelect.value = String(state.historyDefaultDays);
 }
 
 async function persistStateSettings(nextSettings = {}) {
@@ -4237,7 +4264,13 @@ function setSyncBadgeState(s, keys) {
 
 async function saveSettingsRemote() {
   // Theme is intentionally excluded — it stays device-local
-  const next = { fuelType: state.fuelType, activeLocation: state.activeLocation, lang: state.lang, contributorsOpen: state.contributorsOpen };
+  const next = {
+    fuelType: state.fuelType,
+    activeLocation: state.activeLocation,
+    lang: state.lang,
+    contributorsOpen: state.contributorsOpen,
+    historyDefaultDays: state.historyDefaultDays,
+  };
   try { await api('/api/settings', { method: 'POST', body: JSON.stringify(next) }); } catch {}
 }
 
@@ -4248,7 +4281,8 @@ function saveSettingsLocal() {
       activeLocation: state.activeLocation,
       theme: state.theme,
       lang: state.lang,
-      contributorsOpen: state.contributorsOpen
+      contributorsOpen: state.contributorsOpen,
+      historyDefaultDays: state.historyDefaultDays,
     }));
   } catch {}
 }
