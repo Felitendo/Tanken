@@ -1394,6 +1394,11 @@ function enterScanPickerMode() {
 
   state._scanPicker = { circle, marker, onMapClick };
 
+  // Frame the radius so the user can see the full 25 km area at a glance.
+  try {
+    state.map.fitBounds(circle.getBounds(), { padding: [40, 40], animate: true });
+  } catch { /* fitBounds can throw on a not-yet-projected map; ignore */ }
+
   // Toggle button into confirm mode + insert cancel pill alongside it
   const btn = document.getElementById('btn-search-here');
   setSearchBtnConfirm(btn);
