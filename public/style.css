@@ -1798,6 +1798,14 @@ body.logged-in .cloud-sync-hint {
   50%      { transform: scale(0.65); opacity: 0.65; }
 }
 
+/* Austria has live E-Control coverage everywhere — no scan flow, so the
+   "Hier suchen" pill, its cancel sibling and any queued pins are hidden. */
+[data-active-country="at"] .map-search-here,
+[data-active-country="at"] .map-scan-cancel,
+[data-active-country="at"] .scan-queue-pin {
+  display: none !important;
+}
+
 /* Brighten dark map labels for readability */
 .bright-labels {
   filter: brightness(1.8) contrast(1.1);

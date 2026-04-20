@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readPriceHistoryFromDatabase, readPriceHistoryByStation, getAvailableLocations, getPriceExtremes } from '@/lib/history-store';
+import { readPriceHistoryFromDatabase, readPriceHistoryByStation, getAvailableLocations, getPriceExtremes, type HistoryCountry } from '@/lib/history-store';
 
 export const runtime = 'nodejs';
 
+function parseCountry(raw: string | null): HistoryCountry | undefined {
+  return raw === 'at' || raw === 'de' ? raw : undefined;
+}
+
 export async function GET(request: NextRequest) {
-  // Return list of available location IDs
+  const country = parseCountry(request.nextUrl.searchParams.get('country'));
+
+  // Return list of available location IDs (optionally country-scoped)
   const listLocations = request.nextUrl.searchParams.get('locations');
   if (listLocations === 'list') {
-    const locations = await getAvailableLocations();
+    const locations = await getAvailableLocations(country);
     return NextResponse.json({ locations });
   }
 
@@ -23,8 +29,8 @@ export async function GET(request: NextRequest) {
   }
 
   const [entries, extremes] = await Promise.all([
-    readPriceHistoryFromDatabase(locationId),
-    getPriceExtremes(locationId),
+    readPriceHistoryFromDatabase(locationId, country),
+    getPriceExtremes(locationId, country),
   ]);
   return NextResponse.json({ entries, extremes });
 }

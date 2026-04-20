@@ -1,6 +1,22 @@
 import { database } from '@/lib/server-runtime';
 import { HistoryEntry } from '@/types';
 
+export type HistoryCountry = 'de' | 'at';
+
+/**
+ * SQL fragment + params builder for filtering price_history / station_prices
+ * by country. Austrian rows always carry a location_id starting with `at-`
+ * (grid points and ad-hoc E-Control caches). Everything else is treated as
+ * Germany. Returns clauses that can be combined into a WHERE list.
+ */
+function countryClause(country: HistoryCountry | undefined, nextParamIndex: number): { sql: string | null; params: string[] } {
+  if (!country) return { sql: null, params: [] };
+  if (country === 'at') {
+    return { sql: `location_id LIKE $${nextParamIndex}`, params: ['at-%'] };
+  }
+  return { sql: `(location_id IS NOT NULL AND location_id NOT LIKE $${nextParamIndex})`, params: ['at-%'] };
+}
+
 type HistoryRow = { timestamp: Date; min_price: number; avg_price: number; max_price: number; station: string | null; num_stations: number | null; location_id: string | null };
 
 function mapRows(rows: HistoryRow[]): HistoryEntry[] {
@@ -44,7 +60,7 @@ export async function readPriceHistoryByStation(stationName: string): Promise<Hi
   }));
 }
 
-export async function readPriceHistoryFromDatabase(locationId?: string): Promise<HistoryEntry[]> {
+export async function readPriceHistoryFromDatabase(locationId?: string, country?: HistoryCountry): Promise<HistoryEntry[]> {
   if (locationId) {
     const result = await database.query<HistoryRow>(
       `
@@ -58,12 +74,16 @@ export async function readPriceHistoryFromDatabase(locationId?: string): Promise
     return mapRows(result.rows);
   }
 
+  const cc = countryClause(country, 1);
+  const where = cc.sql ? `WHERE ${cc.sql}` : '';
   const result = await database.query<HistoryRow>(
     `
       SELECT timestamp, min_price, avg_price, max_price, station, num_stations, location_id
       FROM price_history
+      ${where}
       ORDER BY timestamp ASC
-    `
+    `,
+    cc.params
   );
   return mapRows(result.rows);
 }
@@ -76,9 +96,17 @@ export interface StationPriceRow {
   location_id?: string;
 }
 
-export async function readStationPrices(locationId?: string): Promise<StationPriceRow[]> {
-  const where = locationId ? 'WHERE location_id = $1' : '';
-  const params = locationId ? [locationId] : [];
+export async function readStationPrices(locationId?: string, country?: HistoryCountry): Promise<StationPriceRow[]> {
+  const clauses: string[] = [];
+  const params: (string | number)[] = [];
+  if (locationId) {
+    params.push(locationId);
+    clauses.push(`location_id = $${params.length}`);
+  } else {
+    const cc = countryClause(country, params.length + 1);
+    if (cc.sql) { params.push(...cc.params); clauses.push(cc.sql); }
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const result = await database.query<{
     timestamp: Date;
     station_name: string;
@@ -106,9 +134,17 @@ export interface PriceExtreme {
   timestamp: string;
 }
 
-export async function getPriceExtremes(locationId?: string): Promise<{ cheapest: PriceExtreme | null; mostExpensive: PriceExtreme | null }> {
-  const where = locationId ? 'WHERE location_id = $1' : '';
-  const params = locationId ? [locationId] : [];
+export async function getPriceExtremes(locationId?: string, country?: HistoryCountry): Promise<{ cheapest: PriceExtreme | null; mostExpensive: PriceExtreme | null }> {
+  const clauses: string[] = [];
+  const params: (string | number)[] = [];
+  if (locationId) {
+    params.push(locationId);
+    clauses.push(`location_id = $${params.length}`);
+  } else {
+    const cc = countryClause(country, params.length + 1);
+    if (cc.sql) { params.push(...cc.params); clauses.push(cc.sql); }
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
   const cheapestResult = await database.query<{ station_name: string; price: number; timestamp: Date }>(
     `SELECT station_name, price, timestamp FROM station_prices ${where} ORDER BY price ASC LIMIT 1`,
@@ -132,9 +168,14 @@ export async function getPriceExtremes(locationId?: string): Promise<{ cheapest:
   };
 }
 
-export async function getAvailableLocations(): Promise<string[]> {
+export async function getAvailableLocations(country?: HistoryCountry): Promise<string[]> {
+  const clauses: string[] = ['location_id IS NOT NULL'];
+  const params: (string | number)[] = [];
+  const cc = countryClause(country, params.length + 1);
+  if (cc.sql) { params.push(...cc.params); clauses.push(cc.sql); }
   const result = await database.query<{ location_id: string }>(
-    `SELECT DISTINCT location_id FROM price_history WHERE location_id IS NOT NULL ORDER BY location_id`
+    `SELECT DISTINCT location_id FROM price_history WHERE ${clauses.join(' AND ')} ORDER BY location_id`,
+    params
   );
   return result.rows.map(r => r.location_id);
 }

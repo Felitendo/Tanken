@@ -468,6 +468,7 @@ const state = {
   historyDays: 7,
   theme: 'auto',
   lang: detectLanguage(),
+  activeCountry: null,
   loaded: { map: false, history: false, stats: false, settings: false },
   toastTimer: null,
   me: null,
@@ -1222,6 +1223,50 @@ function getActiveCoords() {
   return { lat: 52.52, lng: 13.405 };
 }
 
+// Loose bounding box matching the backend's isAustria check in /api/stations.
+// Used to flip the map UI between DE (scan-based) and AT (live, no scan).
+function isInAustria(lat, lng) {
+  return lat >= 46.3 && lat <= 49.1 && lng >= 9.4 && lng <= 17.2;
+}
+
+function getActiveCountry() {
+  const c = getActiveCoords();
+  return isInAustria(c.lat, c.lng) ? 'at' : 'de';
+}
+
+// Drive country-conditional UI from a single attribute on <html>.
+// CSS hides the scan-here button + cancel pill when [data-active-country="at"].
+function applyCountryUi() {
+  const next = getActiveCountry();
+  if (state.activeCountry === next) return;
+  const prev = state.activeCountry;
+  state.activeCountry = next;
+  document.documentElement.setAttribute('data-active-country', next);
+
+  // Switching country: tear down any in-flight scan picker / queue so the
+  // user doesn't see DE-only affordances bleeding into AT mode.
+  if (next === 'at') {
+    if (state._scanPicker) exitScanPickerMode();
+    if (Array.isArray(state._scanQueue)) {
+      state._scanQueue.forEach(item => { try { state.map.removeLayer(item.pin); } catch {} });
+      state._scanQueue = [];
+    }
+    if (state._searchHereCooldownTimer) {
+      clearInterval(state._searchHereCooldownTimer);
+      state._searchHereCooldownTimer = null;
+    }
+    const btn = document.getElementById('btn-search-here');
+    if (btn) { btn.disabled = false; setSearchBtnIdle(btn); }
+  }
+
+  // Country change invalidates cached history/stats — they're country-scoped now.
+  if (prev && prev !== next) {
+    state.selectedLocation = '';
+    state.loaded.history = false;
+    state.loaded.stats = false;
+  }
+}
+
 function showStationSkeletons(count = 5) {
   const list = document.getElementById('station-list');
   if (!list) return;
@@ -1239,6 +1284,7 @@ function showStationSkeletons(count = 5) {
 async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
   state.loaded.map = true;
   const coords = getActiveCoords();
+  applyCountryUi();
 
   if (!state.map) {
     state.map = L.map('map', {
@@ -1464,6 +1510,7 @@ async function runScanAt(lat, lng) {
     state.stations = stations;
     state.dataTimestamp = result._dataTimestamp || null;
     state._searchHereAnchor = { lat, lng };
+    applyCountryUi();
 
     await animPromise;
     renderStationsOnMap(stations, { skipFitBounds: true });
@@ -2648,7 +2695,8 @@ async function loadSheetChart(stationName, days = 1) {
 
 async function loadLocationPickers() {
   try {
-    const res = await api('/api/history?locations=list');
+    const country = state.activeCountry || getActiveCountry();
+    const res = await api(`/api/history?locations=list&country=${country}`);
     const locations = res && res.locations ? res.locations : [];
     state.availableLocations = locations;
 
@@ -2670,7 +2718,10 @@ async function loadLocationPickers() {
 }
 
 async function fetchHistoryData() {
-  const url = state.selectedLocation ? `/api/history?location=${encodeURIComponent(state.selectedLocation)}` : '/api/history';
+  const country = state.activeCountry || getActiveCountry();
+  const url = state.selectedLocation
+    ? `/api/history?location=${encodeURIComponent(state.selectedLocation)}&country=${country}`
+    : `/api/history?country=${country}`;
   try {
     const res = await api(url);
     // Support both old format (plain array) and new format ({ entries, extremes })
@@ -3014,7 +3065,10 @@ function renderHourChart(entries, dayKey) {
 }
 
 async function reloadStats() {
-  const url = state.selectedLocation ? `/api/stats?location=${encodeURIComponent(state.selectedLocation)}` : '/api/stats';
+  const country = state.activeCountry || getActiveCountry();
+  const url = state.selectedLocation
+    ? `/api/stats?location=${encodeURIComponent(state.selectedLocation)}&country=${country}`
+    : `/api/stats?country=${country}`;
   const stats = await api(url);
   state.stats = stats;
   renderStats(stats);
@@ -3263,8 +3317,20 @@ async function searchLocation(query) {
         if (state._scanPicker) exitScanPickerMode();
         state.loaded.map = true;
 
-        // If a scan is running or the cooldown is still ticking, drop a
-        // yellow pin to mark this request and queue it for later.
+        // Austria has live E-Control coverage everywhere — no scan, no queue,
+        // no cooldown. Just fly to the spot and load prices directly.
+        if (isInAustria(lat, lng)) {
+          state.userLat = lat;
+          state.userLng = lng;
+          state.activeLocation = 'gps';
+          applyCountryUi();
+          if (state.map) state.map.flyTo([lat, lng], 13, { duration: 0.6 });
+          await new Promise(r => setTimeout(r, 650));
+          await loadMapTab();
+          return;
+        }
+
+        // Germany flow: queue if a scan is running or the cooldown is still ticking.
         if (isScanBusy()) {
           enqueueScan(lat, lng);
           return;
