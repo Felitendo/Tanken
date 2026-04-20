@@ -1723,6 +1723,17 @@ body.logged-in .cloud-sync-hint {
   filter: brightness(1.5) contrast(0.9);
 }
 
+/* Match the Leaflet container background to the active tile palette so
+   loading tiles don't flash white before they paint. */
+[data-theme="dark"] .leaflet-container {
+  background: #2c2c2c;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .leaflet-container {
+    background: #2c2c2c;
+  }
+}
+
 /* Disable touch/select quirks on Leaflet chrome */
 .leaflet-container,
 .leaflet-pane,
