@@ -1098,7 +1098,7 @@ body.logged-in .cloud-sync-hint {
 .sheet-hours-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 10px 20px;
   cursor: pointer;
   -webkit-user-select: none;
@@ -1139,7 +1139,8 @@ body.logged-in .cloud-sync-hint {
 .sheet-hours-row {
   display: flex;
   justify-content: space-between;
-  padding: 5px 0 5px 32px;
+  /* 24 px icon slot + 10 px gap = 34 px text indent, matching the toggle row. */
+  padding: 5px 0 5px 34px;
   font-size: 13px;
 }
 
