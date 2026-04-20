@@ -1720,17 +1720,17 @@ body.logged-in .cloud-sync-hint {
    out the dark background — brightness pulls labels up, lower contrast
    prevents them from collapsing back into the background. */
 .map-tiles-dark {
-  filter: brightness(1.5) contrast(0.9);
+  filter: brightness(1.75) contrast(0.95);
 }
 
 /* Match the Leaflet container background to the active tile palette so
    loading tiles don't flash white before they paint. */
 [data-theme="dark"] .leaflet-container {
-  background: #2c2c2c;
+  background: #313131;
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .leaflet-container {
-    background: #2c2c2c;
+    background: #313131;
   }
 }
 
