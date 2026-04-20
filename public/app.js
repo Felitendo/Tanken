@@ -2696,12 +2696,14 @@ function showStationSheet(station) {
       </div>
       ${station.id ? `<button class="fav-btn sheet-fav-btn${sheetIsFav ? ' active' : ''}" data-station-id="${station.id}" aria-label="${sheetIsFav ? t('removeFavourite') : t('addFavourite')}"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
     </div>
-    ${station._expiresAt ? `<div class="sheet-manual-scan-banner" data-expires-at="${station._expiresAt}" data-ttl-ms="${MANUAL_SCAN_TTL_MS}">
-      <span class="sheet-manual-scan-dot" aria-hidden="true"></span>
-      <span class="sheet-manual-scan-text">${t('manualScanLabel')} · ${t('manualScanExpiresIn')} <strong class="sheet-manual-scan-countdown">–:––</strong>${t('manualScanExpiresSuffix') ? ' ' + t('manualScanExpiresSuffix') : ''}</span>
-      <div class="sheet-manual-scan-progress" aria-hidden="true"><div class="sheet-manual-scan-progress-bar"></div></div>
+    ${station._expiresAt ? `<div class="sheet-manual-scan-banner-wrap">
+      <div class="sheet-manual-scan-banner" data-expires-at="${station._expiresAt}" data-ttl-ms="${MANUAL_SCAN_TTL_MS}">
+        <span class="sheet-manual-scan-dot" aria-hidden="true"></span>
+        <span class="sheet-manual-scan-text">${t('manualScanLabel')} · ${t('manualScanExpiresIn')} <strong class="sheet-manual-scan-countdown">–:––</strong>${t('manualScanExpiresSuffix') ? ' ' + t('manualScanExpiresSuffix') : ''}</span>
+        <div class="sheet-manual-scan-progress" aria-hidden="true"><div class="sheet-manual-scan-progress-bar"></div></div>
+      </div>
     </div>` : ''}
-    <div class="sheet-station-price${station._expiresAt ? ' has-manual-scan' : ''}" style="color:${color}">
+    <div class="sheet-station-price" style="color:${color}">
       ${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}
       <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>
     </div>

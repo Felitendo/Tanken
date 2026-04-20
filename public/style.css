@@ -1267,29 +1267,33 @@ body.logged-in .cloud-sync-hint {
 }
 .sheet-chart-empty-btn:active { opacity: 0.85; transform: scale(0.97); }
 
-/* Subtle banner for manual-scan stations — data is ephemeral (15 min TTL),
-   so we surface a small dot + countdown + thin progress bar. Colour is
-   driven live by JS from --scan-color (green → yellow → red over TTL),
-   inherited from #bottom-sheet-body so the price can glow in the same hue. */
-/* Default freshness palette lives on the shared sheet container so both the
-   banner and the price inherit the same --scan-color. JS overwrites on each
-   tick while the manual-scan window is open. */
+/* Subtle pill for manual-scan stations — ephemeral data (15 min TTL).
+   Freshness colour comes from --scan-color which is set on
+   #bottom-sheet-body each tick (green → yellow → red). The pill itself
+   stays low-key: tinted background, hint text, small pulsing dot,
+   hairline progress strip along the inner-bottom edge. */
 #bottom-sheet-body {
   --scan-color: #22c55e;
 }
+.sheet-manual-scan-banner-wrap {
+  padding: 4px 20px 10px;
+}
 .sheet-manual-scan-banner {
-  --scan-track: rgba(148, 163, 184, 0.22);
-  display: flex;
+  --scan-track: rgba(148, 163, 184, 0.18);
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 20px 10px;
-  margin: 0;
-  font-size: 12px;
+  gap: 7px;
+  padding: 5px 11px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--scan-color) 10%, transparent);
+  font-size: 11.5px;
   color: var(--color-hint);
+  max-width: 100%;
   position: relative;
+  overflow: hidden;
+  transition: background 1s linear;
 }
 .sheet-manual-scan-text {
-  flex: 1;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -1301,32 +1305,29 @@ body.logged-in .cloud-sync-hint {
   color: var(--color-text);
 }
 
-/* Small pulsing dot — no heavy halo, the real "wow" lives on the price now. */
+/* Small pulsing dot. */
 .sheet-manual-scan-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--scan-color);
   flex-shrink: 0;
-  box-shadow: 0 0 4px var(--scan-color);
   animation: manualScanPulse 1.8s ease-in-out infinite;
-  transition: background 1s linear, box-shadow 1s linear;
+  transition: background 1s linear;
 }
 @keyframes manualScanPulse {
-  0%, 100% { opacity: 1;   transform: scale(1);    }
-  50%      { opacity: 0.6; transform: scale(0.85); }
+  0%, 100% { opacity: 1;    transform: scale(1);   }
+  50%      { opacity: 0.55; transform: scale(0.8); }
 }
 
-/* Thin progress bar hugging the bottom edge of the banner. */
+/* Hairline progress strip hugging the inside-bottom of the pill. */
 .sheet-manual-scan-progress {
   position: absolute;
-  left: 20px;
-  right: 20px;
+  left: 0;
+  right: 0;
   bottom: 0;
   height: 2px;
-  border-radius: 2px;
   background: var(--scan-track);
-  overflow: hidden;
 }
 .sheet-manual-scan-progress-bar {
   height: 100%;
@@ -1335,17 +1336,7 @@ body.logged-in .cloud-sync-hint {
   transition: width 0.9s linear, background 1s linear;
 }
 
-/* The price itself carries the "fresh/expiring" energy via a subtle text glow
-   in the same colour the freshness indicator uses. */
-.sheet-station-price.has-manual-scan {
-  animation: priceFreshGlow 2.6s ease-in-out infinite;
-}
-@keyframes priceFreshGlow {
-  0%, 100% { text-shadow: 0 0 10px var(--scan-color, currentColor), 0 0 2px var(--scan-color, currentColor); }
-  50%      { text-shadow: 0 0 18px var(--scan-color, currentColor), 0 0 6px var(--scan-color, currentColor); }
-}
-
-/* Last minute: only the dot pulses faster — no hard colour override. */
+/* Last minute: only the dot pulses faster. */
 .sheet-manual-scan-banner.urgent .sheet-manual-scan-dot {
   animation-duration: 0.9s;
 }
