@@ -1271,14 +1271,17 @@ body.logged-in .cloud-sync-hint {
    only kept locally for 15 min, so we surface a live countdown plus a
    progress bar that depletes over the TTL window. */
 .sheet-manual-scan-banner {
-  --scan-color: #ff3b30;
+  --scan-color: #f5a524;
+  --scan-bg: rgba(245, 165, 36, 0.12);
+  --scan-bg-strong: rgba(245, 165, 36, 0.22);
+  --scan-track: rgba(245, 165, 36, 0.20);
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
   margin: 6px 0 12px;
   border-radius: 10px;
-  background: rgba(255, 59, 48, 0.10);
+  background: var(--scan-bg);
   color: var(--scan-color);
   font-size: 12px;
   font-weight: 500;
@@ -1334,7 +1337,7 @@ body.logged-in .cloud-sync-hint {
   right: 0;
   bottom: 0;
   height: 3px;
-  background: rgba(255, 59, 48, 0.18);
+  background: var(--scan-track);
 }
 .sheet-manual-scan-progress-bar {
   height: 100%;
@@ -1344,9 +1347,10 @@ body.logged-in .cloud-sync-hint {
   transition: width 0.9s linear;
 }
 
-/* Last minute: brighter, faster pulse. */
+/* Last minute: shift towards an orange-red urgency tint and pulse faster. */
 .sheet-manual-scan-banner.urgent {
-  background: rgba(255, 59, 48, 0.18);
+  --scan-color: #ff6b1a;
+  background: var(--scan-bg-strong);
 }
 .sheet-manual-scan-banner.urgent .sheet-manual-scan-dot {
   animation-duration: 0.8s;
