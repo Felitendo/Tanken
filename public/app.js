@@ -1354,8 +1354,25 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
         // Re-draw markers when zooming back in after they were cleared.
         renderStationsOnMap(state.stations, { skipFitBounds: true, skipRadiusFilter: true });
       }
+      scheduleAtViewportLoad();
     });
-    state.map.on('moveend', () => { showSearchHereIfMoved(); });
+    state.map.on('moveend', () => {
+      showSearchHereIfMoved();
+      scheduleAtViewportLoad();
+    });
+  }
+
+  // Austria has full grid-cache coverage — pull stations for the current
+  // viewport instead of the user-radius radius query, so zoom/pan reveals
+  // every station in view.
+  if (getActiveCountry() === 'at') {
+    const loader = document.getElementById('map-loading');
+    if (!silent) {
+      loader.classList.remove('hidden');
+      showStationSkeletons();
+    }
+    await loadAtStationsInViewport({ silent });
+    return;
   }
 
   const loader = document.getElementById('map-loading');
@@ -1394,6 +1411,71 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     } else {
       loader.innerHTML = `<span>${t('errorLoading')}</span>`;
     }
+  }
+}
+
+// ─── Austria viewport loader ────────────────────────────────────────
+//
+// Austria is fully covered by the grid scan, so any viewport in the
+// country can be answered straight from the cache via ?bounds=. We
+// debounce moveend/zoomend so panning doesn't fire a request per frame.
+
+const AT_VIEWPORT_DEBOUNCE_MS = 350;
+const AT_VIEWPORT_MIN_ZOOM = 9;
+let _atViewportTimer = null;
+let _atViewportInflight = null;
+
+function scheduleAtViewportLoad() {
+  if (!state.map) return;
+  if (state.map.getZoom() < AT_VIEWPORT_MIN_ZOOM) return;
+  // Trigger based on what's actually visible — that way panning into AT
+  // from a DE-active session still pulls in stations.
+  const c = state.map.getCenter();
+  if (!isInAustria(c.lat, c.lng)) return;
+  if (_atViewportTimer) clearTimeout(_atViewportTimer);
+  _atViewportTimer = setTimeout(() => {
+    _atViewportTimer = null;
+    loadAtStationsInViewport({ silent: true });
+  }, AT_VIEWPORT_DEBOUNCE_MS);
+}
+
+async function loadAtStationsInViewport({ silent = true } = {}) {
+  if (!state.map) return;
+  const b = state.map.getBounds();
+  const south = b.getSouth().toFixed(5);
+  const west = b.getWest().toFixed(5);
+  const north = b.getNorth().toFixed(5);
+  const east = b.getEast().toFixed(5);
+  const url = `/api/stations?bounds=${south},${west},${north},${east}&fuel=${state.fuelType}`;
+
+  // Coalesce concurrent in-flight requests so the final move wins.
+  if (_atViewportInflight) {
+    try { await _atViewportInflight; } catch {}
+  }
+  const loader = document.getElementById('map-loading');
+  const fetchPromise = (async () => {
+    try {
+      const result = await api(url);
+      const stations = Array.isArray(result) ? result : [];
+      state.stations = stations;
+      state.dataTimestamp = result._dataTimestamp || null;
+      renderStationsOnMap(stations, { skipFitBounds: true, skipRadiusFilter: true });
+      renderStationList(stations);
+      if (loader) {
+        if (!stations.length && !silent) {
+          loader.innerHTML = `<span style="font-size:13px;opacity:0.6">${t('noStationsYet')}</span>`;
+        } else {
+          loader.classList.add('hidden');
+        }
+      }
+      checkPriceAlert(stations);
+    } catch {
+      if (loader && !silent) loader.innerHTML = `<span>${t('errorLoading')}</span>`;
+    }
+  })();
+  _atViewportInflight = fetchPromise;
+  try { await fetchPromise; } finally {
+    if (_atViewportInflight === fetchPromise) _atViewportInflight = null;
   }
 }
 
