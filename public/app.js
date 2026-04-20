@@ -426,18 +426,18 @@ function getCoverageMaskStyle() {
 function ensureCoverageMask() {
   if (!state.map || state.coverageMask) return;
   const outlines = window.COVERAGE_OUTLINES;
-  if (!outlines || !outlines.de || !outlines.at) return;
+  if (!outlines || !Array.isArray(outlines.de) || !Array.isArray(outlines.at)) return;
   // Outer ring: a generous world rectangle. Subsequent rings act as holes.
+  // outlines.de / .at are arrays of rings (a country may consist of multiple
+  // polygons such as German offshore islands).
   const worldRing = [
     [-85, -180],
     [-85, 180],
     [85, 180],
     [85, -180],
   ];
-  state.coverageMask = L.polygon(
-    [worldRing, outlines.de, outlines.at],
-    getCoverageMaskStyle(),
-  ).addTo(state.map);
+  const rings = [worldRing, ...outlines.de, ...outlines.at];
+  state.coverageMask = L.polygon(rings, getCoverageMaskStyle()).addTo(state.map);
 }
 
 function refreshCoverageMaskStyle() {
