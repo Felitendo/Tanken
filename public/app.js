@@ -176,6 +176,8 @@ const i18n = {
     requestSearchNoResults: 'Keine Treffer',
     searchHere: 'Hier suchen',
     searchingHere: 'Suche läuft…',
+    scanConfirm: 'Scannen',
+    scanCancel: 'Abbrechen',
     noStationsHere: 'Keine Tankstellen in der Nähe gefunden.',
   },
   en: {
@@ -342,6 +344,8 @@ const i18n = {
     requestSearchNoResults: 'No matches',
     searchHere: 'Search here',
     searchingHere: 'Searching…',
+    scanConfirm: 'Scan',
+    scanCancel: 'Cancel',
     noStationsHere: 'No petrol stations nearby.',
   }
 };
@@ -428,6 +432,16 @@ function applyLanguage() {
   document.querySelectorAll('[data-i18n-option]').forEach(el => {
     el.textContent = t(el.getAttribute('data-i18n-option'));
   });
+
+  // Search-here button is rendered dynamically (cooldown / confirm state),
+  // so keep its label in sync when the language toggles.
+  const searchBtn = document.getElementById('btn-search-here');
+  if (searchBtn && !searchBtn.disabled) {
+    if (state._scanPicker) setSearchBtnConfirm(searchBtn);
+    else setSearchBtnIdle(searchBtn);
+  }
+  const cancelBtn = document.getElementById('btn-scan-cancel');
+  if (cancelBtn) cancelBtn.setAttribute('aria-label', t('scanCancel'));
 }
 
 const state = {
@@ -1300,58 +1314,236 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
 }
 
 const SEARCH_HERE_COOLDOWN_SEC = 30;
+const SCAN_RADIUS_KM = 25;
+const SCAN_ANIMATION_DURATION = 1300;
+const SCAN_RIPPLE_COUNT = 3;
+const SCAN_RIPPLE_STAGGER = 260;
+
+const SEARCH_ICON_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
+const CHECK_ICON_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+const CLOSE_ICON_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+
+function getAccentColor() {
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim();
+  return v || '#007aff';
+}
 
 function setupSearchHereButton() {
   const btn = document.getElementById('btn-search-here');
   if (!btn || btn._setup) return;
   btn._setup = true;
   btn.classList.remove('hidden');
+  setSearchBtnIdle(btn);
 
-  btn.addEventListener('click', async () => {
+  btn.addEventListener('click', () => {
     if (!state.map || btn.disabled) return;
-    haptic('light');
-    const c = state.map.getCenter();
-    const labelEl = btn.querySelector('span');
-    const originalLabel = labelEl?.textContent || t('searchHere');
-    btn.disabled = true;
-    if (labelEl) labelEl.textContent = t('searchingHere');
-    try {
-      const result = await api(`/api/stations?lat=${c.lat}&lng=${c.lng}&rad=25&fuel=${state.fuelType}`);
-      const stations = Array.isArray(result) ? result : [];
-      state.userLat = c.lat;
-      state.userLng = c.lng;
-      state.activeLocation = 'gps';
-      state.stations = stations;
-      state.dataTimestamp = result._dataTimestamp || null;
-      renderStationsOnMap(stations, { skipFitBounds: true });
-      renderStationList(stations);
-      state._searchHereAnchor = { lat: c.lat, lng: c.lng };
-      if (!stations.length) showToast(t('noStationsHere'));
-    } catch {
-      showToast(t('errorLoading'));
-    } finally {
-      startSearchHereCooldown(labelEl, originalLabel);
-    }
+    if (state._scanPicker) confirmScanPicker();
+    else enterScanPickerMode();
   });
 }
 
-function startSearchHereCooldown(labelEl, restoreLabel) {
+function setSearchBtnIdle(btn) {
+  btn = btn || document.getElementById('btn-search-here');
+  if (!btn) return;
+  btn.classList.remove('is-confirm');
+  btn.innerHTML = `${SEARCH_ICON_SVG}<span>${t('searchHere')}</span>`;
+}
+
+function setSearchBtnConfirm(btn) {
+  btn = btn || document.getElementById('btn-search-here');
+  if (!btn) return;
+  btn.classList.add('is-confirm');
+  btn.innerHTML = `${CHECK_ICON_SVG}<span>${t('scanConfirm')}</span>`;
+}
+
+function enterScanPickerMode() {
+  if (state._scanPicker || !state.map) return;
+  haptic('light');
+
+  const accent = getAccentColor();
+  const center = state.map.getCenter();
+
+  const circle = L.circle(center, {
+    radius: SCAN_RADIUS_KM * 1000,
+    color: accent,
+    weight: 2,
+    opacity: 0.9,
+    fillColor: accent,
+    fillOpacity: 0.08,
+    interactive: false,
+  }).addTo(state.map);
+
+  const pinIcon = L.divIcon({
+    className: '',
+    html: `<div class="scan-pin" style="--scan-accent:${accent}"><span class="scan-pin-dot"></span></div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+  const marker = L.marker(center, { draggable: true, icon: pinIcon, zIndexOffset: 1000 }).addTo(state.map);
+
+  marker.on('drag', () => {
+    const p = marker.getLatLng();
+    circle.setLatLng(p);
+  });
+
+  const onMapClick = (e) => {
+    marker.setLatLng(e.latlng);
+    circle.setLatLng(e.latlng);
+  };
+  state.map.on('click', onMapClick);
+
+  state._scanPicker = { circle, marker, onMapClick };
+
+  // Toggle button into confirm mode + insert cancel pill alongside it
+  const btn = document.getElementById('btn-search-here');
+  setSearchBtnConfirm(btn);
+  if (btn && !document.getElementById('btn-scan-cancel')) {
+    const cancel = document.createElement('button');
+    cancel.id = 'btn-scan-cancel';
+    cancel.className = 'map-scan-cancel';
+    cancel.type = 'button';
+    cancel.setAttribute('aria-label', t('scanCancel'));
+    cancel.innerHTML = CLOSE_ICON_SVG;
+    cancel.addEventListener('click', cancelScanPicker);
+    btn.parentNode.insertBefore(cancel, btn);
+  }
+}
+
+function exitScanPickerMode() {
+  const picker = state._scanPicker;
+  if (picker) {
+    try { state.map.removeLayer(picker.circle); } catch {}
+    try { state.map.removeLayer(picker.marker); } catch {}
+    if (picker.onMapClick) try { state.map.off('click', picker.onMapClick); } catch {}
+    state._scanPicker = null;
+  }
+  document.getElementById('btn-scan-cancel')?.remove();
+  setSearchBtnIdle();
+}
+
+function cancelScanPicker() {
+  haptic('light');
+  exitScanPickerMode();
+}
+
+async function confirmScanPicker() {
+  const picker = state._scanPicker;
+  if (!picker) return;
+  haptic('medium');
+  const center = picker.marker.getLatLng();
+
+  // Tear down picker UI but keep the search button visible (disabled during scan)
+  exitScanPickerMode();
+
+  const btn = document.getElementById('btn-search-here');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `${SEARCH_ICON_SVG}<span>${t('searchingHere')}</span>`;
+  }
+
+  const animPromise = playScanAnimation(center, SCAN_RADIUS_KM);
+
+  try {
+    const result = await api(`/api/stations?lat=${center.lat}&lng=${center.lng}&rad=${SCAN_RADIUS_KM}&fuel=${state.fuelType}`);
+    const stations = Array.isArray(result) ? result : [];
+    state.userLat = center.lat;
+    state.userLng = center.lng;
+    state.activeLocation = 'gps';
+    state.stations = stations;
+    state.dataTimestamp = result._dataTimestamp || null;
+    state._searchHereAnchor = { lat: center.lat, lng: center.lng };
+
+    await animPromise;
+    renderStationsOnMap(stations, { skipFitBounds: true });
+    renderStationList(stations);
+    if (!stations.length) showToast(t('noStationsHere'));
+  } catch {
+    await animPromise;
+    showToast(t('errorLoading'));
+  } finally {
+    startSearchHereCooldown();
+  }
+}
+
+function playScanAnimation(centerLatLng, radiusKm) {
+  return new Promise((resolve) => {
+    if (!state.map) { resolve(); return; }
+    const accent = getAccentColor();
+    const finalRadius = radiusKm * 1000;
+    const total = SCAN_ANIMATION_DURATION + (SCAN_RIPPLE_COUNT - 1) * SCAN_RIPPLE_STAGGER;
+    let done = 0;
+    let resolved = false;
+    const finish = () => { if (!resolved) { resolved = true; resolve(); } };
+
+    for (let i = 0; i < SCAN_RIPPLE_COUNT; i++) {
+      setTimeout(() => {
+        if (!state.map) { done++; if (done === SCAN_RIPPLE_COUNT) finish(); return; }
+        const ripple = L.circle(centerLatLng, {
+          radius: 0,
+          color: accent,
+          weight: 2.5,
+          opacity: 0.9,
+          fillColor: accent,
+          fillOpacity: 0.18,
+          interactive: false,
+        }).addTo(state.map);
+        animateRipple(ripple, finalRadius, SCAN_ANIMATION_DURATION, () => {
+          done++;
+          if (done === SCAN_RIPPLE_COUNT) finish();
+        });
+      }, i * SCAN_RIPPLE_STAGGER);
+    }
+    // Safety net so we never hang the cooldown if a tile hiccup kills RAF
+    setTimeout(finish, total + 600);
+  });
+}
+
+function animateRipple(circle, finalRadius, duration, onDone) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    try {
+      circle.setRadius(eased * finalRadius);
+      circle.setStyle({
+        opacity: 0.9 * (1 - t * 0.7),
+        fillOpacity: 0.18 * (1 - t),
+      });
+    } catch {
+      onDone && onDone();
+      return;
+    }
+    if (t < 1) requestAnimationFrame(step);
+    else {
+      try { state.map.removeLayer(circle); } catch {}
+      onDone && onDone();
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+function startSearchHereCooldown() {
   const btn = document.getElementById('btn-search-here');
   if (!btn) return;
   if (state._searchHereCooldownTimer) clearInterval(state._searchHereCooldownTimer);
   let remaining = SEARCH_HERE_COOLDOWN_SEC;
   btn.disabled = true;
-  if (labelEl) labelEl.textContent = `${restoreLabel} (${remaining})`;
+  const baseLabel = t('searchHere');
+  setSearchBtnIdle(btn);
+  const updateLabel = () => {
+    btn.innerHTML = `${SEARCH_ICON_SVG}<span>${baseLabel} (${remaining})</span>`;
+  };
+  updateLabel();
   state._searchHereCooldownTimer = setInterval(() => {
     remaining -= 1;
     if (remaining <= 0) {
       clearInterval(state._searchHereCooldownTimer);
       state._searchHereCooldownTimer = null;
       btn.disabled = false;
-      if (labelEl) labelEl.textContent = restoreLabel;
+      setSearchBtnIdle(btn);
       return;
     }
-    if (labelEl) labelEl.textContent = `${restoreLabel} (${remaining})`;
+    updateLabel();
   }, 1000);
 }
 

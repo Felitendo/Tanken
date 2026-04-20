@@ -1711,6 +1711,66 @@ body.logged-in .cloud-sync-hint {
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* "Confirm" state of the search-here pill (during scan-picker mode) */
+.map-search-here.is-confirm {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  box-shadow: 0 6px 18px rgba(0, 122, 255, 0.35);
+}
+
+/* Round cancel pill placed left of the confirm button while picking */
+.map-scan-cancel {
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  /* Sits just to the left of the confirm pill (which is centered) */
+  transform: translateX(calc(-50% - 96px));
+  z-index: 1000;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-bg);
+  color: var(--color-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  animation: searchHerePopIn 0.22s ease-out;
+}
+.map-scan-cancel:active { opacity: 0.85; transform: translateX(calc(-50% - 96px)) scale(0.94); }
+
+/* Draggable pin shown in the centre of the scan-radius picker circle */
+.scan-pin {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--scan-accent, #007aff) 18%, transparent);
+  border: 2px solid var(--scan-accent, #007aff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  cursor: grab;
+}
+.scan-pin:active { cursor: grabbing; }
+.scan-pin-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--scan-accent, #007aff);
+  box-shadow: 0 0 0 3px var(--color-bg);
+  animation: scanPinPulse 1.6s ease-in-out infinite;
+}
+@keyframes scanPinPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(0.78); opacity: 0.85; }
+}
+
 /* Brighten dark map labels for readability */
 .bright-labels {
   filter: brightness(1.8) contrast(1.1);
