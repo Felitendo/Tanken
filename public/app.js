@@ -2761,6 +2761,55 @@ async function refreshStationStatus(station) {
   }
 }
 
+// Lazy-load admin-curated scan locations once and cache them. Used to
+// decide whether a German station has coverage (i.e. lies within some
+// scan location's radius); if not, we skip the API call and surface the
+// "request a scan location" hint directly.
+async function ensureScanLocations() {
+  if (Array.isArray(state._scanLocations)) return state._scanLocations;
+  if (state._scanLocationsPromise) return state._scanLocationsPromise;
+  state._scanLocationsPromise = (async () => {
+    try {
+      const res = await api('/api/scan-locations');
+      const list = Array.isArray(res?.locations) ? res.locations : [];
+      state._scanLocations = list;
+      return list;
+    } catch {
+      state._scanLocations = [];
+      return [];
+    } finally {
+      state._scanLocationsPromise = null;
+    }
+  })();
+  return state._scanLocationsPromise;
+}
+
+// Haversine distance in km between two lat/lng pairs.
+function distanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// True if any DE scan location's radius covers this station. Austrian
+// stations are covered by the grid scan everywhere, so they short-circuit
+// to true.
+function isStationCovered(station, scanLocations) {
+  if (!station || !Number.isFinite(station.lat) || !Number.isFinite(station.lng)) return false;
+  if (isInAustria(station.lat, station.lng)) return true;
+  const locs = Array.isArray(scanLocations) ? scanLocations : [];
+  for (const loc of locs) {
+    if (loc.country !== 'de') continue;
+    const r = Number(loc.radiusKm) > 0 ? Number(loc.radiusKm) : 25;
+    if (distanceKm(station.lat, station.lng, loc.lat, loc.lng) <= r) return true;
+  }
+  return false;
+}
+
 // Render the empty state for the per-station price chart. In Austria we just
 // say "data is accumulating"; in Germany we point users to the request flow
 // because the station isn't covered by the scanner.
@@ -2805,12 +2854,25 @@ async function loadSheetChart(stationName, days = 1) {
   canvas.style.display = 'none';
 
   try {
+    // For German stations: if no admin scan location covers the station's
+    // 25 km radius, we know we won't have meaningful history. Skip the API
+    // call entirely and show the request CTA instead. (AT short-circuits
+    // to "covered" inside isStationCovered.)
+    const station = state.sheetStation;
+    if (station && Number.isFinite(station.lat) && Number.isFinite(station.lng) && !isInAustria(station.lat, station.lng)) {
+      const scanLocs = await ensureScanLocations();
+      if (!isStationCovered(station, scanLocs)) {
+        renderSheetChartEmptyState(loading, station);
+        return;
+      }
+    }
+
     const data = await api(`/api/history?station=${encodeURIComponent(stationName)}`);
     // Backend returns an array of station entries when ≥ 2 rows exist; an
     // object {entries, extremes} otherwise. Treat both "no rows" cases the same.
     const hasSeries = Array.isArray(data) && data.length >= 2;
     if (!hasSeries) {
-      renderSheetChartEmptyState(loading, state.sheetStation);
+      renderSheetChartEmptyState(loading, station);
       return;
     }
 

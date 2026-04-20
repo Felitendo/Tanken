@@ -16,6 +16,7 @@ export async function GET() {
       country: l.country,
       lat: l.lat,
       lng: l.lng,
+      radiusKm: l.radiusKm,
     }));
     return NextResponse.json({ locations: publicList });
   } catch {
