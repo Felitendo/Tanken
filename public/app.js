@@ -1625,7 +1625,7 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
       // the user's 25 km circle, so skip the per-list radius filter there.
       const renderOpts = { skipFitBounds: true, skipRadiusFilter: true };
       renderStationsOnMap(stations, renderOpts);
-      renderStationList(stations, { skipRadiusFilter: true });
+      renderStationList(stations);
       if (loader) {
         if (!stations.length && !silent) {
           loader.innerHTML = `<span style="font-size:13px;opacity:0.6">${t('noStationsYet')}</span>`;
@@ -2227,15 +2227,16 @@ function rankColor(ratio) {
   return `rgb(${r},${g},${b})`;
 }
 
-function renderStationList(stations, { skipRadiusFilter = false } = {}) {
+function renderStationList(stations) {
   // Same merge as renderStationsOnMap — list and markers stay in sync.
+  // The list trusts whatever the upstream loader produced: loadStationsAroundCenter,
+  // runScanAt and loadMapTab all curate state.stations to the right area
+  // already, so a second radius pass here would just drop legitimate entries
+  // (e.g. DE scan-location stations slightly beyond the user's 25 km circle).
   stations = withManualScans(stations);
   const list = document.getElementById('station-list');
   const countLabel = document.getElementById('station-count');
-  const radiusKm = state.radiusKm || 25;
-  const open = stations.filter(s =>
-    s.isOpen && s.price && (skipRadiusFilter || !s.dist || s.dist <= radiusKm),
-  );
+  const open = stations.filter(s => s.isOpen && s.price);
 
   if (countLabel) countLabel.textContent = `${open.length} ${t('stationsFound')}`;
 
