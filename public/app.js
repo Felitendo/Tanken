@@ -1466,25 +1466,25 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
         // Re-draw markers when zooming back in after they were cleared.
         renderStationsOnMap(state.stations, { skipFitBounds: true, skipRadiusFilter: true });
       }
-      scheduleAtViewportLoad();
+      scheduleViewportRefresh();
     });
     state.map.on('moveend', () => {
       showSearchHereIfMoved();
       applyViewCountryUi();
-      scheduleAtViewportLoad();
+      scheduleViewportRefresh();
     });
   }
 
   // Austria has full grid-cache coverage — pull stations for the current
-  // viewport instead of the user-radius radius query, so zoom/pan reveals
-  // every station in view.
+  // viewport (25 km circle around the centre) instead of the radius-around-pin
+  // query, so the list and markers follow what the user is looking at.
   if (getActiveCountry() === 'at') {
     const loader = document.getElementById('map-loading');
     if (!silent) {
       loader.classList.remove('hidden');
       showStationSkeletons();
     }
-    await loadAtStationsInViewport({ silent });
+    await loadStationsAroundCenter({ silent });
     return;
   }
 
@@ -1527,53 +1527,105 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
   }
 }
 
-// ─── Austria viewport loader ────────────────────────────────────────
+// ─── Centre-driven viewport loader ──────────────────────────────────
 //
-// Austria is fully covered by the grid scan, so any viewport in the
-// country can be answered straight from the cache via ?bounds=. We
-// debounce moveend/zoomend so panning doesn't fire a request per frame.
+// As the user pans, the list and markers should follow an invisible
+// 25 km circle around the map centre. Two strategies depending on
+// country:
+//   AT — query the cached grid via ?bounds= and trim to the 25 km
+//        circle client-side.
+//   DE — find admin scan locations whose 25 km radius overlaps the
+//        user's 25 km circle (i.e. centres within 50 km), then fetch
+//        each one's full cached set so the user sees the entire scan
+//        radius even when pieces of it sit outside the centre circle.
 
-const AT_VIEWPORT_DEBOUNCE_MS = 350;
-const AT_VIEWPORT_MIN_ZOOM = 9;
-let _atViewportTimer = null;
-let _atViewportInflight = null;
+const VIEWPORT_RADIUS_KM = 25;
+const VIEWPORT_DEBOUNCE_MS = 350;
+const VIEWPORT_MIN_ZOOM = 8;
+let _viewportTimer = null;
+let _viewportInflight = null;
 
-function scheduleAtViewportLoad() {
+function scheduleViewportRefresh() {
   if (!state.map) return;
-  if (state.map.getZoom() < AT_VIEWPORT_MIN_ZOOM) return;
-  // Trigger based on what's actually visible — that way panning into AT
-  // from a DE-active session still pulls in stations.
-  const c = state.map.getCenter();
-  if (!isInAustria(c.lat, c.lng)) return;
-  if (_atViewportTimer) clearTimeout(_atViewportTimer);
-  _atViewportTimer = setTimeout(() => {
-    _atViewportTimer = null;
-    loadAtStationsInViewport({ silent: true });
-  }, AT_VIEWPORT_DEBOUNCE_MS);
+  if (state.map.getZoom() < VIEWPORT_MIN_ZOOM) return;
+  if (_viewportTimer) clearTimeout(_viewportTimer);
+  _viewportTimer = setTimeout(() => {
+    _viewportTimer = null;
+    loadStationsAroundCenter({ silent: true });
+  }, VIEWPORT_DEBOUNCE_MS);
 }
 
-async function loadAtStationsInViewport({ silent = true } = {}) {
+async function loadStationsAroundCenter({ silent = true } = {}) {
   if (!state.map) return;
-  const b = state.map.getBounds();
-  const south = b.getSouth().toFixed(5);
-  const west = b.getWest().toFixed(5);
-  const north = b.getNorth().toFixed(5);
-  const east = b.getEast().toFixed(5);
-  const url = `/api/stations?bounds=${south},${west},${north},${east}&fuel=${state.fuelType}`;
+  const c = state.map.getCenter();
+  const lat = c.lat;
+  const lng = c.lng;
+  const isAt = isInAustria(lat, lng);
 
-  // Coalesce concurrent in-flight requests so the final move wins.
-  if (_atViewportInflight) {
-    try { await _atViewportInflight; } catch {}
-  }
+  // Coalesce concurrent in-flight requests so the latest move wins.
+  if (_viewportInflight) { try { await _viewportInflight; } catch {} }
   const loader = document.getElementById('map-loading');
+
   const fetchPromise = (async () => {
     try {
-      const result = await api(url);
-      const stations = Array.isArray(result) ? result : [];
+      let stations = [];
+      if (isAt) {
+        // Austria: bounds enclosing a 25 km circle around the centre.
+        const latMargin = VIEWPORT_RADIUS_KM / 111;
+        const lngMargin = VIEWPORT_RADIUS_KM / Math.max(0.001, 111 * Math.cos((lat * Math.PI) / 180));
+        const south = (lat - latMargin).toFixed(5);
+        const north = (lat + latMargin).toFixed(5);
+        const west = (lng - lngMargin).toFixed(5);
+        const east = (lng + lngMargin).toFixed(5);
+        const result = await api(`/api/stations?bounds=${south},${west},${north},${east}&fuel=${state.fuelType}`);
+        stations = Array.isArray(result) ? result : [];
+        state.dataTimestamp = result?._dataTimestamp || null;
+        // Re-distance against centre and clip to true circle.
+        stations = stations
+          .map((s) => ({ ...s, dist: distanceKm(lat, lng, s.lat, s.lng), distApprox: false }))
+          .filter((s) => s.dist <= VIEWPORT_RADIUS_KM);
+      } else {
+        // Germany: find every DE scan location whose 25 km radius reaches
+        // the user's 25 km circle (i.e. centre-to-centre ≤ 50 km).
+        const scanLocs = await ensureScanLocations();
+        const matching = (scanLocs || []).filter((loc) => {
+          if (loc.country !== 'de') return false;
+          const r = Number(loc.radiusKm) > 0 ? Number(loc.radiusKm) : 25;
+          return distanceKm(lat, lng, loc.lat, loc.lng) <= VIEWPORT_RADIUS_KM + r;
+        });
+        if (matching.length) {
+          const results = await Promise.allSettled(
+            matching.map((loc) =>
+              api(`/api/stations?location=${encodeURIComponent(loc.id)}&fuel=${state.fuelType}`),
+            ),
+          );
+          const seen = new Set();
+          for (const r of results) {
+            if (r.status !== 'fulfilled') continue;
+            const list = Array.isArray(r.value) ? r.value : [];
+            for (const s of list) {
+              const k = s.id || `${s.lat},${s.lng}`;
+              if (seen.has(k)) continue;
+              seen.add(k);
+              stations.push(s);
+            }
+          }
+          // Re-distance against the centre so the list shows distances
+          // from where the user is looking, not from each scan location.
+          stations = stations.map((s) => ({
+            ...s,
+            dist: distanceKm(lat, lng, s.lat, s.lng),
+            distApprox: false,
+          }));
+        }
+      }
+
       state.stations = stations;
-      state.dataTimestamp = result._dataTimestamp || null;
-      renderStationsOnMap(stations, { skipFitBounds: true, skipRadiusFilter: true });
-      renderStationList(stations);
+      // DE shows the full scan-location set even when stations sit beyond
+      // the user's 25 km circle, so skip the per-list radius filter there.
+      const renderOpts = { skipFitBounds: true, skipRadiusFilter: true };
+      renderStationsOnMap(stations, renderOpts);
+      renderStationList(stations, { skipRadiusFilter: true });
       if (loader) {
         if (!stations.length && !silent) {
           loader.innerHTML = `<span style="font-size:13px;opacity:0.6">${t('noStationsYet')}</span>`;
@@ -1586,9 +1638,9 @@ async function loadAtStationsInViewport({ silent = true } = {}) {
       if (loader && !silent) loader.innerHTML = `<span>${t('errorLoading')}</span>`;
     }
   })();
-  _atViewportInflight = fetchPromise;
+  _viewportInflight = fetchPromise;
   try { await fetchPromise; } finally {
-    if (_atViewportInflight === fetchPromise) _atViewportInflight = null;
+    if (_viewportInflight === fetchPromise) _viewportInflight = null;
   }
 }
 
@@ -2175,13 +2227,15 @@ function rankColor(ratio) {
   return `rgb(${r},${g},${b})`;
 }
 
-function renderStationList(stations) {
+function renderStationList(stations, { skipRadiusFilter = false } = {}) {
   // Same merge as renderStationsOnMap — list and markers stay in sync.
   stations = withManualScans(stations);
   const list = document.getElementById('station-list');
   const countLabel = document.getElementById('station-count');
   const radiusKm = state.radiusKm || 25;
-  const open = stations.filter(s => s.isOpen && s.price && (!s.dist || s.dist <= radiusKm));
+  const open = stations.filter(s =>
+    s.isOpen && s.price && (skipRadiusFilter || !s.dist || s.dist <= radiusKm),
+  );
 
   if (countLabel) countLabel.textContent = `${open.length} ${t('stationsFound')}`;
 
