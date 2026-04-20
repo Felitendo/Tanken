@@ -16,6 +16,8 @@ export interface UserStore {
   readLocalAlert(): Promise<Record<string, unknown> | null>;
   writeLocalAlert(alert: Record<string, unknown>): Promise<Record<string, unknown>>;
   deleteLocalAlert(): Promise<void>;
+  /** All users that have an enabled price alert configured. */
+  listUsersWithEnabledPriceAlerts(): Promise<UserProfile[]>;
 }
 
 export interface SessionStore {
@@ -170,6 +172,16 @@ export function createStores(config: RuntimeConfig): {
         alerts: user.alerts || {},
         favourites: user.favourites || []
       };
+    },
+    async listUsersWithEnabledPriceAlerts() {
+      const result = await db.query<{ data_json: UserProfile }>(
+        `
+          SELECT data_json
+          FROM users
+          WHERE COALESCE(data_json->'alerts'->'price'->>'enabled', 'false') = 'true'
+        `
+      );
+      return result.rows.map((r) => r.data_json);
     },
     async readLegacyAlert(userId) {
       const user = await this.getUserById(userId);

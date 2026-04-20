@@ -3785,10 +3785,22 @@ async function searchLocation(query) {
 function initAlertUI() {
   document.getElementById('alert-toggle').addEventListener('change', async (e) => {
     haptic('light');
-    if (e.target.checked) {
-      document.getElementById('alert-config').style.display = 'block';
+    const toggle = e.target;
+    const config = document.getElementById('alert-config');
+    if (toggle.checked) {
+      // Just reveal the config; nothing is saved server-side until "Save".
+      config.style.display = 'block';
     } else {
-      await deleteAlert();
+      // Optimistic disable: hide UI immediately, roll back on failure.
+      const previous = config.style.display;
+      config.style.display = 'none';
+      try {
+        await deleteAlert();
+      } catch {
+        // Roll back on error
+        toggle.checked = true;
+        config.style.display = previous || 'block';
+      }
     }
   });
 
@@ -3855,11 +3867,12 @@ async function refreshAlertUi() {
   const activeInfo = document.getElementById('alert-active-info');
   const refEl = document.getElementById('alert-ref-price');
 
-  toggle.checked = false;
-  configEl.style.display = 'none';
-  activeInfo.style.display = 'none';
-  activeInfo.textContent = '';
+  // Don't blank the toggle before the network round-trip finishes — that's
+  // the flicker the user sees when re-opening the settings tab. Instead we
+  // overwrite once with whatever the server returns.
 
+  // Reference price (cheapest in current radius) is informational only; if
+  // the request fails we just leave the previous label in place.
   try {
     const coords = getActiveCoords();
     const stations = await api(`/api/stations?lat=${coords.lat}&lng=${coords.lng}&rad=${state.radiusKm}&fuel=${state.fuelType}`);
@@ -3871,34 +3884,42 @@ async function refreshAlertUi() {
     }
   } catch {}
 
+  let alert = null;
   try {
-    const alert = await api(state.user ? '/api/alert' : '/api/alert/local');
-    if (alert?.threshold) {
-      state.alertPrice = alert.threshold;
-      state.alertChannel = alert.channel || 'ntfy';
-      state.alertNtfyTopic = alert.ntfyTopic || '';
-      state.alertEmail = alert.email || '';
-      toggle.checked = true;
-      configEl.style.display = 'block';
-      activeInfo.style.display = 'block';
-      const chLabel = state.alertChannel === 'email' ? ' (E-Mail)' : ' (ntfy.sh)';
-      activeInfo.textContent = `${t('alertActive')} ${formatPrice(alert.threshold)}${chLabel}`;
+    alert = await api(state.user ? '/api/alert' : '/api/alert/local');
+  } catch { /* network error — keep current UI */ return; }
 
-      // Restore channel picker UI
-      const channelSegs = document.querySelectorAll('#alert-channel-picker .alert-ch-seg');
-      channelSegs.forEach(s => {
-        const active = s.dataset.channel === state.alertChannel;
-        s.classList.toggle('active', active);
-        s.setAttribute('aria-selected', active ? 'true' : 'false');
-      });
-      document.getElementById('alert-ntfy-config').style.display = state.alertChannel === 'ntfy' ? 'block' : 'none';
-      document.getElementById('alert-email-config').style.display = state.alertChannel === 'email' ? 'block' : 'none';
-      const ntfyInput = document.getElementById('alert-ntfy-topic');
-      if (ntfyInput) ntfyInput.value = state.alertNtfyTopic;
-      const emailInput = document.getElementById('alert-email-address');
-      if (emailInput) emailInput.value = state.alertEmail;
-    }
-  } catch {}
+  if (alert?.threshold && alert.enabled !== false) {
+    state.alertPrice = alert.threshold;
+    state.alertChannel = alert.channel || 'ntfy';
+    state.alertNtfyTopic = alert.ntfyTopic || '';
+    state.alertEmail = alert.email || '';
+    toggle.checked = true;
+    configEl.style.display = 'block';
+    activeInfo.style.display = 'block';
+    const chLabel = state.alertChannel === 'email' ? ' (E-Mail)' : ' (ntfy.sh)';
+    activeInfo.textContent = `${t('alertActive')} ${formatPrice(alert.threshold)}${chLabel}`;
+
+    // Restore channel picker UI
+    const channelSegs = document.querySelectorAll('#alert-channel-picker .alert-ch-seg');
+    channelSegs.forEach(s => {
+      const active = s.dataset.channel === state.alertChannel;
+      s.classList.toggle('active', active);
+      s.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    document.getElementById('alert-ntfy-config').style.display = state.alertChannel === 'ntfy' ? 'block' : 'none';
+    document.getElementById('alert-email-config').style.display = state.alertChannel === 'email' ? 'block' : 'none';
+    const ntfyInput = document.getElementById('alert-ntfy-topic');
+    if (ntfyInput) ntfyInput.value = state.alertNtfyTopic;
+    const emailInput = document.getElementById('alert-email-address');
+    if (emailInput) emailInput.value = state.alertEmail;
+  } else {
+    // No active alert — collapse the panel.
+    toggle.checked = false;
+    configEl.style.display = 'none';
+    activeInfo.style.display = 'none';
+    activeInfo.textContent = '';
+  }
 
   updateAlertDisplay();
 }
@@ -3923,6 +3944,9 @@ async function saveAlert() {
 
   if (state.user) setSyncBadgeState('syncing', ['alert']);
   try {
+    // Capture the user's current location so the background evaluator
+    // knows which area to watch. Falls back to the GPS / saved fallback.
+    const coords = getActiveCoords();
     const result = await api(state.user ? '/api/alert' : '/api/alert/local', {
       method: 'POST',
       body: JSON.stringify({
@@ -3931,7 +3955,10 @@ async function saveAlert() {
         enabled: true,
         channel: state.alertChannel,
         ntfyTopic: state.alertNtfyTopic,
-        email: state.alertEmail
+        email: state.alertEmail,
+        lat: coords.lat,
+        lng: coords.lng,
+        radiusKm: state.radiusKm || 25,
       })
     });
     if (result?.ok) {
@@ -3987,40 +4014,10 @@ async function testAlert() {
   }
 }
 
-async function checkPriceAlert(stations) {
-  if (state.alertNotified) return;
-  // Get current alert
-  let alert = null;
-  try {
-    alert = await api(state.user ? '/api/alert' : '/api/alert/local');
-  } catch { return; }
-  if (!alert?.threshold || !alert.enabled) return;
-
-  const priced = stations.filter(s => typeof s.price === 'number' && s.isOpen);
-  const cheapest = priced.length ? priced.reduce((a, b) => a.price < b.price ? a : b) : null;
-  if (!cheapest || cheapest.price >= alert.threshold) return;
-
-  state.alertNotified = true;
-  const title = t('priceAlertTitle');
-  const body = `${fixEnc(cheapest.brand || cheapest.name)}: ${formatPrice(cheapest.price)} (${t('under')} ${formatPrice(alert.threshold)})`;
-
-  const channel = alert.channel || 'ntfy';
-  if (channel === 'email' && alert.email) {
-    try {
-      await api('/api/alert/email', {
-        method: 'POST',
-        body: JSON.stringify({ to: alert.email, subject: title, body })
-      });
-    } catch {}
-  } else if (channel === 'ntfy' && alert.ntfyTopic) {
-    try {
-      await api('/api/alert/notify', {
-        method: 'POST',
-        body: JSON.stringify({ topic: alert.ntfyTopic, title, message: body })
-      });
-    } catch {}
-  }
-}
+// Client-side trigger is no longer needed — the server-side evaluator runs
+// after every scheduler cycle and handles dedup via lastNotifiedAt /
+// lastNotifiedPrice. Kept as a no-op so call sites don't need to change.
+async function checkPriceAlert(_stations) { /* handled server-side */ }
 
 async function deleteAlert() {
   if (state.user) setSyncBadgeState('syncing', ['alert']);

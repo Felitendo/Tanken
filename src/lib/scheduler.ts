@@ -337,6 +337,22 @@ class ScanScheduler {
         console.error(`[Scheduler] ${eMsg}`);
       }
 
+      // Background price-alert evaluation: walks every enabled alert and
+      // fires notifications for cheapest-station drops below threshold.
+      try {
+        const { evaluatePriceAlerts } = await import('@/lib/alert-evaluator');
+        const result = await evaluatePriceAlerts();
+        if (result.checked > 0) {
+          const aMsg = `Alarme geprüft: ${result.checked} (${result.notified} ausgelöst)`;
+          this.de.addLog(aMsg, 'info');
+          console.log(`[Scheduler] ${aMsg}`);
+        }
+      } catch (err) {
+        const eMsg = `Alarm-Eval Fehler: ${err instanceof Error ? err.message : String(err)}`;
+        this.de.addLog(eMsg, 'error');
+        console.error(`[Scheduler] ${eMsg}`);
+      }
+
       const total = this.de.stationsScanned + this.at.stationsScanned;
       const msg = `Scan #${this._cycleCount} fertig: ${total.toLocaleString('de-DE')} Stationen in ${fmtDuration(cycleDuration)}`;
       this.de.addLog(msg, 'success');

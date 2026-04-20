@@ -137,6 +137,14 @@ export interface PriceAlert {
   channel: 'ntfy' | 'email';
   ntfyTopic?: string;
   email?: string;
+  /** Centre of the area the background evaluator monitors. */
+  lat?: number;
+  lng?: number;
+  /** Radius around (lat, lng) to scan, in km. Defaults to 25 km when missing. */
+  radiusKm?: number;
+  /** Last notification metadata — used by the evaluator to dedupe alerts. */
+  lastNotifiedAt?: string;
+  lastNotifiedPrice?: number;
   created: string;
   updated?: string;
 }
