@@ -362,8 +362,40 @@ function t(key) {
   return key;
 }
 
-const TILE_URL = 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png';
-const TILE_OPTIONS = { maxZoom: 19, attribution: '© OpenStreetMap · Deutschland', subdomains: 'abc' };
+function isDarkTheme() {
+  const attr = document.documentElement.getAttribute('data-theme');
+  if (attr === 'dark') return true;
+  if (attr === 'light') return false;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function getTileConfig() {
+  if (isDarkTheme()) {
+    return {
+      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      options: { maxZoom: 19, attribution: '© OpenStreetMap · CARTO', subdomains: 'abcd' },
+    };
+  }
+  if (state.lang === 'de') {
+    return {
+      url: 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
+      options: { maxZoom: 19, attribution: '© OpenStreetMap Deutschland', subdomains: 'abc' },
+    };
+  }
+  return {
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    options: { maxZoom: 19, attribution: '© OpenStreetMap · CARTO', subdomains: 'abcd' },
+  };
+}
+
+function refreshMapTiles() {
+  if (!state.map) return;
+  const cfg = getTileConfig();
+  if (state.tileLayer) {
+    try { state.map.removeLayer(state.tileLayer); } catch {}
+  }
+  state.tileLayer = L.tileLayer(cfg.url, cfg.options).addTo(state.map);
+}
 
 function applyLanguage() {
   document.documentElement.lang = state.lang;
@@ -638,6 +670,14 @@ function applyTheme(theme) {
   } else {
     document.documentElement.setAttribute('data-theme', theme);
   }
+  refreshMapTiles();
+}
+
+if (typeof window !== 'undefined' && window.matchMedia) {
+  const mql = window.matchMedia('(prefers-color-scheme: dark)');
+  const handler = () => { if (state.theme === 'auto') refreshMapTiles(); };
+  if (mql.addEventListener) mql.addEventListener('change', handler);
+  else if (mql.addListener) mql.addListener(handler);
 }
 
 function setupTheme() {
@@ -661,6 +701,7 @@ function setupLangPicker() {
     haptic('light');
     state.lang = select.value;
     applyLanguage();
+    refreshMapTiles();
     renderAccountUi();
     // Re-render dynamic content if already loaded
     if (state.loaded.history && state.history.length) renderChart(state.history);
@@ -1014,7 +1055,8 @@ function openLocationRequestSheet() {
   if (mapEl && window.L) {
     const L = window.L;
     const map = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView([reqState.lat, reqState.lng], 11);
-    L.tileLayer(TILE_URL, TILE_OPTIONS).addTo(map);
+    const reqTileCfg = getTileConfig();
+    L.tileLayer(reqTileCfg.url, reqTileCfg.options).addTo(map);
     const marker = L.marker([reqState.lat, reqState.lng], { draggable: true }).addTo(map);
     const circle = L.circle([reqState.lat, reqState.lng], {
       radius: reqState.radiusKm * 1000,
@@ -1191,7 +1233,8 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
       tapHold: false
     }).setView([coords.lat, coords.lng], 12);
 
-    state.tileLayer = L.tileLayer(TILE_URL, TILE_OPTIONS).addTo(state.map);
+    const initialTileCfg = getTileConfig();
+    state.tileLayer = L.tileLayer(initialTileCfg.url, initialTileCfg.options).addTo(state.map);
 
     setupMapZoomGesture();
     setupMapSearch();
