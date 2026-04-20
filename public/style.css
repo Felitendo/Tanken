@@ -3403,6 +3403,12 @@ html[data-theme="dark"] .pwa-popup-icon img,
     opacity: 0.5;
   }
 
+  /* The desktop close button overlays the top-right corner — give the fav
+     star enough right-side breathing room so they don't visually collide. */
+  .sheet-fav-btn {
+    margin-right: 36px;
+  }
+
   /* --- Hide expand button on desktop (close button handles dismiss) --- */
   .sheet-expand-btn {
     display: none !important;
