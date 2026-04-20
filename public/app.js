@@ -982,6 +982,7 @@ async function renderHistoryLocations() {
 
 async function renderUserRequests() {
   const card = document.getElementById('user-requests-card');
+  const header = document.getElementById('user-requests-header');
   const hint = document.getElementById('user-requests-login-hint');
   const list = document.getElementById('user-requests-list');
   const btn = document.getElementById('btn-request-location');
@@ -989,6 +990,7 @@ async function renderUserRequests() {
 
   if (!state.user) {
     card.style.display = 'none';
+    if (header) header.style.display = 'none';
     hint.style.display = '';
     hint.querySelector('span')?.setAttribute('data-i18n', 'requestsLoginHint');
     const span = hint.querySelector('span');
@@ -997,6 +999,7 @@ async function renderUserRequests() {
   }
   if (state.user.authProvider !== 'oidc') {
     card.style.display = 'none';
+    if (header) header.style.display = 'none';
     hint.style.display = '';
     const span = hint.querySelector('span');
     if (span) { span.setAttribute('data-i18n', 'requestsOidcOnly'); span.textContent = t('requestsOidcOnly'); }
@@ -1013,10 +1016,15 @@ async function renderUserRequests() {
     requests = [];
   }
 
+  // Empty: hide the "MEINE ANFRAGEN" sub-header + list placeholder so the
+  // settings tab isn't cluttered with empty sections. The request button
+  // below stays visible so users can still create new requests.
   if (!requests.length) {
-    list.innerHTML = `<div style="padding:14px 16px;font-size:13px;color:var(--color-hint);text-align:center">${t('requestsEmpty')}</div>`;
+    if (header) header.style.display = 'none';
+    list.innerHTML = '';
     return;
   }
+  if (header) header.style.display = '';
 
   const badgeColors = {
     pending: { bg: 'rgba(255,159,10,0.15)', fg: '#ff9f0a' },

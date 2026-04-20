@@ -178,7 +178,7 @@ export const APP_SHELL = `
         <div id="history-locations-list" aria-live="polite"></div>
       </div>
 
-      <div class="section-sub-header" data-i18n="myRequests">MEINE ANFRAGEN</div>
+      <div class="section-sub-header" id="user-requests-header" data-i18n="myRequests">MEINE ANFRAGEN</div>
       <div class="card" id="user-requests-card">
         <div id="user-requests-list"></div>
         <button type="button" id="btn-request-location" class="card-row request-location-btn">
