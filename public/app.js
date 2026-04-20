@@ -1634,26 +1634,29 @@ function recordManualScan(lat, lng, stations) {
   persistManualScans();
 }
 
-// Drive the manual-scan banner colour from the remaining-time fraction t
+// Drive the manual-scan freshness colour from the remaining-time fraction t
 // (1 = just scanned, 0 = expired). Hue interpolates green → yellow → red.
+// We push the value onto the sheet body so both the small banner and the
+// big price (sibling, .has-manual-scan) inherit and pulse in the same hue.
 function applyManualScanFreshness(el, t) {
   const clamped = Math.max(0, Math.min(1, t));
-  // Piecewise hue: 1.0 → 142 (green), 0.5 → 45 (yellow), 0.0 → 0 (red).
   let hue;
   if (clamped >= 0.5) {
-    const u = (clamped - 0.5) / 0.5; // 0..1 across upper half
+    const u = (clamped - 0.5) / 0.5;
     hue = 45 + u * (142 - 45);
   } else {
-    const u = clamped / 0.5; // 0..1 across lower half
+    const u = clamped / 0.5;
     hue = u * 45;
   }
-  // Slightly punchier saturation when cold (less so when fresh green).
-  const sat = 78 + (1 - clamped) * 8;
+  const sat = 80 + (1 - clamped) * 8;
   const light = 50;
-  el.style.setProperty('--scan-color', `hsl(${hue.toFixed(1)} ${sat.toFixed(1)}% ${light}%)`);
-  el.style.setProperty('--scan-bg', `hsla(${hue.toFixed(1)}, ${sat.toFixed(1)}%, ${light}%, 0.12)`);
-  el.style.setProperty('--scan-bg-strong', `hsla(${hue.toFixed(1)}, ${sat.toFixed(1)}%, ${light}%, 0.20)`);
-  el.style.setProperty('--scan-track', `hsla(${hue.toFixed(1)}, ${sat.toFixed(1)}%, ${light}%, 0.20)`);
+  const color = `hsl(${hue.toFixed(1)} ${sat.toFixed(1)}% ${light}%)`;
+  const targets = [el];
+  const sheetBody = document.getElementById('bottom-sheet-body');
+  if (sheetBody) targets.push(sheetBody);
+  for (const target of targets) {
+    target.style.setProperty('--scan-color', color);
+  }
 }
 
 // Merge active manual-scan stations into the given list. Any station the
@@ -2644,7 +2647,7 @@ function showStationSheet(station) {
       <span class="sheet-manual-scan-text">${t('manualScanLabel')} · ${t('manualScanExpiresIn')} <strong class="sheet-manual-scan-countdown">–:––</strong>${t('manualScanExpiresSuffix') ? ' ' + t('manualScanExpiresSuffix') : ''}</span>
       <div class="sheet-manual-scan-progress" aria-hidden="true"><div class="sheet-manual-scan-progress-bar"></div></div>
     </div>` : ''}
-    <div class="sheet-station-price" style="color:${color}">
+    <div class="sheet-station-price${station._expiresAt ? ' has-manual-scan' : ''}" style="color:${color}">
       ${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}
       <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>
     </div>

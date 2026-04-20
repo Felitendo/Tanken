@@ -1267,35 +1267,26 @@ body.logged-in .cloud-sync-hint {
 }
 .sheet-chart-empty-btn:active { opacity: 0.85; transform: scale(0.97); }
 
-/* Banner shown for stations that came from a manual scan — the data is
-   only kept locally for 15 min, so we surface a live countdown plus a
-   progress bar that depletes over the TTL window. */
-.sheet-manual-scan-banner {
-  /* Default palette — overwritten on each tick by applyManualScanFreshness
-     to interpolate green → yellow → red as the TTL ticks down. */
+/* Subtle banner for manual-scan stations — data is ephemeral (15 min TTL),
+   so we surface a small dot + countdown + thin progress bar. Colour is
+   driven live by JS from --scan-color (green → yellow → red over TTL),
+   inherited from #bottom-sheet-body so the price can glow in the same hue. */
+/* Default freshness palette lives on the shared sheet container so both the
+   banner and the price inherit the same --scan-color. JS overwrites on each
+   tick while the manual-scan window is open. */
+#bottom-sheet-body {
   --scan-color: #22c55e;
-  --scan-bg: rgba(34, 197, 94, 0.12);
-  --scan-bg-strong: rgba(34, 197, 94, 0.20);
-  --scan-track: rgba(34, 197, 94, 0.20);
+}
+.sheet-manual-scan-banner {
+  --scan-track: rgba(148, 163, 184, 0.22);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  margin: 6px 0 12px;
-  border-radius: 10px;
-  background: var(--scan-bg);
-  color: var(--scan-color);
+  gap: 10px;
+  padding: 8px 20px 10px;
+  margin: 0;
   font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.1px;
+  color: var(--color-hint);
   position: relative;
-  overflow: hidden;
-  transition: background 1s linear, color 1s linear;
-}
-.sheet-manual-scan-dot,
-.sheet-manual-scan-dot::after,
-.sheet-manual-scan-progress-bar {
-  transition: background 1s linear, box-shadow 1s linear;
 }
 .sheet-manual-scan-text {
   flex: 1;
@@ -1306,71 +1297,63 @@ body.logged-in .cloud-sync-hint {
 }
 .sheet-manual-scan-countdown {
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-weight: 600;
+  color: var(--color-text);
 }
 
-/* Pulsing dot with a soft glow halo. */
+/* Small pulsing dot — no heavy halo, the real "wow" lives on the price now. */
 .sheet-manual-scan-dot {
-  position: relative;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--scan-color);
   flex-shrink: 0;
-  box-shadow: 0 0 5px var(--scan-color);
-  animation: manualScanPulse 1.6s ease-in-out infinite;
-}
-.sheet-manual-scan-dot::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 50%;
-  background: var(--scan-color);
-  opacity: 0.3;
-  animation: manualScanRipple 1.6s ease-out infinite;
+  box-shadow: 0 0 4px var(--scan-color);
+  animation: manualScanPulse 1.8s ease-in-out infinite;
+  transition: background 1s linear, box-shadow 1s linear;
 }
 @keyframes manualScanPulse {
-  0%, 100% { box-shadow: 0 0 5px var(--scan-color); }
-  50%      { box-shadow: 0 0 9px var(--scan-color); }
-}
-@keyframes manualScanRipple {
-  0%   { transform: scale(0.7); opacity: 0.4; }
-  100% { transform: scale(1.9); opacity: 0;   }
+  0%, 100% { opacity: 1;   transform: scale(1);    }
+  50%      { opacity: 0.6; transform: scale(0.85); }
 }
 
-/* Depleting progress bar at the bottom edge of the banner. */
+/* Thin progress bar hugging the bottom edge of the banner. */
 .sheet-manual-scan-progress {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 20px;
+  right: 20px;
   bottom: 0;
-  height: 3px;
+  height: 2px;
+  border-radius: 2px;
   background: var(--scan-track);
+  overflow: hidden;
 }
 .sheet-manual-scan-progress-bar {
   height: 100%;
   width: 100%;
   background: var(--scan-color);
-  box-shadow: 0 0 6px var(--scan-color);
-  transition: width 0.9s linear;
+  transition: width 0.9s linear, background 1s linear;
 }
 
-/* Last minute: deeper background tint and a faster pulse. The colour itself
-   is already driven from JS via --scan-color (green → yellow → red over the
-   TTL window), so this only intensifies the cue. */
-.sheet-manual-scan-banner.urgent {
-  background: var(--scan-bg-strong);
+/* The price itself carries the "fresh/expiring" energy via a subtle text glow
+   in the same colour the freshness indicator uses. */
+.sheet-station-price.has-manual-scan {
+  animation: priceFreshGlow 2.6s ease-in-out infinite;
 }
+@keyframes priceFreshGlow {
+  0%, 100% { text-shadow: 0 0 10px var(--scan-color, currentColor), 0 0 2px var(--scan-color, currentColor); }
+  50%      { text-shadow: 0 0 18px var(--scan-color, currentColor), 0 0 6px var(--scan-color, currentColor); }
+}
+
+/* Last minute: only the dot pulses faster — no hard colour override. */
 .sheet-manual-scan-banner.urgent .sheet-manual-scan-dot {
-  animation-duration: 0.8s;
+  animation-duration: 0.9s;
 }
 
-/* Expired (kept until the sheet redraws). */
 .sheet-manual-scan-banner.expired {
   opacity: 0.55;
 }
-.sheet-manual-scan-banner.expired .sheet-manual-scan-dot,
-.sheet-manual-scan-banner.expired .sheet-manual-scan-dot::after {
+.sheet-manual-scan-banner.expired .sheet-manual-scan-dot {
   animation: none;
 }
 
