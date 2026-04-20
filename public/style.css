@@ -1839,11 +1839,12 @@ body.logged-in .cloud-sync-hint {
   50%      { transform: scale(0.65); opacity: 0.65; }
 }
 
-/* Austria has live E-Control coverage everywhere — no scan flow, so the
-   "Hier suchen" pill, its cancel sibling and any queued pins are hidden. */
-[data-active-country="at"] .map-search-here,
-[data-active-country="at"] .map-scan-cancel,
-[data-active-country="at"] .scan-queue-pin {
+/* The scan UI follows what the user is LOOKING at (map centre), not where
+   their pin sits — so searching Salzburg then panning to Munich should
+   still show the "Hier suchen" pill. Keyed off data-view-country. */
+[data-view-country="at"] .map-search-here,
+[data-view-country="at"] .map-scan-cancel,
+[data-view-country="at"] .scan-queue-pin {
   display: none !important;
 }
 

@@ -514,6 +514,7 @@ const state = {
   theme: 'auto',
   lang: detectLanguage(),
   activeCountry: null,
+  viewCountry: null,
   loaded: { map: false, history: false, stats: false, settings: false },
   toastTimer: null,
   me: null,
@@ -1321,17 +1322,37 @@ function getActiveCountry() {
   return isInAustria(c.lat, c.lng) ? 'at' : 'de';
 }
 
-// Drive country-conditional UI from a single attribute on <html>.
-// CSS hides the scan-here button + cancel pill when [data-active-country="at"].
+// "Active" country = where the user's pin is (from GPS or last explicit
+// search). Drives history/stats filtering — should NOT flip when the user
+// just pans the map around.
 function applyCountryUi() {
   const next = getActiveCountry();
+  applyViewCountryUi(); // view-country always follows the map center
   if (state.activeCountry === next) return;
   const prev = state.activeCountry;
   state.activeCountry = next;
   document.documentElement.setAttribute('data-active-country', next);
 
-  // Switching country: tear down any in-flight scan picker / queue so the
-  // user doesn't see DE-only affordances bleeding into AT mode.
+  // Country change invalidates cached history/stats — they're country-scoped now.
+  if (prev && prev !== next) {
+    state.selectedLocation = '';
+    state.loaded.history = false;
+    state.loaded.stats = false;
+  }
+}
+
+// "View" country = whatever the map centre is currently over. Drives the
+// scan button and other map-chrome UI, because the user's intent is tied
+// to what they're looking at, not where their pin sits.
+function applyViewCountryUi() {
+  const center = state.map ? state.map.getCenter() : null;
+  const next = center ? (isInAustria(center.lat, center.lng) ? 'at' : 'de')
+                      : getActiveCountry();
+  if (state.viewCountry === next) return;
+  state.viewCountry = next;
+  document.documentElement.setAttribute('data-view-country', next);
+
+  // Entering AT view: clear DE-only affordances the user can't use anyway.
   if (next === 'at') {
     if (state._scanPicker) exitScanPickerMode();
     if (Array.isArray(state._scanQueue)) {
@@ -1344,13 +1365,6 @@ function applyCountryUi() {
     }
     const btn = document.getElementById('btn-search-here');
     if (btn) { btn.disabled = false; setSearchBtnIdle(btn); }
-  }
-
-  // Country change invalidates cached history/stats — they're country-scoped now.
-  if (prev && prev !== next) {
-    state.selectedLocation = '';
-    state.loaded.history = false;
-    state.loaded.stats = false;
   }
 }
 
@@ -1408,6 +1422,7 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     });
     state.map.on('moveend', () => {
       showSearchHereIfMoved();
+      applyViewCountryUi();
       scheduleAtViewportLoad();
     });
   }
