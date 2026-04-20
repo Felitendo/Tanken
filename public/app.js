@@ -1626,6 +1626,28 @@ function recordManualScan(lat, lng, stations) {
   persistManualScans();
 }
 
+// Drive the manual-scan banner colour from the remaining-time fraction t
+// (1 = just scanned, 0 = expired). Hue interpolates green → yellow → red.
+function applyManualScanFreshness(el, t) {
+  const clamped = Math.max(0, Math.min(1, t));
+  // Piecewise hue: 1.0 → 142 (green), 0.5 → 45 (yellow), 0.0 → 0 (red).
+  let hue;
+  if (clamped >= 0.5) {
+    const u = (clamped - 0.5) / 0.5; // 0..1 across upper half
+    hue = 45 + u * (142 - 45);
+  } else {
+    const u = clamped / 0.5; // 0..1 across lower half
+    hue = u * 45;
+  }
+  // Slightly punchier saturation when cold (less so when fresh green).
+  const sat = 78 + (1 - clamped) * 8;
+  const light = 50;
+  el.style.setProperty('--scan-color', `hsl(${hue.toFixed(1)} ${sat.toFixed(1)}% ${light}%)`);
+  el.style.setProperty('--scan-bg', `hsla(${hue.toFixed(1)}, ${sat.toFixed(1)}%, ${light}%, 0.12)`);
+  el.style.setProperty('--scan-bg-strong', `hsla(${hue.toFixed(1)}, ${sat.toFixed(1)}%, ${light}%, 0.20)`);
+  el.style.setProperty('--scan-track', `hsla(${hue.toFixed(1)}, ${sat.toFixed(1)}%, ${light}%, 0.20)`);
+}
+
 // Merge active manual-scan stations into the given list. Any station the
 // user manually scanned within the TTL keeps its _expiresAt tag, even when
 // the primary list also contains it (so the detail sheet always shows the
@@ -2702,7 +2724,7 @@ function showStationSheet(station) {
 
   // Tick the "expires in" countdown + progress bar if the station came from
   // a manual scan. The bar starts full and depletes over the TTL window;
-  // the banner pulses red and shifts to a stronger red as it nears 0.
+  // the banner shifts smoothly from green → yellow → red as it nears 0.
   const manualBanner = body.querySelector('.sheet-manual-scan-banner');
   if (manualBanner) {
     const expiresAt = Number(manualBanner.dataset.expiresAt);
@@ -2714,6 +2736,7 @@ function showStationSheet(station) {
       if (remainingMs <= 0) {
         if (countdownEl) countdownEl.textContent = '0:00';
         if (barEl) barEl.style.width = '0%';
+        applyManualScanFreshness(manualBanner, 0);
         manualBanner.classList.add('expired');
         if (state._manualScanCountdownTimer) {
           clearInterval(state._manualScanCountdownTimer);
@@ -2729,11 +2752,10 @@ function showStationSheet(station) {
       const m = Math.floor(totalSec / 60);
       const s = totalSec % 60;
       if (countdownEl) countdownEl.textContent = `${m}:${String(s).padStart(2, '0')}`;
-      if (barEl) {
-        const pct = Math.max(0, Math.min(100, (remainingMs / ttlMs) * 100));
-        barEl.style.width = `${pct}%`;
-      }
-      // Last 60 s gets a brighter red & faster pulse via .urgent.
+      const t = Math.max(0, Math.min(1, remainingMs / ttlMs));
+      if (barEl) barEl.style.width = `${t * 100}%`;
+      applyManualScanFreshness(manualBanner, t);
+      // Last 60 s gets a faster pulse — colour is already deep red by then.
       manualBanner.classList.toggle('urgent', remainingMs <= 60 * 1000);
     };
     if (state._manualScanCountdownTimer) clearInterval(state._manualScanCountdownTimer);

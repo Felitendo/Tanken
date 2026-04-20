@@ -1271,10 +1271,12 @@ body.logged-in .cloud-sync-hint {
    only kept locally for 15 min, so we surface a live countdown plus a
    progress bar that depletes over the TTL window. */
 .sheet-manual-scan-banner {
-  --scan-color: #f5a524;
-  --scan-bg: rgba(245, 165, 36, 0.12);
-  --scan-bg-strong: rgba(245, 165, 36, 0.22);
-  --scan-track: rgba(245, 165, 36, 0.20);
+  /* Default palette — overwritten on each tick by applyManualScanFreshness
+     to interpolate green → yellow → red as the TTL ticks down. */
+  --scan-color: #22c55e;
+  --scan-bg: rgba(34, 197, 94, 0.12);
+  --scan-bg-strong: rgba(34, 197, 94, 0.20);
+  --scan-track: rgba(34, 197, 94, 0.20);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1288,6 +1290,12 @@ body.logged-in .cloud-sync-hint {
   letter-spacing: 0.1px;
   position: relative;
   overflow: hidden;
+  transition: background 1s linear, color 1s linear;
+}
+.sheet-manual-scan-dot,
+.sheet-manual-scan-dot::after,
+.sheet-manual-scan-progress-bar {
+  transition: background 1s linear, box-shadow 1s linear;
 }
 .sheet-manual-scan-text {
   flex: 1;
@@ -1347,9 +1355,10 @@ body.logged-in .cloud-sync-hint {
   transition: width 0.9s linear;
 }
 
-/* Last minute: shift towards an orange-red urgency tint and pulse faster. */
+/* Last minute: deeper background tint and a faster pulse. The colour itself
+   is already driven from JS via --scan-color (green → yellow → red over the
+   TTL window), so this only intensifies the cue. */
 .sheet-manual-scan-banner.urgent {
-  --scan-color: #ff6b1a;
   background: var(--scan-bg-strong);
 }
 .sheet-manual-scan-banner.urgent .sheet-manual-scan-dot {
