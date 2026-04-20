@@ -370,21 +370,18 @@ function isDarkTheme() {
 }
 
 function getTileConfig() {
+  const baseOptions = { maxZoom: 19, attribution: '© OpenStreetMap · CARTO', subdomains: 'abcd' };
   if (isDarkTheme()) {
     return {
-      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      options: { maxZoom: 19, attribution: '© OpenStreetMap · CARTO', subdomains: 'abcd' },
-    };
-  }
-  if (state.lang === 'de') {
-    return {
-      url: 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
-      options: { maxZoom: 19, attribution: '© OpenStreetMap Deutschland', subdomains: 'abc' },
+      url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+      labelsUrl: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+      options: baseOptions,
+      labelsClassName: 'map-labels-bright',
     };
   }
   return {
     url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    options: { maxZoom: 19, attribution: '© OpenStreetMap · CARTO', subdomains: 'abcd' },
+    options: baseOptions,
   };
 }
 
@@ -394,7 +391,17 @@ function refreshMapTiles() {
   if (state.tileLayer) {
     try { state.map.removeLayer(state.tileLayer); } catch {}
   }
+  if (state.labelsLayer) {
+    try { state.map.removeLayer(state.labelsLayer); } catch {}
+    state.labelsLayer = null;
+  }
   state.tileLayer = L.tileLayer(cfg.url, cfg.options).addTo(state.map);
+  if (cfg.labelsUrl) {
+    state.labelsLayer = L.tileLayer(cfg.labelsUrl, {
+      ...cfg.options,
+      className: cfg.labelsClassName || '',
+    }).addTo(state.map);
+  }
 }
 
 function applyLanguage() {
@@ -1057,6 +1064,12 @@ function openLocationRequestSheet() {
     const map = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView([reqState.lat, reqState.lng], 11);
     const reqTileCfg = getTileConfig();
     L.tileLayer(reqTileCfg.url, reqTileCfg.options).addTo(map);
+    if (reqTileCfg.labelsUrl) {
+      L.tileLayer(reqTileCfg.labelsUrl, {
+        ...reqTileCfg.options,
+        className: reqTileCfg.labelsClassName || '',
+      }).addTo(map);
+    }
     const marker = L.marker([reqState.lat, reqState.lng], { draggable: true }).addTo(map);
     const circle = L.circle([reqState.lat, reqState.lng], {
       radius: reqState.radiusKm * 1000,
@@ -1233,8 +1246,7 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
       tapHold: false
     }).setView([coords.lat, coords.lng], 12);
 
-    const initialTileCfg = getTileConfig();
-    state.tileLayer = L.tileLayer(initialTileCfg.url, initialTileCfg.options).addTo(state.map);
+    refreshMapTiles();
 
     setupMapZoomGesture();
     setupMapSearch();
