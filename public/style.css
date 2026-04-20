@@ -1716,9 +1716,11 @@ body.logged-in .cloud-sync-hint {
   filter: brightness(1.8) contrast(1.1);
 }
 
-/* Slightly brighten dark-mode tiles so place names stay readable */
+/* Lift dark-mode tiles so place names stay readable without washing
+   out the dark background — brightness pulls labels up, lower contrast
+   prevents them from collapsing back into the background. */
 .map-tiles-dark {
-  filter: brightness(1.25) contrast(1.05);
+  filter: brightness(1.5) contrast(0.9);
 }
 
 /* Disable touch/select quirks on Leaflet chrome */
