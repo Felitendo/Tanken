@@ -1072,12 +1072,13 @@ function openLocationRequestSheet(opts = {}) {
   const body = document.getElementById('bottom-sheet-body');
   if (!sheet || !body) return;
 
-  // Optional pre-fill: caller can pass {lat, lng, name} so e.g. the
-  // station-detail "Anfragen" button drops the user straight onto the
-  // station's coordinates with the name pre-populated.
+  // Optional pre-fill: caller can pass {lat, lng, name, address} so e.g.
+  // the station-detail "Anfragen" button drops the user straight onto the
+  // station's coordinates with both name and address pre-populated.
   const presetLat = Number(opts.lat);
   const presetLng = Number(opts.lng);
   const presetName = typeof opts.name === 'string' ? opts.name : '';
+  const presetAddress = typeof opts.address === 'string' ? opts.address : '';
   const initialLat = Number.isFinite(presetLat) ? presetLat
     : Number.isFinite(state.userLat) ? state.userLat
     : 51.1657;
@@ -1252,6 +1253,10 @@ function openLocationRequestSheet(opts = {}) {
   const nameInput = document.getElementById('req-name');
   const noteInput = document.getElementById('req-note');
   if (presetName && nameInput) nameInput.value = presetName;
+  if (presetAddress) {
+    const addressInput = document.getElementById('req-search');
+    if (addressInput) addressInput.value = presetAddress;
+  }
   submitBtn.addEventListener('click', async () => {
     if (reqState.sending) return;
     const name = nameInput.value.trim();
@@ -3108,7 +3113,20 @@ function renderSheetChartEmptyState(loadingEl, station) {
     btn.addEventListener('click', () => {
       haptic('light');
       const label = [station.name || station.brand, station.place].filter(Boolean).join(' · ');
-      openLocationRequestSheet({ lat: station.lat, lng: station.lng, name: label });
+      // Build a "Street 12, 12345 City" string from whichever pieces exist
+      // so the request sheet's address field starts pre-filled and matches
+      // the station the user just tapped.
+      const streetLine = [
+        [station.street, station.houseNumber].filter(Boolean).join(' ').trim(),
+      ].filter(Boolean).join('');
+      const cityLine = [station.postCode, station.place].filter(Boolean).join(' ').trim();
+      const address = [streetLine, cityLine].filter(Boolean).join(', ');
+      openLocationRequestSheet({
+        lat: station.lat,
+        lng: station.lng,
+        name: label,
+        address,
+      });
     });
   }
 }
