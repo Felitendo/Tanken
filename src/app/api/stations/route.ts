@@ -73,19 +73,23 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // No nearby scanned data — try live API call with user's radius
-  const isAustria = lat >= 46.3 && lat <= 49.1 && lng >= 9.4 && lng <= 17.2;
-  if (isAustria) {
-    // E-Control API (no key needed)
+  // No nearby scanned data — try live API call with user's radius.
+  // The AT bounding box also covers parts of southern Germany (Munich, Ulm,
+  // Augsburg, Lindau), so we optimistically try E-Control first when inside
+  // the box and fall through to Tankerkönig if it returns nothing.
+  const maybeAustria = lat >= 46.3 && lat <= 49.1 && lng >= 9.4 && lng <= 17.2;
+  if (maybeAustria) {
     const stations = await fetchStationsEControl({ lat, lng, fuelType: fuel });
     if (stations.length > 0) {
-      // Cache for future lookups and daily price updates
       const cacheId = `at-live-${lat.toFixed(2)}-${lng.toFixed(2)}`;
       setCachedStations(cacheId, { stations, lat, lng, radiusKm: rad, fuelType: fuel });
       const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, stations);
       return NextResponse.json(enriched, { headers: { 'X-Cache': 'live-at' } });
     }
-  } else if (runtimeConfig.apiKey && canMakeLiveCall() && !getScheduler().de.scanning) {
+    // E-Control returned nothing → coordinates are likely in southern Germany.
+    // Fall through to the Tankerkönig path below.
+  }
+  if (runtimeConfig.apiKey && canMakeLiveCall() && !getScheduler().de.scanning) {
     // Tankerkönig API (Germany) — skip when scanner is active to avoid 503 rate limits
     recordLiveCall();
     try {

@@ -1279,10 +1279,41 @@ function getActiveCoords() {
   return { lat: 52.52, lng: 13.405 };
 }
 
-// Loose bounding box matching the backend's isAustria check in /api/stations.
-// Used to flip the map UI between DE (scan-based) and AT (live, no scan).
+// Cheap pre-filter — AT's actual bounding box. Southern Germany (Munich,
+// Ulm, Augsburg, Lindau) overlaps this box, so we still need a proper
+// point-in-polygon check for anything inside it.
+const AT_BBOX = { south: 46.37, north: 49.02, west: 9.53, east: 17.16 };
+
+function pointInRing(lat, lng, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const yi = ring[i][0], xi = ring[i][1];
+    const yj = ring[j][0], xj = ring[j][1];
+    const intersect =
+      ((yi > lat) !== (yj > lat)) &&
+      (lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Decides whether a coordinate sits inside Austria. Uses the loaded AT
+// outline (Natural Earth 10 m) if available; otherwise falls back to the
+// bounding box so we don't deadlock before outlines arrive.
 function isInAustria(lat, lng) {
-  return lat >= 46.3 && lat <= 49.1 && lng >= 9.4 && lng <= 17.2;
+  if (lat < AT_BBOX.south || lat > AT_BBOX.north || lng < AT_BBOX.west || lng > AT_BBOX.east) {
+    return false;
+  }
+  const outlines = window.COVERAGE_OUTLINES;
+  const rings = outlines && Array.isArray(outlines.at) ? outlines.at : null;
+  if (!rings || !rings.length) {
+    // Outlines haven't loaded yet — be permissive, UI will re-check on next event.
+    return true;
+  }
+  for (const ring of rings) {
+    if (pointInRing(lat, lng, ring)) return true;
+  }
+  return false;
 }
 
 function getActiveCountry() {
