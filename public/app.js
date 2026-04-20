@@ -1626,23 +1626,38 @@ function recordManualScan(lat, lng, stations) {
   persistManualScans();
 }
 
-// Merge active manual-scan stations into the given list. Stations already
-// present in `primary` keep their fresh data (no _expiresAt). Stations only
-// available via the manual scan get tagged with the scan's expiresAt so the
-// detail sheet can show the countdown.
+// Merge active manual-scan stations into the given list. Any station the
+// user manually scanned within the TTL keeps its _expiresAt tag, even when
+// the primary list also contains it (so the detail sheet always shows the
+// countdown right after a scan, not just after a refresh).
 function withManualScans(primary) {
+  // Build a station-id → latest expiresAt map across all active scans.
+  const expiryByKey = new Map();
+  for (const scan of state.manualScans || []) {
+    const exp = Number(scan.expiresAt);
+    if (!(exp > Date.now())) continue;
+    for (const s of scan.stations || []) {
+      const key = s.id || `${s.lat},${s.lng}`;
+      const existing = expiryByKey.get(key);
+      if (!existing || exp > existing) expiryByKey.set(key, exp);
+    }
+  }
+
   const out = new Map();
   const list = Array.isArray(primary) ? primary : [];
   for (const s of list) {
     const key = s.id || `${s.lat},${s.lng}`;
-    out.set(key, s);
+    const exp = expiryByKey.get(key);
+    out.set(key, exp ? { ...s, _expiresAt: exp } : s);
   }
+  // Add stations only present in a manual scan (not in primary at all).
   for (const scan of state.manualScans || []) {
-    if (Number(scan.expiresAt) <= Date.now()) continue;
+    const exp = Number(scan.expiresAt);
+    if (!(exp > Date.now())) continue;
     for (const s of scan.stations || []) {
       const key = s.id || `${s.lat},${s.lng}`;
       if (out.has(key)) continue;
-      out.set(key, { ...s, _expiresAt: scan.expiresAt });
+      out.set(key, { ...s, _expiresAt: exp });
     }
   }
   return Array.from(out.values());

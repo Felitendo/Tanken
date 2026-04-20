@@ -1301,33 +1301,33 @@ body.logged-in .cloud-sync-hint {
   font-weight: 700;
 }
 
-/* Pulsing red dot with a soft glow halo. */
+/* Pulsing dot with a soft glow halo. */
 .sheet-manual-scan-dot {
   position: relative;
-  width: 9px;
-  height: 9px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--scan-color);
   flex-shrink: 0;
-  box-shadow: 0 0 8px var(--scan-color), 0 0 2px var(--scan-color);
+  box-shadow: 0 0 5px var(--scan-color);
   animation: manualScanPulse 1.6s ease-in-out infinite;
 }
 .sheet-manual-scan-dot::after {
   content: '';
   position: absolute;
-  inset: -4px;
+  inset: -2px;
   border-radius: 50%;
   background: var(--scan-color);
-  opacity: 0.35;
+  opacity: 0.3;
   animation: manualScanRipple 1.6s ease-out infinite;
 }
 @keyframes manualScanPulse {
-  0%, 100% { box-shadow: 0 0 8px var(--scan-color), 0 0 2px var(--scan-color); }
-  50%      { box-shadow: 0 0 14px var(--scan-color), 0 0 4px var(--scan-color); }
+  0%, 100% { box-shadow: 0 0 5px var(--scan-color); }
+  50%      { box-shadow: 0 0 9px var(--scan-color); }
 }
 @keyframes manualScanRipple {
-  0%   { transform: scale(0.6); opacity: 0.45; }
-  100% { transform: scale(2.2); opacity: 0;    }
+  0%   { transform: scale(0.7); opacity: 0.4; }
+  100% { transform: scale(1.9); opacity: 0;   }
 }
 
 /* Depleting progress bar at the bottom edge of the banner. */
