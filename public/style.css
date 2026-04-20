@@ -1771,6 +1771,33 @@ body.logged-in .cloud-sync-hint {
   50%      { transform: scale(0.78); opacity: 0.85; }
 }
 
+/* Yellow pin shown for queued scan requests waiting on the cooldown.
+   Click to remove the pin (and its queue entry). */
+.scan-queue-pin {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 193, 7, 0.22);
+  border: 2px solid #ffc107;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.scan-queue-pin-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffc107;
+  box-shadow: 0 0 0 2px var(--color-bg);
+  animation: scanQueuePinPulse 1.4s ease-in-out infinite;
+}
+@keyframes scanQueuePinPulse {
+  0%, 100% { transform: scale(1);    opacity: 1;    }
+  50%      { transform: scale(0.65); opacity: 0.65; }
+}
+
 /* Brighten dark map labels for readability */
 .bright-labels {
   filter: brightness(1.8) contrast(1.1);

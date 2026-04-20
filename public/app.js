@@ -1441,6 +1441,7 @@ async function confirmScanPicker() {
 // Scan animation + station fetch + render. Drives the search-here button
 // state for both the manual picker flow and the location-search result flow.
 async function runScanAt(lat, lng) {
+  state._scanRunning = true;
   const btn = document.getElementById('btn-search-here');
   if (btn) {
     btn.disabled = true;
@@ -1467,8 +1468,55 @@ async function runScanAt(lat, lng) {
     await animPromise;
     showToast(t('errorLoading'));
   } finally {
+    state._scanRunning = false;
     startSearchHereCooldown();
   }
+}
+
+// True while a scan is animating/fetching or its post-scan cooldown is
+// counting down. New scan requests must queue instead of firing.
+function isScanBusy() {
+  return Boolean(state._scanRunning) || state._searchHereCooldownTimer != null;
+}
+
+// Drop a yellow pin to signal "queued, waiting for cooldown". Tap the pin
+// to remove the entry from the queue.
+function enqueueScan(lat, lng) {
+  if (!state.map) return;
+  if (!Array.isArray(state._scanQueue)) state._scanQueue = [];
+  const pin = L.marker([lat, lng], {
+    icon: L.divIcon({
+      className: '',
+      html: '<div class="scan-queue-pin" aria-hidden="true"><span class="scan-queue-pin-dot"></span></div>',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    }),
+    zIndexOffset: 800,
+    interactive: true,
+    keyboard: false,
+  }).addTo(state.map);
+
+  const item = { lat, lng, pin };
+  pin.on('click', () => removeQueuedScan(item));
+  state._scanQueue.push(item);
+}
+
+function removeQueuedScan(item) {
+  if (!Array.isArray(state._scanQueue)) return;
+  const idx = state._scanQueue.indexOf(item);
+  if (idx === -1) return;
+  state._scanQueue.splice(idx, 1);
+  try { state.map.removeLayer(item.pin); } catch {}
+}
+
+// Pop the oldest queued scan and run it. Called when the cooldown ends.
+function processScanQueue() {
+  if (!Array.isArray(state._scanQueue) || !state._scanQueue.length) return;
+  const next = state._scanQueue.shift();
+  try { state.map.removeLayer(next.pin); } catch {}
+  const flyDuration = 0.6;
+  if (state.map) state.map.flyTo([next.lat, next.lng], 13, { duration: flyDuration });
+  setTimeout(() => { runScanAt(next.lat, next.lng); }, flyDuration * 1000 + 50);
 }
 
 function playScanAnimation(centerLatLng, radiusKm) {
@@ -1547,6 +1595,7 @@ function startSearchHereCooldown() {
       state._searchHereCooldownTimer = null;
       btn.disabled = false;
       setSearchBtnIdle(btn);
+      processScanQueue();
       return;
     }
     updateLabel();
@@ -3207,10 +3256,17 @@ async function searchLocation(query) {
         document.getElementById('map-location-banner')?.classList.add('hidden');
         // Tear down any open picker so the ripple is the only overlay
         if (state._scanPicker) exitScanPickerMode();
-        // Fly to the picked spot, then run the scan animation centred on it
+        state.loaded.map = true;
+
+        // If a scan is running or the cooldown is still ticking, drop a
+        // yellow pin to mark this request and queue it for later.
+        if (isScanBusy()) {
+          enqueueScan(lat, lng);
+          return;
+        }
+
         const flyDuration = 0.6;
         if (state.map) state.map.flyTo([lat, lng], 13, { duration: flyDuration });
-        state.loaded.map = true;
         await new Promise(r => setTimeout(r, flyDuration * 1000 + 50));
         await runScanAt(lat, lng);
       });
