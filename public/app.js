@@ -373,10 +373,9 @@ function getTileConfig() {
   const baseOptions = { maxZoom: 19, attribution: '© OpenStreetMap · CARTO', subdomains: 'abcd' };
   if (isDarkTheme()) {
     return {
-      url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
-      labelsUrl: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
       options: baseOptions,
-      labelsClassName: 'map-labels-bright',
+      className: 'map-tiles-dark',
     };
   }
   return {
@@ -391,17 +390,10 @@ function refreshMapTiles() {
   if (state.tileLayer) {
     try { state.map.removeLayer(state.tileLayer); } catch {}
   }
-  if (state.labelsLayer) {
-    try { state.map.removeLayer(state.labelsLayer); } catch {}
-    state.labelsLayer = null;
-  }
-  state.tileLayer = L.tileLayer(cfg.url, cfg.options).addTo(state.map);
-  if (cfg.labelsUrl) {
-    state.labelsLayer = L.tileLayer(cfg.labelsUrl, {
-      ...cfg.options,
-      className: cfg.labelsClassName || '',
-    }).addTo(state.map);
-  }
+  state.tileLayer = L.tileLayer(cfg.url, {
+    ...cfg.options,
+    className: cfg.className || '',
+  }).addTo(state.map);
 }
 
 function applyLanguage() {
@@ -1063,13 +1055,10 @@ function openLocationRequestSheet() {
     const L = window.L;
     const map = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView([reqState.lat, reqState.lng], 11);
     const reqTileCfg = getTileConfig();
-    L.tileLayer(reqTileCfg.url, reqTileCfg.options).addTo(map);
-    if (reqTileCfg.labelsUrl) {
-      L.tileLayer(reqTileCfg.labelsUrl, {
-        ...reqTileCfg.options,
-        className: reqTileCfg.labelsClassName || '',
-      }).addTo(map);
-    }
+    L.tileLayer(reqTileCfg.url, {
+      ...reqTileCfg.options,
+      className: reqTileCfg.className || '',
+    }).addTo(map);
     const marker = L.marker([reqState.lat, reqState.lng], { draggable: true }).addTo(map);
     const circle = L.circle([reqState.lat, reqState.lng], {
       radius: reqState.radiusKm * 1000,
