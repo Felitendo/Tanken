@@ -1268,27 +1268,97 @@ body.logged-in .cloud-sync-hint {
 .sheet-chart-empty-btn:active { opacity: 0.85; transform: scale(0.97); }
 
 /* Banner shown for stations that came from a manual scan — the data is
-   only kept locally for 15 min, so we surface a live countdown. */
+   only kept locally for 15 min, so we surface a live countdown plus a
+   progress bar that depletes over the TTL window. */
 .sheet-manual-scan-banner {
-  display: inline-flex;
+  --scan-color: #ff3b30;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  margin: 6px 0 10px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
-  color: var(--color-accent);
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 6px 0 12px;
+  border-radius: 10px;
+  background: rgba(255, 59, 48, 0.10);
+  color: var(--scan-color);
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.1px;
+  position: relative;
+  overflow: hidden;
 }
-.sheet-manual-scan-banner.expired {
-  background: rgba(255, 59, 48, 0.14);
-  color: #ff3b30;
+.sheet-manual-scan-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sheet-manual-scan-countdown {
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: 700;
+}
+
+/* Pulsing red dot with a soft glow halo. */
+.sheet-manual-scan-dot {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--scan-color);
+  flex-shrink: 0;
+  box-shadow: 0 0 8px var(--scan-color), 0 0 2px var(--scan-color);
+  animation: manualScanPulse 1.6s ease-in-out infinite;
+}
+.sheet-manual-scan-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: var(--scan-color);
+  opacity: 0.35;
+  animation: manualScanRipple 1.6s ease-out infinite;
+}
+@keyframes manualScanPulse {
+  0%, 100% { box-shadow: 0 0 8px var(--scan-color), 0 0 2px var(--scan-color); }
+  50%      { box-shadow: 0 0 14px var(--scan-color), 0 0 4px var(--scan-color); }
+}
+@keyframes manualScanRipple {
+  0%   { transform: scale(0.6); opacity: 0.45; }
+  100% { transform: scale(2.2); opacity: 0;    }
+}
+
+/* Depleting progress bar at the bottom edge of the banner. */
+.sheet-manual-scan-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 59, 48, 0.18);
+}
+.sheet-manual-scan-progress-bar {
+  height: 100%;
+  width: 100%;
+  background: var(--scan-color);
+  box-shadow: 0 0 6px var(--scan-color);
+  transition: width 0.9s linear;
+}
+
+/* Last minute: brighter, faster pulse. */
+.sheet-manual-scan-banner.urgent {
+  background: rgba(255, 59, 48, 0.18);
+}
+.sheet-manual-scan-banner.urgent .sheet-manual-scan-dot {
+  animation-duration: 0.8s;
+}
+
+/* Expired (kept until the sheet redraws). */
+.sheet-manual-scan-banner.expired {
+  opacity: 0.55;
+}
+.sheet-manual-scan-banner.expired .sheet-manual-scan-dot,
+.sheet-manual-scan-banner.expired .sheet-manual-scan-dot::after {
+  animation: none;
 }
 
 .sheet-expand-btn {

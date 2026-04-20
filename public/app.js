@@ -183,7 +183,9 @@ const i18n = {
     stationNotScannedHint: 'Du kannst einen Scan-Standort dafür in den Einstellungen anfragen.',
     requestScanLocation: 'Standort anfragen',
     historyAccumulating: 'Noch keine Preisverlaufsdaten – sammelt sich mit der Zeit.',
-    manualScanValidFor: 'Manueller Scan – gültig noch',
+    manualScanLabel: 'Manuell gescannt',
+    manualScanExpiresIn: 'läuft in',
+    manualScanExpiresSuffix: 'ab',
     historyDefault: 'PREISVERLAUF',
     historyDefaultLabel: 'Standard-Ansicht',
     historyDefault24h: '24 Stunden',
@@ -360,7 +362,9 @@ const i18n = {
     stationNotScannedHint: 'You can request a scan location for it from the settings.',
     requestScanLocation: 'Request location',
     historyAccumulating: 'No price history yet – it builds up over time.',
-    manualScanValidFor: 'Manual scan – valid for',
+    manualScanLabel: 'Manually scanned',
+    manualScanExpiresIn: 'expires in',
+    manualScanExpiresSuffix: '',
     historyDefault: 'PRICE HISTORY',
     historyDefaultLabel: 'Default range',
     historyDefault24h: '24 hours',
@@ -2590,6 +2594,11 @@ function showStationSheet(station) {
       </div>
       ${station.id ? `<button class="fav-btn sheet-fav-btn${sheetIsFav ? ' active' : ''}" data-station-id="${station.id}" aria-label="${sheetIsFav ? t('removeFavourite') : t('addFavourite')}"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
     </div>
+    ${station._expiresAt ? `<div class="sheet-manual-scan-banner" data-expires-at="${station._expiresAt}" data-ttl-ms="${MANUAL_SCAN_TTL_MS}">
+      <span class="sheet-manual-scan-dot" aria-hidden="true"></span>
+      <span class="sheet-manual-scan-text">${t('manualScanLabel')} · ${t('manualScanExpiresIn')} <strong class="sheet-manual-scan-countdown">–:––</strong>${t('manualScanExpiresSuffix') ? ' ' + t('manualScanExpiresSuffix') : ''}</span>
+      <div class="sheet-manual-scan-progress" aria-hidden="true"><div class="sheet-manual-scan-progress-bar"></div></div>
+    </div>` : ''}
     <div class="sheet-station-price" style="color:${color}">
       ${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}
       <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>
@@ -2606,10 +2615,6 @@ function showStationSheet(station) {
     ${state.dataTimestamp ? `<div class="sheet-info-row" style="color:var(--color-hint)">
       <svg class="sheet-info-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
       <span>${formatDataAge(state.dataTimestamp)}</span>
-    </div>` : ''}
-    ${station._expiresAt ? `<div class="sheet-manual-scan-banner" data-expires-at="${station._expiresAt}">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm.5 5h-1v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg>
-      <span>${t('manualScanValidFor')} <strong class="sheet-manual-scan-countdown">–:––</strong></span>
     </div>` : ''}
     <div class="sheet-hours-section" id="sheet-hours-section"></div>
     <div class="sheet-nav-buttons${isAndroid ? ' android-only' : ''}">
@@ -2680,16 +2685,20 @@ function showStationSheet(station) {
     if (state.defaultBounds) showResetViewBtn();
   };
 
-  // Tick the "valid for" countdown if the station came from a manual scan.
+  // Tick the "expires in" countdown + progress bar if the station came from
+  // a manual scan. The bar starts full and depletes over the TTL window;
+  // the banner pulses red and shifts to a stronger red as it nears 0.
   const manualBanner = body.querySelector('.sheet-manual-scan-banner');
   if (manualBanner) {
     const expiresAt = Number(manualBanner.dataset.expiresAt);
+    const ttlMs = Number(manualBanner.dataset.ttlMs) || MANUAL_SCAN_TTL_MS;
+    const countdownEl = manualBanner.querySelector('.sheet-manual-scan-countdown');
+    const barEl = manualBanner.querySelector('.sheet-manual-scan-progress-bar');
     const tick = () => {
       const remainingMs = expiresAt - Date.now();
-      const el = manualBanner.querySelector('.sheet-manual-scan-countdown');
-      if (!el) return;
       if (remainingMs <= 0) {
-        el.textContent = '0:00';
+        if (countdownEl) countdownEl.textContent = '0:00';
+        if (barEl) barEl.style.width = '0%';
         manualBanner.classList.add('expired');
         if (state._manualScanCountdownTimer) {
           clearInterval(state._manualScanCountdownTimer);
@@ -2704,7 +2713,13 @@ function showStationSheet(station) {
       const totalSec = Math.ceil(remainingMs / 1000);
       const m = Math.floor(totalSec / 60);
       const s = totalSec % 60;
-      el.textContent = `${m}:${String(s).padStart(2, '0')}`;
+      if (countdownEl) countdownEl.textContent = `${m}:${String(s).padStart(2, '0')}`;
+      if (barEl) {
+        const pct = Math.max(0, Math.min(100, (remainingMs / ttlMs) * 100));
+        barEl.style.width = `${pct}%`;
+      }
+      // Last 60 s gets a brighter red & faster pulse via .urgent.
+      manualBanner.classList.toggle('urgent', remainingMs <= 60 * 1000);
     };
     if (state._manualScanCountdownTimer) clearInterval(state._manualScanCountdownTimer);
     tick();
