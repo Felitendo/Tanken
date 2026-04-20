@@ -1435,23 +1435,29 @@ async function confirmScanPicker() {
   // Tear down picker UI but keep the search button visible (disabled during scan)
   exitScanPickerMode();
 
+  await runScanAt(center.lat, center.lng);
+}
+
+// Scan animation + station fetch + render. Drives the search-here button
+// state for both the manual picker flow and the location-search result flow.
+async function runScanAt(lat, lng) {
   const btn = document.getElementById('btn-search-here');
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = `${SEARCH_ICON_SVG}<span>${t('searchingHere')}</span>`;
   }
 
-  const animPromise = playScanAnimation(center, SCAN_RADIUS_KM);
+  const animPromise = playScanAnimation({ lat, lng }, SCAN_RADIUS_KM);
 
   try {
-    const result = await api(`/api/stations?lat=${center.lat}&lng=${center.lng}&rad=${SCAN_RADIUS_KM}&fuel=${state.fuelType}`);
+    const result = await api(`/api/stations?lat=${lat}&lng=${lng}&rad=${SCAN_RADIUS_KM}&fuel=${state.fuelType}`);
     const stations = Array.isArray(result) ? result : [];
-    state.userLat = center.lat;
-    state.userLng = center.lng;
+    state.userLat = lat;
+    state.userLng = lng;
     state.activeLocation = 'gps';
     state.stations = stations;
     state.dataTimestamp = result._dataTimestamp || null;
-    state._searchHereAnchor = { lat: center.lat, lng: center.lng };
+    state._searchHereAnchor = { lat, lng };
 
     await animPromise;
     renderStationsOnMap(stations, { skipFitBounds: true });
@@ -3191,7 +3197,7 @@ async function searchLocation(query) {
     resultsEl.classList.remove('hidden');
 
     resultsEl.querySelectorAll('.map-search-result-item').forEach(el => {
-      el.addEventListener('click', () => {
+      el.addEventListener('click', async () => {
         const lat = parseFloat(el.dataset.lat);
         const lng = parseFloat(el.dataset.lng);
         document.getElementById('map-search-input').value = el.querySelector('span').textContent;
@@ -3199,13 +3205,14 @@ async function searchLocation(query) {
         resultsEl.classList.add('hidden');
         // Hide location banner since user picked a location
         document.getElementById('map-location-banner')?.classList.add('hidden');
-        // Fly to location and reload stations
-        if (state.map) state.map.flyTo([lat, lng], 13, { duration: 0.5 });
-        state.userLat = lat;
-        state.userLng = lng;
-        state.activeLocation = 'gps';
-        state.loaded.map = false;
-        loadMapTab();
+        // Tear down any open picker so the ripple is the only overlay
+        if (state._scanPicker) exitScanPickerMode();
+        // Fly to the picked spot, then run the scan animation centred on it
+        const flyDuration = 0.6;
+        if (state.map) state.map.flyTo([lat, lng], 13, { duration: flyDuration });
+        state.loaded.map = true;
+        await new Promise(r => setTimeout(r, flyDuration * 1000 + 50));
+        await runScanAt(lat, lng);
       });
     });
   } catch {
