@@ -2160,6 +2160,8 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
   // a refresh / pan-away. Stations already in the primary list keep their
   // fresh data and get no countdown.
   stations = withManualScans(stations);
+  // Distance labels (sheet detail) follow GPS — strips dist if unknown.
+  stations = withDistanceFromUser(stations);
   // Remove previous cluster group or individual markers
   if (state.clusterGroup) {
     state.map.removeLayer(state.clusterGroup);
@@ -2337,6 +2339,11 @@ function renderStationList(stations) {
   // already, so a second radius pass here would just drop legitimate entries
   // (e.g. DE scan-location stations slightly beyond the user's 25 km circle).
   stations = withManualScans(stations);
+  // The manual-scan merge can pull in stations that still carry an old
+  // dist field (relative to the scan centre). Re-apply the GPS-based
+  // distance pass so dist matches the user's real location, or is
+  // stripped entirely when GPS is unknown.
+  stations = withDistanceFromUser(stations);
   const list = document.getElementById('station-list');
   const countLabel = document.getElementById('station-count');
   const open = stations.filter(s => s.isOpen && s.price);
