@@ -16,7 +16,8 @@ const settingsSchema = z
     activeLocation: z.string().min(1).optional(),
     lang: z.string().min(1).max(10).optional(),
     contributorsOpen: z.boolean().optional(),
-    historyDefaultDays: historyDaysSchema.optional()
+    historyDefaultDays: historyDaysSchema.optional(),
+    favouritesOnTop: z.boolean().optional()
   })
   .partial();
 
@@ -66,6 +67,10 @@ export async function POST(request: NextRequest) {
 
   if (updates.historyDefaultDays === 1 || updates.historyDefaultDays === 7) {
     nextSettings.historyDefaultDays = updates.historyDefaultDays;
+  }
+
+  if (typeof updates.favouritesOnTop === 'boolean') {
+    nextSettings.favouritesOnTop = updates.favouritesOnTop;
   }
 
   await stores.userStore.updateUser(user.id, (currentUser) => {

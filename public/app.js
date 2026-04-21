@@ -4352,9 +4352,11 @@ function setupFavouritesToggle() {
   applyFavouritesToggleUi();
   btn.addEventListener('click', () => {
     haptic('light');
-    state.favouritesOnTop = !state.favouritesOnTop;
-    applyFavouritesToggleUi();
-    if (state.stations) renderStationList(state.stations);
+    const next = !state.favouritesOnTop;
+    // persistStateSettings calls applySettingsToState which sets the flag,
+    // refreshes the toggle UI and re-renders the list, plus syncs to the
+    // Felo ID account if logged in.
+    persistStateSettings({ favouritesOnTop: next });
   });
 }
 
@@ -4492,6 +4494,9 @@ function applySettingsToState(settings = {}) {
   if (settings.historyDefaultDays === 1 || settings.historyDefaultDays === 7) {
     state.historyDefaultDays = settings.historyDefaultDays;
   }
+  if (typeof settings.favouritesOnTop === 'boolean') {
+    state.favouritesOnTop = settings.favouritesOnTop;
+  }
 
   state.radiusKm = 25;
 
@@ -4500,6 +4505,11 @@ function applySettingsToState(settings = {}) {
   if (themeSelect) themeSelect.value = state.theme;
   const histSelect = document.getElementById('history-default-picker');
   if (histSelect) histSelect.value = String(state.historyDefaultDays);
+  // Reflect the toggle's pressed state — the bar may already be in the DOM.
+  if (typeof applyFavouritesToggleUi === 'function') applyFavouritesToggleUi();
+  // Re-render the station list so the new pinning takes effect immediately
+  // (e.g. when the value arrives from the cloud-sync after an account login).
+  if (state.stations?.length) renderStationList(state.stations);
 }
 
 async function persistStateSettings(nextSettings = {}) {
@@ -4546,6 +4556,7 @@ async function saveSettingsRemote() {
     lang: state.lang,
     contributorsOpen: state.contributorsOpen,
     historyDefaultDays: state.historyDefaultDays,
+    favouritesOnTop: !!state.favouritesOnTop,
   };
   try { await api('/api/settings', { method: 'POST', body: JSON.stringify(next) }); } catch {}
 }
@@ -4559,6 +4570,7 @@ function saveSettingsLocal() {
       lang: state.lang,
       contributorsOpen: state.contributorsOpen,
       historyDefaultDays: state.historyDefaultDays,
+      favouritesOnTop: !!state.favouritesOnTop,
     }));
   } catch {}
 }

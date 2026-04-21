@@ -128,6 +128,8 @@ export interface UserSettings {
   contributorsOpen?: boolean;
   /** Default range for the per-station price chart: 1 = 24 h, 7 = 7 days. */
   historyDefaultDays?: 1 | 7;
+  /** Pin favourites to the top of the station list. */
+  favouritesOnTop?: boolean;
 }
 
 export interface PriceAlert {
