@@ -1517,11 +1517,13 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
         state.markers.forEach(m => state.map.removeLayer(m));
         state.markers = [];
       }
-      // Fire immediately (skip debounce) when zooming into a new area, but
-      // only if the centre actually shifted — pure zoom in/out at the same
-      // spot shouldn't re-thrash the list.
-      if (state.map.getZoom() >= VIEWPORT_MIN_ZOOM && viewportCenterMovedEnough()) {
+      // Always refresh on zoom — the visible viewport (and therefore the
+      // bounds query / scan-location selection) changes drastically, and
+      // skipping would leave the user with stale markers / a clipped list.
+      // Pan refresh is still gated by the move-distance threshold below.
+      if (state.map.getZoom() >= VIEWPORT_MIN_ZOOM) {
         if (_viewportTimer) { clearTimeout(_viewportTimer); _viewportTimer = null; }
+        syncManualScansFromServer({ rerender: false });
         loadStationsAroundCenter({ silent: true });
       }
     });
@@ -1646,21 +1648,22 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
     try {
       let stations = [];
       if (isAt) {
-        // Austria: bounds enclosing a 25 km circle around the centre.
+        // Austria: query whichever is larger — the visible viewport or the
+        // guaranteed 25 km circle around the centre. That way the list
+        // always covers at least 25 km (zoomed-in case) AND every station
+        // currently visible on the map gets a marker (zoomed-out case).
         const latMargin = VIEWPORT_RADIUS_KM / 111;
         const lngMargin = VIEWPORT_RADIUS_KM / Math.max(0.001, 111 * Math.cos((lat * Math.PI) / 180));
-        const south = (lat - latMargin).toFixed(5);
-        const north = (lat + latMargin).toFixed(5);
-        const west = (lng - lngMargin).toFixed(5);
-        const east = (lng + lngMargin).toFixed(5);
+        const visible = state.map.getBounds();
+        const south = Math.min(lat - latMargin, visible.getSouth()).toFixed(5);
+        const north = Math.max(lat + latMargin, visible.getNorth()).toFixed(5);
+        const west = Math.min(lng - lngMargin, visible.getWest()).toFixed(5);
+        const east = Math.max(lng + lngMargin, visible.getEast()).toFixed(5);
         const result = await api(`/api/stations?bounds=${south},${west},${north},${east}&fuel=${state.fuelType}`);
         stations = Array.isArray(result) ? result : [];
         state.dataTimestamp = result?._dataTimestamp || null;
-        // Inclusion: clip to the 25 km circle around the centre.
-        stations = stations.filter((s) =>
-          Number.isFinite(s.lat) && Number.isFinite(s.lng) &&
-          distanceKm(lat, lng, s.lat, s.lng) <= VIEWPORT_RADIUS_KM,
-        );
+        // No additional client-side filter — show everything the query
+        // returned so zoomed-out viewports don't end up with empty patches.
       } else {
         // Germany: find every DE scan location whose 25 km radius reaches
         // the user's 25 km circle (i.e. centre-to-centre ≤ 50 km).
