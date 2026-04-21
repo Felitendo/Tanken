@@ -1623,6 +1623,10 @@ function scheduleViewportRefresh() {
   if (_viewportTimer) clearTimeout(_viewportTimer);
   _viewportTimer = setTimeout(() => {
     _viewportTimer = null;
+    // Run the manual-scan sync alongside the viewport load so panning
+    // into an area a peer just scanned surfaces their markers without
+    // waiting for the next 60 s poll.
+    syncManualScansFromServer({ rerender: false });
     loadStationsAroundCenter({ silent: true });
   }, VIEWPORT_DEBOUNCE_MS);
 }
@@ -2040,8 +2044,14 @@ async function runScanAt(lat, lng) {
     applyCountryUi();
 
     // Persist the manual scan so the markers and a 15 min "valid for"
-    // countdown survive a refresh.
-    if (stations.length) recordManualScan(lat, lng, stations);
+    // countdown survive a refresh. Also push a sync so other tabs /
+    // users pick up this fresh scan on their next render.
+    if (stations.length) {
+      recordManualScan(lat, lng, stations);
+      // Fire-and-forget — the server already cached via /api/stations,
+      // this just nudges any other open tab to grab the new entry sooner.
+      syncManualScansFromServer({ rerender: false });
+    }
 
     await animPromise;
     renderStationsOnMap(stations, { skipFitBounds: true });
