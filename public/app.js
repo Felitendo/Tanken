@@ -191,7 +191,7 @@ const i18n = {
     historyDefault24h: '24 Stunden',
     historyDefault7d: '7 Tage',
     alreadyCovered: 'Bereits durch einen Scan-Standort abgedeckt – nicht nötig.',
-    favouritesToggleTitle: 'Nur Favoriten anzeigen',
+    favouritesToggleTitle: 'Favoriten oben anzeigen',
     favouritesEmpty: 'Noch keine Favoriten – Tippe auf den Stern bei einer Tankstelle.',
     favouritesLoginRequired: 'Bitte einloggen, um Favoriten zu sehen.',
   },
@@ -374,7 +374,7 @@ const i18n = {
     historyDefault24h: '24 hours',
     historyDefault7d: '7 days',
     alreadyCovered: 'Already covered by a scan location – no scan needed.',
-    favouritesToggleTitle: 'Only favourites',
+    favouritesToggleTitle: 'Pin favourites to top',
     favouritesEmpty: 'No favourites yet – tap the star on a station.',
     favouritesLoginRequired: 'Please log in to see your favourites.',
   }
@@ -540,7 +540,7 @@ const state = {
   activeCountry: null,
   viewCountry: null,
   manualScans: [],
-  favouritesOnly: false,
+  favouritesOnTop: false,
   loaded: { map: false, history: false, stats: false, settings: false },
   toastTimer: null,
   me: null,
@@ -2339,19 +2339,12 @@ function renderStationList(stations) {
   stations = withManualScans(stations);
   const list = document.getElementById('station-list');
   const countLabel = document.getElementById('station-count');
-  let open = stations.filter(s => s.isOpen && s.price);
-
-  // Star toggle in the sort bar: when active, hide everything except the
-  // user's favourites (still scoped to whatever is currently in view).
-  if (state.favouritesOnly) {
-    open = open.filter(s => s.id && state.favourites.includes(s.id));
-  }
+  const open = stations.filter(s => s.isOpen && s.price);
 
   if (countLabel) countLabel.textContent = `${open.length} ${t('stationsFound')}`;
 
   if (!open.length) {
-    const msg = state.favouritesOnly ? t('favouritesEmpty') : t('noOpenStations');
-    list.innerHTML = `<div class="empty-state"><svg class="empty-state-icon" viewBox="0 0 24 24" width="48" height="48" fill="var(--color-hint)"><path d="M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33a2.5 2.5 0 002.5 2.5c.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14a2 2 0 00-2-2h-1V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16h10v-7.5h1.5v5a2.5 2.5 0 005 0V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5z"/></svg><div class="empty-state-text">${msg}</div></div>`;
+    list.innerHTML = `<div class="empty-state"><svg class="empty-state-icon" viewBox="0 0 24 24" width="48" height="48" fill="var(--color-hint)"><path d="M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33a2.5 2.5 0 002.5 2.5c.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14a2 2 0 00-2-2h-1V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16h10v-7.5h1.5v5a2.5 2.5 0 005 0V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5z"/></svg><div class="empty-state-text">${t('noOpenStations')}</div></div>`;
     return;
   }
 
@@ -2361,21 +2354,16 @@ function renderStationList(stations) {
     open.sort((a, b) => a.price - b.price);
   }
 
-  // Sort favourites to top — but only when they sit within 50 km of the
-  // user's actual location. A favourite 300 km away from where you stand
-  // shouldn't outrank the cheap nearby option you'd actually drive to.
-  // Without GPS we can't measure proximity, so we don't pin anything.
-  const FAVORITE_NEARBY_KM = 50;
-  const isNearbyFav = (s) =>
-    s.id &&
-    state.favourites.includes(s.id) &&
-    Number.isFinite(s.dist) &&
-    s.dist <= FAVORITE_NEARBY_KM;
-  open.sort((a, b) => {
-    const aFav = isNearbyFav(a) ? 0 : 1;
-    const bFav = isNearbyFav(b) ? 0 : 1;
-    return aFav - bFav;
-  });
+  // Star toggle in the sort bar: when active, pin every favourite to the
+  // top of the list (relative order preserved). Off — favourites are
+  // sorted just like any other station.
+  if (state.favouritesOnTop) {
+    open.sort((a, b) => {
+      const aFav = a.id && state.favourites.includes(a.id) ? 0 : 1;
+      const bFav = b.id && state.favourites.includes(b.id) ? 0 : 1;
+      return aFav - bFav;
+    });
+  }
 
   const minPrice = Math.min(...open.map(s => s.price));
   const maxPrice = Math.max(...open.map(s => s.price));
@@ -4364,7 +4352,7 @@ function setupFavouritesToggle() {
   applyFavouritesToggleUi();
   btn.addEventListener('click', () => {
     haptic('light');
-    state.favouritesOnly = !state.favouritesOnly;
+    state.favouritesOnTop = !state.favouritesOnTop;
     applyFavouritesToggleUi();
     if (state.stations) renderStationList(state.stations);
   });
@@ -4373,7 +4361,7 @@ function setupFavouritesToggle() {
 function applyFavouritesToggleUi() {
   const btn = document.getElementById('station-fav-toggle');
   if (!btn) return;
-  const active = !!state.favouritesOnly;
+  const active = !!state.favouritesOnTop;
   btn.classList.toggle('active', active);
   btn.setAttribute('aria-pressed', active ? 'true' : 'false');
 }
