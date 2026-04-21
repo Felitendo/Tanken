@@ -285,18 +285,32 @@ class ScanScheduler {
   // ─── Main loop ──────────────────────────────────────────────────
 
   private async startScanLoop(): Promise<void> {
+    // AT grid cache is the ONLY source of truth for the AT viewport loader;
+    // if it's empty on startup (first deploy, DB wipe, or restart before the
+    // first 12:01 tick) the user sees zero stations on the map. Kick off an
+    // immediate AT scan so coverage is in place without waiting a day.
+    let firstIteration = true;
     while (this.timer) {
-      // Wait until 12:01
-      const waitMs = this.msUntilNext1201();
-      const waitH = Math.round(waitMs / 3_600_000 * 10) / 10;
-      this._nextCycleAt = new Date(Date.now() + waitMs);
-      this.de.addLog(`Nächster Scan um 12:01 Uhr (in ${waitH} Std.)`, 'info');
-      this.at.addLog(`Nächster Scan um 12:01 Uhr (in ${waitH} Std.)`, 'info');
-      console.log(`[Scheduler] Next scan in ${waitH}h at 12:01`);
-      const { promise, cancel } = cancellableSleep(waitMs);
-      this._waitingCancel = cancel;
-      await promise;
-      this._waitingCancel = null;
+      const atCacheEmpty = !getAllCachedLocations().some(loc => loc.locationId.startsWith('at-'));
+      const runImmediately = firstIteration && atCacheEmpty;
+      firstIteration = false;
+
+      if (!runImmediately) {
+        // Wait until 12:01
+        const waitMs = this.msUntilNext1201();
+        const waitH = Math.round(waitMs / 3_600_000 * 10) / 10;
+        this._nextCycleAt = new Date(Date.now() + waitMs);
+        this.de.addLog(`Nächster Scan um 12:01 Uhr (in ${waitH} Std.)`, 'info');
+        this.at.addLog(`Nächster Scan um 12:01 Uhr (in ${waitH} Std.)`, 'info');
+        console.log(`[Scheduler] Next scan in ${waitH}h at 12:01`);
+        const { promise, cancel } = cancellableSleep(waitMs);
+        this._waitingCancel = cancel;
+        await promise;
+        this._waitingCancel = null;
+      } else {
+        this.at.addLog('AT-Cache leer — Start-Scan sofort', 'info');
+        console.log('[Scheduler] AT cache empty on startup — running immediate scan');
+      }
       if (!this.timer) break;
 
       this._nextCycleAt = null;
