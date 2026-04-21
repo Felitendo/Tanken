@@ -190,6 +190,7 @@ const i18n = {
     historyDefaultLabel: 'Standard-Ansicht',
     historyDefault24h: '24 Stunden',
     historyDefault7d: '7 Tage',
+    alreadyCovered: 'Bereits durch einen Scan-Standort abgedeckt – nicht nötig.',
   },
   en: {
     tabMap: 'Map',
@@ -369,6 +370,7 @@ const i18n = {
     historyDefaultLabel: 'Default range',
     historyDefault24h: '24 hours',
     historyDefault7d: '7 days',
+    alreadyCovered: 'Already covered by a scan location – no scan needed.',
   }
 };
 
@@ -1894,12 +1896,22 @@ function cancelScanPicker() {
 async function confirmScanPicker() {
   const picker = state._scanPicker;
   if (!picker) return;
-  haptic('medium');
   const center = picker.marker.getLatLng();
 
+  // Don't waste a scan slot on an area already covered by an admin scan
+  // location (or its immediate 25 km neighbourhood). Just navigate there
+  // — loadStationsAroundCenter will pull the cached data for free.
+  if (await isLocationAlreadyCovered(center.lat, center.lng)) {
+    haptic('warning');
+    showToast(t('alreadyCovered'));
+    exitScanPickerMode();
+    if (state.map) state.map.flyTo([center.lat, center.lng], 13, { duration: 0.6 });
+    return;
+  }
+
+  haptic('medium');
   // Tear down picker UI but keep the search button visible (disabled during scan)
   exitScanPickerMode();
-
   await runScanAt(center.lat, center.lng);
 }
 
@@ -3104,6 +3116,21 @@ function isStationCovered(station, scanLocations) {
   return false;
 }
 
+// True if a manual scan at (lat, lng) would be redundant — either AT
+// (whole country grid-scanned) or DE inside / immediately neighbouring
+// an existing scan location's radius (loc.radiusKm + 25 km buffer).
+async function isLocationAlreadyCovered(lat, lng) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  if (isInAustria(lat, lng)) return true;
+  const scanLocs = await ensureScanLocations();
+  for (const loc of scanLocs || []) {
+    if (loc.country !== 'de') continue;
+    const r = Number(loc.radiusKm) > 0 ? Number(loc.radiusKm) : 25;
+    if (distanceKm(lat, lng, loc.lat, loc.lng) <= r + 25) return true;
+  }
+  return false;
+}
+
 // Render the empty state for the per-station price chart. In Austria we just
 // say "data is accumulating"; in Germany we point users to the request flow
 // because the station isn't covered by the scanner.
@@ -3910,8 +3937,12 @@ async function searchLocation(query) {
         state.loaded.map = true;
 
         // Austria has live E-Control coverage everywhere — no scan, no queue,
-        // no cooldown. Just fly to the spot and load prices directly.
-        if (isInAustria(lat, lng)) {
+        // no cooldown. Just fly to the spot and load prices directly. Same
+        // applies for German locations that already sit inside (or within
+        // 25 km of) an existing scan location's radius — manually scanning
+        // there would be wasted, the data is already in the cache.
+        const covered = await isLocationAlreadyCovered(lat, lng);
+        if (covered) {
           state.userLat = lat;
           state.userLng = lng;
           state.activeLocation = 'gps';
