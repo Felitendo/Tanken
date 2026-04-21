@@ -1331,8 +1331,39 @@ function getActiveCoords() {
   if (state.userLat && state.userLng) {
     return { lat: state.userLat, lng: state.userLng };
   }
-  // Fallback: Berlin
+  // Fallback: Berlin (used purely for the initial map view when geolocation
+  // isn't available — distance calculations should NOT use this).
   return { lat: 52.52, lng: 13.405 };
+}
+
+// The user's actual location (from device GPS), or null when unknown.
+// Distance labels are computed from this — never from the map centre or
+// from a search-bar pick, so the "X km entfernt" stays honest.
+function getUserGpsCoords() {
+  if (Number.isFinite(state.userLat) && Number.isFinite(state.userLng)) {
+    return { lat: state.userLat, lng: state.userLng };
+  }
+  return null;
+}
+
+// Apply (or strip) the dist field on a list of stations using the user's
+// real GPS position. When GPS is unknown, dist is removed so the UI shows
+// no distance instead of a misleading number.
+function withDistanceFromUser(stations) {
+  if (!Array.isArray(stations)) return [];
+  const gps = getUserGpsCoords();
+  if (!gps) {
+    return stations.map(s => {
+      // eslint-disable-next-line no-unused-vars
+      const { dist, distApprox, ...rest } = s;
+      return rest;
+    });
+  }
+  return stations.map(s => ({
+    ...s,
+    dist: distanceKm(gps.lat, gps.lng, s.lat, s.lng),
+    distApprox: false,
+  }));
 }
 
 // Cheap pre-filter — AT's actual bounding box. Southern Germany (Munich,
@@ -1510,8 +1541,10 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
 
   try {
     const result = await api(`/api/stations?lat=${coords.lat}&lng=${coords.lng}&rad=${state.radiusKm}&fuel=${state.fuelType}`);
-    const stations = Array.isArray(result) ? result : [];
+    const rawStations = Array.isArray(result) ? result : [];
     const cacheStatus = result._cacheStatus || 'fresh';
+    // Distance labels follow GPS, not the query centre — strips dist if no GPS.
+    const stations = withDistanceFromUser(rawStations);
     state.stations = stations;
     state.dataTimestamp = result._dataTimestamp || null;
     renderStationsOnMap(stations, { skipFitBounds });
@@ -1607,10 +1640,11 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
         const result = await api(`/api/stations?bounds=${south},${west},${north},${east}&fuel=${state.fuelType}`);
         stations = Array.isArray(result) ? result : [];
         state.dataTimestamp = result?._dataTimestamp || null;
-        // Re-distance against centre and clip to true circle.
-        stations = stations
-          .map((s) => ({ ...s, dist: distanceKm(lat, lng, s.lat, s.lng), distApprox: false }))
-          .filter((s) => s.dist <= VIEWPORT_RADIUS_KM);
+        // Inclusion: clip to the 25 km circle around the centre.
+        stations = stations.filter((s) =>
+          Number.isFinite(s.lat) && Number.isFinite(s.lng) &&
+          distanceKm(lat, lng, s.lat, s.lng) <= VIEWPORT_RADIUS_KM,
+        );
       } else {
         // Germany: find every DE scan location whose 25 km radius reaches
         // the user's 25 km circle (i.e. centre-to-centre ≤ 50 km).
@@ -1637,16 +1671,13 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
               stations.push(s);
             }
           }
-          // Re-distance against the centre so the list shows distances
-          // from where the user is looking, not from each scan location.
-          stations = stations.map((s) => ({
-            ...s,
-            dist: distanceKm(lat, lng, s.lat, s.lng),
-            distApprox: false,
-          }));
         }
       }
 
+      // Distance labels track the user's real GPS position (not the map
+      // centre, not the search-bar pick). When GPS is unknown the dist
+      // field is stripped so no misleading "X km entfernt" appears.
+      stations = withDistanceFromUser(stations);
       state.stations = stations;
       state._lastViewportCenter = { lat, lng };
       // DE shows the full scan-location set even when stations sit beyond
@@ -1933,10 +1964,11 @@ async function runScanAt(lat, lng) {
 
   try {
     const result = await api(`/api/stations?lat=${lat}&lng=${lng}&rad=${SCAN_RADIUS_KM}&fuel=${state.fuelType}`);
-    const stations = Array.isArray(result) ? result : [];
-    state.userLat = lat;
-    state.userLng = lng;
-    state.activeLocation = 'gps';
+    const rawStations = Array.isArray(result) ? result : [];
+    // The scan only changes WHAT the user is looking at — not where they
+    // are. The blue pin stays at the device's GPS reading; distance labels
+    // are recomputed from there (or stripped if GPS is unknown).
+    const stations = withDistanceFromUser(rawStations);
     state.stations = stations;
     state.dataTimestamp = result._dataTimestamp || null;
     state._searchHereAnchor = { lat, lng };
@@ -2341,7 +2373,7 @@ function renderStationList(stations) {
           ${isFav && state.user ? `<button class="fav-btn active" data-station-id="${s.id}" aria-label="${t('removeFavourite')}"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
           <div>
             <div class="station-price" style="color:${color}">${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}</div>
-            <div class="station-dist">${dist}</div>
+            ${dist ? `<div class="station-dist">${dist}</div>` : ''}
           </div>
         </div>
       </div>`;
@@ -3967,15 +3999,14 @@ async function searchLocation(query) {
         // applies for German locations that already sit inside (or within
         // 25 km of) an existing scan location's radius — manually scanning
         // there would be wasted, the data is already in the cache.
+        // The user's pin (state.userLat/Lng) is NOT moved by a search — the
+        // search only changes the map view, not the user's actual location.
         const covered = await isLocationAlreadyCovered(lat, lng);
         if (covered) {
-          state.userLat = lat;
-          state.userLng = lng;
-          state.activeLocation = 'gps';
           applyCountryUi();
           if (state.map) state.map.flyTo([lat, lng], 13, { duration: 0.6 });
           await new Promise(r => setTimeout(r, 650));
-          await loadMapTab();
+          // viewport refresh fires from the moveend hook after flyTo finishes.
           return;
         }
 
