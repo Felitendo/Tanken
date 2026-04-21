@@ -957,6 +957,11 @@ body.logged-in .cloud-sync-hint {
 .station-fav-btn:hover { background: var(--color-bg-secondary); }
 .station-fav-btn.active { color: var(--color-accent); }
 
+/* Cloud-sync indicator nudged slightly off the star toggle. */
+body.logged-in .station-fav-sync {
+  margin-right: 6px;
+}
+
 /* === Chart === */
 .chart-container {
   background: var(--color-bg-secondary);
