@@ -1456,10 +1456,13 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     setupMapSearch();
     setupSearchHereButton();
 
-    // The station list is pinned to the last explicit search (initial location
-    // or "Hier suchen" click). Pan and zoom only change the map view — they
-    // never silently replace the list. Markers are hidden when zoomed out
-    // past the world-view threshold so we don't draw thousands of pins.
+    // Markers are hidden when zoomed out past the world-view threshold so
+    // we don't draw thousands of pins. On zoom-in we DON'T re-render the
+    // previous state.stations — the centre may have moved while zoomed out
+    // (zoom out → pan → zoom in elsewhere), so the old data would briefly
+    // flash at the wrong coords and the list would still show old entries
+    // until the debounced loader fired. Instead we fire the loader
+    // immediately on zoom so list + markers refresh together.
     const MIN_ZOOM_FOR_STATIONS = 10;
     state.map.on('zoomend', () => {
       if (!state.map) return;
@@ -1467,11 +1470,13 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
         if (state.clusterGroup) { state.map.removeLayer(state.clusterGroup); state.clusterGroup = null; }
         state.markers.forEach(m => state.map.removeLayer(m));
         state.markers = [];
-      } else if (state.stations.length && state.markers.length === 0) {
-        // Re-draw markers when zooming back in after they were cleared.
-        renderStationsOnMap(state.stations, { skipFitBounds: true, skipRadiusFilter: true });
       }
-      scheduleViewportRefresh();
+      // Fire immediately (skip debounce) so zooming into a new area updates
+      // the list right away rather than after the moveend grace period.
+      if (state.map.getZoom() >= VIEWPORT_MIN_ZOOM) {
+        if (_viewportTimer) { clearTimeout(_viewportTimer); _viewportTimer = null; }
+        loadStationsAroundCenter({ silent: true });
+      }
     });
     state.map.on('moveend', () => {
       showSearchHereIfMoved();
