@@ -24,9 +24,6 @@ export const APP_SHELL = `
       <button id="btn-my-location" class="map-fab" type="button" data-i18n-title="myLocation" data-i18n-aria-label="myLocation" title="Mein Standort" aria-label="Mein Standort">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
       </button>
-      <button id="btn-favourites" class="map-fab map-fab-secondary" type="button" data-i18n-title="favouritesTitle" data-i18n-aria-label="favouritesTitle" title="Favoriten" aria-label="Favoriten">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-      </button>
       <button id="btn-search-here" class="map-search-here" type="button">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
         <span data-i18n="searchHere">Hier suchen</span>
@@ -38,6 +35,9 @@ export const APP_SHELL = `
     </div>
     <div class="desktop-station-panel">
       <div class="station-sort-bar">
+        <button type="button" class="station-fav-btn" id="station-fav-toggle" data-i18n-title="favouritesToggleTitle" data-i18n-aria-label="favouritesToggleTitle" title="Nur Favoriten" aria-label="Nur Favoriten" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </button>
         <span class="station-sort-label" id="station-count"></span>
         <button type="button" class="station-sort-btn" id="station-sort" aria-label="Sortierung ändern">
           <svg id="sort-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/></svg>

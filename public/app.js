@@ -191,10 +191,9 @@ const i18n = {
     historyDefault24h: '24 Stunden',
     historyDefault7d: '7 Tage',
     alreadyCovered: 'Bereits durch einen Scan-Standort abgedeckt – nicht nötig.',
-    favouritesTitle: 'Favoriten',
+    favouritesToggleTitle: 'Nur Favoriten anzeigen',
     favouritesEmpty: 'Noch keine Favoriten – Tippe auf den Stern bei einer Tankstelle.',
     favouritesLoginRequired: 'Bitte einloggen, um Favoriten zu sehen.',
-    favouritesUnknown: 'Standort-Daten momentan nicht verfügbar',
   },
   en: {
     tabMap: 'Map',
@@ -375,10 +374,9 @@ const i18n = {
     historyDefault24h: '24 hours',
     historyDefault7d: '7 days',
     alreadyCovered: 'Already covered by a scan location – no scan needed.',
-    favouritesTitle: 'Favourites',
+    favouritesToggleTitle: 'Only favourites',
     favouritesEmpty: 'No favourites yet – tap the star on a station.',
     favouritesLoginRequired: 'Please log in to see your favourites.',
-    favouritesUnknown: 'Location data temporarily unavailable',
   }
 };
 
@@ -542,6 +540,7 @@ const state = {
   activeCountry: null,
   viewCountry: null,
   manualScans: [],
+  favouritesOnly: false,
   loaded: { map: false, history: false, stats: false, settings: false },
   toastTimer: null,
   me: null,
@@ -604,7 +603,7 @@ async function init() {
   setupLangPicker();
   setupHistoryDefaultPicker();
   setupMyLocationBtn();
-  setupFavouritesBtn();
+  setupFavouritesToggle();
   setupAccountUi();
   setupStationSort();
   setupPullToRefresh();
@@ -2340,12 +2339,19 @@ function renderStationList(stations) {
   stations = withManualScans(stations);
   const list = document.getElementById('station-list');
   const countLabel = document.getElementById('station-count');
-  const open = stations.filter(s => s.isOpen && s.price);
+  let open = stations.filter(s => s.isOpen && s.price);
+
+  // Star toggle in the sort bar: when active, hide everything except the
+  // user's favourites (still scoped to whatever is currently in view).
+  if (state.favouritesOnly) {
+    open = open.filter(s => s.id && state.favourites.includes(s.id));
+  }
 
   if (countLabel) countLabel.textContent = `${open.length} ${t('stationsFound')}`;
 
   if (!open.length) {
-    list.innerHTML = `<div class="empty-state"><svg class="empty-state-icon" viewBox="0 0 24 24" width="48" height="48" fill="var(--color-hint)"><path d="M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33a2.5 2.5 0 002.5 2.5c.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14a2 2 0 00-2-2h-1V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16h10v-7.5h1.5v5a2.5 2.5 0 005 0V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5z"/></svg><div class="empty-state-text">${t('noOpenStations')}</div></div>`;
+    const msg = state.favouritesOnly ? t('favouritesEmpty') : t('noOpenStations');
+    list.innerHTML = `<div class="empty-state"><svg class="empty-state-icon" viewBox="0 0 24 24" width="48" height="48" fill="var(--color-hint)"><path d="M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33a2.5 2.5 0 002.5 2.5c.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14a2 2 0 00-2-2h-1V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16h10v-7.5h1.5v5a2.5 2.5 0 005 0V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5z"/></svg><div class="empty-state-text">${msg}</div></div>`;
     return;
   }
 
@@ -4351,152 +4357,25 @@ function setupMyLocationBtn() {
   });
 }
 
-function setupFavouritesBtn() {
-  const btn = document.getElementById('btn-favourites');
+function setupFavouritesToggle() {
+  const btn = document.getElementById('station-fav-toggle');
   if (!btn || btn._setup) return;
   btn._setup = true;
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
+  applyFavouritesToggleUi();
+  btn.addEventListener('click', () => {
     haptic('light');
-    openFavouritesSheet();
+    state.favouritesOnly = !state.favouritesOnly;
+    applyFavouritesToggleUi();
+    if (state.stations) renderStationList(state.stations);
   });
 }
 
-async function openFavouritesSheet() {
-  const sheet = document.getElementById('bottom-sheet');
-  const body = document.getElementById('bottom-sheet-body');
-  if (!sheet || !body) return;
-
-  body.innerHTML = `
-    <div style="padding:4px 4px 20px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="var(--color-accent)" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-        <div style="font-size:18px;font-weight:600;color:var(--color-text)">${t('favouritesTitle')}</div>
-      </div>
-      <div id="favourites-list-content" aria-live="polite">
-        <div style="display:flex;justify-content:center;padding:20px"><div class="spinner" aria-hidden="true"></div></div>
-      </div>
-    </div>`;
-
-  // Reuse the same sheet-open chrome the station detail uses.
-  if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
-  sheet.classList.remove('hidden');
-  sheet.setAttribute('aria-hidden', 'false');
-  const backdrop = sheet.querySelector('.bottom-sheet-backdrop');
-  const content = sheet.querySelector('.bottom-sheet-content');
-  content.style.transform = '';
-  content.classList.remove('dragging', 'snapping', 'expanded');
-  state.sheetExpanded = false;
-  const handleArea = document.getElementById('sheet-handle-area');
-
-  content.querySelector('.sheet-expand-btn')?.remove();
-  const expandBtn = document.createElement('button');
-  expandBtn.className = 'sheet-expand-btn';
-  updateExpandBtnIcon(expandBtn, false);
-  expandBtn.addEventListener('click', () => toggleSheetExpanded(content));
-  content.appendChild(expandBtn);
-
-  const closeSheet = () => {
-    state.sheetExpanded = false;
-    content.style.transform = '';
-    content.classList.remove('dragging', 'snapping', 'expanded');
-    content.querySelector('.sheet-expand-btn')?.remove();
-    content.querySelector('.sheet-desktop-close')?.remove();
-    backdrop.style.opacity = '';
-    sheet.classList.add('hidden');
-    sheet.setAttribute('aria-hidden', 'true');
-    backdrop.removeEventListener('click', closeSheet);
-    if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
-  };
-  backdrop.addEventListener('click', closeSheet);
-
-  if (window.matchMedia('(min-width: 900px)').matches) {
-    content.querySelector('.sheet-desktop-close')?.remove();
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'sheet-desktop-close';
-    closeBtn.innerHTML = '&times;';
-    closeBtn.addEventListener('click', closeSheet);
-    content.prepend(closeBtn);
-  }
-
-  setupSheetDrag(content, handleArea, backdrop, closeSheet);
-
-  await renderFavouritesList(closeSheet);
-}
-
-async function renderFavouritesList(closeSheet) {
-  const container = document.getElementById('favourites-list-content');
-  if (!container) return;
-
-  if (!state.user) {
-    container.innerHTML = `<div style="padding:20px;text-align:center;color:var(--color-hint);font-size:13px">${t('favouritesLoginRequired')}</div>`;
-    return;
-  }
-
-  let favourites = [];
-  try {
-    const res = await api(`/api/favourites/details?fuel=${state.fuelType}`);
-    favourites = Array.isArray(res?.favourites) ? res.favourites : [];
-  } catch {
-    favourites = [];
-  }
-
-  if (!favourites.length) {
-    container.innerHTML = `<div style="padding:20px;text-align:center;color:var(--color-hint);font-size:13px">${t('favouritesEmpty')}</div>`;
-    return;
-  }
-
-  const gps = getUserGpsCoords();
-  const enriched = favourites.map((s) => {
-    const known = Number.isFinite(s.lat) && Number.isFinite(s.lng) && (s.lat !== 0 || s.lng !== 0);
-    const dist = known && gps ? distanceKm(gps.lat, gps.lng, s.lat, s.lng) : null;
-    return { ...s, _known: known, _dist: dist };
-  });
-
-  container.innerHTML = enriched.map((s, i) => {
-    const priceParts = s.price != null && s.price > 0 ? formatPriceParts(s.price) : null;
-    const distLabel = s._dist != null ? `${s._dist.toFixed(1)} ${t('kmAway')}` : '';
-    const addressLine = s._known
-      ? `${fixEnc(s.street || '')} ${s.houseNumber || ''}, ${fixEnc(s.place || '')}`.trim().replace(/^[, ]+|[, ]+$/g, '')
-      : t('favouritesUnknown');
-    return `
-      <div class="favourite-row" data-idx="${i}" role="button" tabindex="0">
-        <div class="favourite-info">
-          <div class="favourite-name">${fixEnc(s.name || s.brand || '—')}</div>
-          <div class="favourite-addr">${addressLine}${distLabel ? ` · ${distLabel}` : ''}</div>
-        </div>
-        <div class="favourite-price">${priceParts ? `${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}` : '–'}</div>
-        <button class="favourite-remove fav-btn active" data-station-id="${s.id}" aria-label="${t('removeFavourite')}">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-        </button>
-      </div>`;
-  }).join('');
-
-  container.querySelectorAll('.favourite-row').forEach((row) => {
-    row.addEventListener('click', (ev) => {
-      // Don't fly when the user tapped the remove-star — let that handler run.
-      if (ev.target.closest('.favourite-remove')) return;
-      const idx = parseInt(row.dataset.idx, 10);
-      const s = enriched[idx];
-      if (!s || !s._known || !state.map) return;
-      haptic('light');
-      if (typeof closeSheet === 'function') closeSheet();
-      state.map.flyTo([s.lat, s.lng], 15, { duration: 0.6 });
-      // After the fly, surface the station detail sheet for this entry.
-      setTimeout(() => showStationSheet(s), 700);
-    });
-  });
-
-  container.querySelectorAll('.favourite-remove').forEach((btn) => {
-    btn.addEventListener('click', async (ev) => {
-      ev.stopPropagation();
-      haptic('light');
-      const id = btn.dataset.stationId;
-      await toggleFavourite(id);
-      // Re-render the list with the freshly updated state.favourites.
-      await renderFavouritesList(closeSheet);
-    });
-  });
+function applyFavouritesToggleUi() {
+  const btn = document.getElementById('station-fav-toggle');
+  if (!btn) return;
+  const active = !!state.favouritesOnly;
+  btn.classList.toggle('active', active);
+  btn.setAttribute('aria-pressed', active ? 'true' : 'false');
 }
 
 function setupMapZoomGesture() {
