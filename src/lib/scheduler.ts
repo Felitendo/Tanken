@@ -65,6 +65,9 @@ const DE_LOC_MAX_DELAY_MS = 1_200_000;
 /** Retries per location on rate-limit / transient errors. */
 const DE_LOC_MAX_RETRIES = 3;
 
+/** Fuels to scan per DE admin location — one list.php call per fuel. */
+const DE_FUELS = ['diesel', 'e5', 'e10'] as const;
+
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -247,7 +250,11 @@ class ScanScheduler {
     };
   }
 
-  /** Run a one-off scan for a single admin location. Used by the admin "Jetzt scannen" button. */
+  /**
+   * Run a one-off scan for a single admin location across all three fuels.
+   * Stations are cached per fuel as `${loc.id}-${fuel}`. A 2 s spacer between
+   * calls keeps us well below Tankerkönig's 10-req/min ceiling.
+   */
   async scanSingleLocation(locationId: string): Promise<{ ok: boolean; stationCount: number; error?: string }> {
     const loc = await getScanLocation(locationId);
     if (!loc) return { ok: false, stationCount: 0, error: 'Standort nicht gefunden' };
@@ -256,30 +263,42 @@ class ScanScheduler {
     const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
     if (!apiKey) return { ok: false, stationCount: 0, error: 'Kein API-Key konfiguriert' };
 
-    try {
-      const stations = await fetchStationsLive({
-        apiKey,
-        lat: loc.lat,
-        lng: loc.lng,
-        radiusKm: loc.radiusKm,
-        fuelType: loc.fuelType,
-      });
-      setCachedStations(loc.id, {
-        stations,
-        lat: loc.lat,
-        lng: loc.lng,
-        radiusKm: loc.radiusKm,
-        fuelType: loc.fuelType,
-      });
-      await recordScanResult(loc.id, { stationCount: stations.length, error: null });
-      this.de.addLog(`Manueller Scan "${loc.name}": ${stations.length} Stationen`, 'success');
-      return { ok: true, stationCount: stations.length };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      await recordScanResult(loc.id, { stationCount: 0, error: msg });
-      this.de.addLog(`Manueller Scan "${loc.name}" fehlgeschlagen: ${msg}`, 'error');
-      return { ok: false, stationCount: 0, error: msg };
+    const uniqueIds = new Set<string>();
+    const errors: string[] = [];
+
+    for (let fi = 0; fi < DE_FUELS.length; fi++) {
+      const fuel = DE_FUELS[fi];
+      if (fi > 0) await sleep(2_000);
+      try {
+        const stations = await fetchStationsLive({
+          apiKey,
+          lat: loc.lat,
+          lng: loc.lng,
+          radiusKm: loc.radiusKm,
+          fuelType: fuel,
+        });
+        setCachedStations(`${loc.id}-${fuel}`, {
+          stations,
+          lat: loc.lat,
+          lng: loc.lng,
+          radiusKm: loc.radiusKm,
+          fuelType: fuel,
+        });
+        for (const s of stations) uniqueIds.add(s.id);
+        this.de.addLog(`Manueller Scan "${loc.name}" ${fuel}: ${stations.length} Stationen`, 'success');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`${fuel}: ${msg}`);
+        this.de.addLog(`Manueller Scan "${loc.name}" ${fuel} fehlgeschlagen: ${msg}`, 'error');
+      }
     }
+
+    const errorStr = errors.length > 0 ? errors.join('; ') : null;
+    await recordScanResult(loc.id, { stationCount: uniqueIds.size, error: errorStr });
+    if (errors.length === DE_FUELS.length) {
+      return { ok: false, stationCount: 0, error: errorStr ?? 'alle Sorten fehlgeschlagen' };
+    }
+    return { ok: true, stationCount: uniqueIds.size, error: errorStr ?? undefined };
   }
 
   // ─── Main loop ──────────────────────────────────────────────────
@@ -418,82 +437,99 @@ class ScanScheduler {
       return;
     }
 
+    const totalCalls = locs.length * DE_FUELS.length;
     cs.gridPoints = locs.length;
-    cs.addLog(`Standort-Scan gestartet: ${locs.length} Standort${locs.length === 1 ? '' : 'e'}`, 'info');
-    console.log(`[DE] Location scan: ${locs.length} locations`);
+    cs.addLog(`Standort-Scan gestartet: ${locs.length} Standort${locs.length === 1 ? '' : 'e'} × ${DE_FUELS.length} Sorten (${totalCalls} Abfragen)`, 'info');
+    console.log(`[DE] Location scan: ${locs.length} locations × ${DE_FUELS.length} fuels = ${totalCalls} calls`);
 
     const startTime = Date.now();
     let delay = DE_LOC_DELAY_MS;
     let errors = 0;
-    let totalStations = 0;
+    let callIndex = 0;
 
     try {
       for (let i = 0; i < locs.length; i++) {
         if (!this.timer) break;
         const loc = locs[i];
-        cs.progress = `${i + 1}/${locs.length}`;
         cs.currentPoint = { lat: loc.lat, lng: loc.lng };
         cs.currentLocation = { id: loc.id, name: loc.name };
-        cs.estimatedEndAt = new Date(Date.now() + (locs.length - i - 1) * delay);
 
-        let attempt = 0;
-        let succeeded = false;
-        let lastErr: string | null = null;
+        const uniqueIds = new Set<string>();
+        const locErrors: string[] = [];
 
-        while (attempt <= DE_LOC_MAX_RETRIES && this.timer) {
-          if (attempt > 0) {
-            cs.addLog(`"${loc.name}": Retry ${attempt}/${DE_LOC_MAX_RETRIES} in ${(delay / 1000).toFixed(1)}s`, 'warn');
-            await sleep(delay);
-            if (!this.timer) break;
+        for (let fi = 0; fi < DE_FUELS.length; fi++) {
+          if (!this.timer) break;
+          const fuel = DE_FUELS[fi];
+          callIndex++;
+          cs.progress = `${callIndex}/${totalCalls}`;
+          cs.estimatedEndAt = new Date(Date.now() + (totalCalls - callIndex) * delay);
+
+          let attempt = 0;
+          let succeeded = false;
+          let lastErr: string | null = null;
+
+          while (attempt <= DE_LOC_MAX_RETRIES && this.timer) {
+            if (attempt > 0) {
+              cs.addLog(`"${loc.name}" ${fuel}: Retry ${attempt}/${DE_LOC_MAX_RETRIES} in ${(delay / 1000).toFixed(1)}s`, 'warn');
+              await sleep(delay);
+              if (!this.timer) break;
+            }
+            try {
+              const t0 = Date.now();
+              const stations = await fetchStationsLive({
+                apiKey,
+                lat: loc.lat,
+                lng: loc.lng,
+                radiusKm: loc.radiusKm,
+                fuelType: fuel,
+              });
+              cs.callDurations.push(Date.now() - t0);
+
+              setCachedStations(`${loc.id}-${fuel}`, {
+                stations,
+                lat: loc.lat,
+                lng: loc.lng,
+                radiusKm: loc.radiusKm,
+                fuelType: fuel,
+              });
+              cs.addStations(stations);
+              for (const s of stations) uniqueIds.add(s.id);
+
+              // Soft decay — prevent ping-pong against rate limit
+              delay = Math.max(DE_LOC_DELAY_MS, Math.round(delay * 0.8));
+              succeeded = true;
+              cs.addLog(`"${loc.name}" ${fuel}: ${stations.length} Stationen`, 'info');
+              break;
+            } catch (err) {
+              lastErr = err instanceof Error ? err.message : String(err);
+              const isRateLimit = /\b(503|429)\b|Rate Limit|Service Temporarily/i.test(lastErr);
+              delay = Math.min(
+                isRateLimit ? Math.max(delay * 3, 10_000) : delay * 2,
+                DE_LOC_MAX_DELAY_MS,
+              );
+              attempt++;
+            }
           }
-          try {
-            const t0 = Date.now();
-            const stations = await fetchStationsLive({
-              apiKey,
-              lat: loc.lat,
-              lng: loc.lng,
-              radiusKm: loc.radiusKm,
-              fuelType: loc.fuelType,
-            });
-            cs.callDurations.push(Date.now() - t0);
 
-            setCachedStations(loc.id, {
-              stations,
-              lat: loc.lat,
-              lng: loc.lng,
-              radiusKm: loc.radiusKm,
-              fuelType: loc.fuelType,
-            });
-            cs.addStations(stations);
-            totalStations += stations.length;
-            await recordScanResult(loc.id, { stationCount: stations.length, error: null });
-
-            // Soft decay — prevent ping-pong against rate limit
-            delay = Math.max(DE_LOC_DELAY_MS, Math.round(delay * 0.8));
-            succeeded = true;
-            cs.addLog(`"${loc.name}": ${stations.length} Stationen`, 'info');
-            break;
-          } catch (err) {
-            lastErr = err instanceof Error ? err.message : String(err);
-            const isRateLimit = /\b(503|429)\b|Rate Limit|Service Temporarily/i.test(lastErr);
-            delay = Math.min(
-              isRateLimit ? Math.max(delay * 3, 10_000) : delay * 2,
-              DE_LOC_MAX_DELAY_MS,
-            );
-            attempt++;
+          if (!succeeded && lastErr) {
+            errors++;
+            locErrors.push(`${fuel}: ${lastErr}`);
+            const msg = `"${loc.name}" ${fuel} nach ${DE_LOC_MAX_RETRIES} Retries: ${lastErr}`;
+            console.error(`[DE] ${msg}`);
+            cs.addError(msg);
+            cs.addLog(`"${loc.name}" ${fuel} übersprungen, Delay jetzt ${(delay / 1000).toFixed(1)}s`, 'warn');
           }
+
+          // Rate-limit pause between every API call (incl. between fuels of the
+          // same location). Skip after the very last call of the whole scan.
+          const isLastCall = i === locs.length - 1 && fi === DE_FUELS.length - 1;
+          if (!isLastCall && this.timer) await sleep(delay);
         }
 
-        if (!succeeded && lastErr) {
-          errors++;
-          const msg = `"${loc.name}" nach ${DE_LOC_MAX_RETRIES} Retries: ${lastErr}`;
-          console.error(`[DE] ${msg}`);
-          cs.addError(msg);
-          cs.addLog(`"${loc.name}" übersprungen, Delay jetzt ${(delay / 1000).toFixed(1)}s`, 'warn');
-          await recordScanResult(loc.id, { stationCount: 0, error: lastErr }).catch(() => {});
-        }
-
-        if (i < locs.length - 1 && this.timer) await sleep(delay);
+        await recordScanResult(loc.id, {
+          stationCount: uniqueIds.size,
+          error: locErrors.length > 0 ? locErrors.join('; ') : null,
+        }).catch(() => {});
       }
 
       const dur = (Date.now() - startTime) / 1000;
@@ -501,8 +537,8 @@ class ScanScheduler {
       cs.lastCompletedAt = new Date();
 
       const errStr = errors > 0 ? `, ${errors} Fehler` : '';
-      cs.addLog(`Standort-Scan fertig: ${totalStations.toLocaleString('de-DE')} Stationen aus ${locs.length} Standorten in ${fmtDuration(dur)}${errStr}`, 'success');
-      console.log(`[DE] Location scan complete: ${totalStations} stations across ${locs.length} locations in ${fmtDuration(dur)}`);
+      cs.addLog(`Standort-Scan fertig: ${cs.stationsScanned.toLocaleString('de-DE')} eindeutige Stationen aus ${locs.length} Standorten × ${DE_FUELS.length} Sorten in ${fmtDuration(dur)}${errStr}`, 'success');
+      console.log(`[DE] Location scan complete: ${cs.stationsScanned} unique stations across ${locs.length} locations in ${fmtDuration(dur)}`);
     } finally {
       cs.reset();
     }

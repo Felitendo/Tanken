@@ -30,10 +30,13 @@ export async function GET(request: NextRequest) {
   const rad = 25;
   const orsKey = runtimeConfig.orsApiKey;
 
-  // If a specific location ID is requested, return its cached data
+  // If a specific location ID is requested, return its cached data.
+  // DE scan caches stations per fuel (key `${loc.id}-${fuel}`); fall back to
+  // the un-suffixed key so pre-multi-fuel cache entries still resolve.
   const locationId = request.nextUrl.searchParams.get('location');
   if (locationId) {
-    const cached = getCachedStationsByLocation(locationId);
+    const cached = getCachedStationsByLocation(`${locationId}-${fuel}`)
+      ?? getCachedStationsByLocation(locationId);
     if (cached) {
       return NextResponse.json(cached.stations, { headers: { 'X-Cache': 'hit' } });
     }
