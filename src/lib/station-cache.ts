@@ -193,6 +193,26 @@ export function getAllUniqueStations(): CachedStation[] {
   return Array.from(map.values()).map(e => e.station);
 }
 
+/** Look up cached station details for a set of IDs. Optionally restrict to
+ *  one fuel type (a station can be cached against multiple fuel-typed scans;
+ *  the most recent entry wins regardless). */
+export function getStationsByIds(ids: string[], fuelType?: string): CachedStation[] {
+  if (!ids.length) return [];
+  const wanted = new Set(ids);
+  const map = new Map<string, { station: CachedStation; timestamp: number }>();
+  for (const entry of getCache().values()) {
+    if (fuelType && entry.fuelType !== fuelType) continue;
+    for (const s of entry.stations) {
+      if (!wanted.has(s.id)) continue;
+      const existing = map.get(s.id);
+      if (!existing || entry.timestamp > existing.timestamp) {
+        map.set(s.id, { station: s, timestamp: entry.timestamp });
+      }
+    }
+  }
+  return Array.from(map.values()).map(e => e.station);
+}
+
 /** Max age for station price history. */
 const PRICE_HISTORY_RETENTION_DAYS = 30;
 

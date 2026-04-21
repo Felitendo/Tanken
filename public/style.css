@@ -938,6 +938,57 @@ body.logged-in .cloud-sync-hint {
   text-align: right;
 }
 
+/* Favourites sheet rows */
+.favourite-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 0.5px solid var(--color-separator);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.favourite-row:last-child { border-bottom: none; }
+.favourite-row:hover { background: var(--color-bg-secondary); }
+.favourite-info { flex: 1; min-width: 0; }
+.favourite-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.favourite-addr {
+  font-size: 12px;
+  color: var(--color-hint);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.favourite-price {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+.favourite-price sup {
+  font-size: 10px;
+  vertical-align: super;
+}
+.favourite-remove {
+  background: none;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.favourite-remove:active { opacity: 0.6; }
+
 /* === Chart === */
 .chart-container {
   background: var(--color-bg-secondary);
@@ -1792,6 +1843,11 @@ body.logged-in .cloud-sync-hint {
   touch-action: manipulation;
 }
 .map-fab:active { opacity: 0.7; transform: scale(0.92); }
+
+/* Secondary FAB stacked above the GPS one (favourites). */
+.map-fab-secondary {
+  bottom: 72px;
+}
 
 /* "Search here" pill — appears after panning */
 .map-search-here {
