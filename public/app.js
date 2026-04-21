@@ -3188,7 +3188,8 @@ function isStationCovered(station, scanLocations) {
 
 // True if a manual scan at (lat, lng) would be redundant — either AT
 // (whole country grid-scanned) or DE inside / immediately neighbouring
-// an existing scan location's radius (loc.radiusKm + 25 km buffer).
+// an existing scan location's radius (loc.radiusKm + 10 km buffer).
+const ALREADY_COVERED_BUFFER_KM = 10;
 async function isLocationAlreadyCovered(lat, lng) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
   if (isInAustria(lat, lng)) return true;
@@ -3196,7 +3197,7 @@ async function isLocationAlreadyCovered(lat, lng) {
   for (const loc of scanLocs || []) {
     if (loc.country !== 'de') continue;
     const r = Number(loc.radiusKm) > 0 ? Number(loc.radiusKm) : 25;
-    if (distanceKm(lat, lng, loc.lat, loc.lng) <= r + 25) return true;
+    if (distanceKm(lat, lng, loc.lat, loc.lng) <= r + ALREADY_COVERED_BUFFER_KM) return true;
   }
   return false;
 }
