@@ -1843,12 +1843,30 @@ function applyManualScanFreshness(el, t) {
 // user manually scanned within the TTL keeps its _expiresAt tag, even when
 // the primary list also contains it (so the detail sheet always shows the
 // countdown right after a scan, not just after a refresh).
+//
+// IMPORTANT: state.manualScans now also holds peer scans pulled from
+// /api/manual-scans, which can sit anywhere in DE/AT. Without a proximity
+// gate they would pollute every render — e.g. an AT user would see
+// distant DE peer scans in their list. Drop scans whose centre is more
+// than MANUAL_SCAN_NEARBY_KM away from the current map view.
+const MANUAL_SCAN_NEARBY_KM = 50;
+function manualScansInRange() {
+  const now = Date.now();
+  const center = state.map ? state.map.getCenter() : null;
+  return (state.manualScans || []).filter((scan) => {
+    if (!scan || Number(scan.expiresAt) <= now) return false;
+    if (!center) return true;
+    if (!Number.isFinite(scan.lat) || !Number.isFinite(scan.lng)) return true;
+    return distanceKm(center.lat, center.lng, scan.lat, scan.lng) <= MANUAL_SCAN_NEARBY_KM;
+  });
+}
+
 function withManualScans(primary) {
+  const inRange = manualScansInRange();
   // Build a station-id → latest expiresAt map across all active scans.
   const expiryByKey = new Map();
-  for (const scan of state.manualScans || []) {
+  for (const scan of inRange) {
     const exp = Number(scan.expiresAt);
-    if (!(exp > Date.now())) continue;
     for (const s of scan.stations || []) {
       const key = s.id || `${s.lat},${s.lng}`;
       const existing = expiryByKey.get(key);
@@ -1864,9 +1882,8 @@ function withManualScans(primary) {
     out.set(key, exp ? { ...s, _expiresAt: exp } : s);
   }
   // Add stations only present in a manual scan (not in primary at all).
-  for (const scan of state.manualScans || []) {
+  for (const scan of inRange) {
     const exp = Number(scan.expiresAt);
-    if (!(exp > Date.now())) continue;
     for (const s of scan.stations || []) {
       const key = s.id || `${s.lat},${s.lng}`;
       if (out.has(key)) continue;
