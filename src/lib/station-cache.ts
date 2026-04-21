@@ -155,6 +155,51 @@ export function getAllCachedLocations(): Array<{ locationId: string; stationCoun
   return result;
 }
 
+/**
+ * Active "live" cache entries — i.e. on-demand fetches triggered by the
+ * "Hier suchen" picker or the DE radius fallback. These are the entries
+ * we expose to every client so a manual scan by one user spares the rest
+ * a Tankerkönig roundtrip for the next 15 min.
+ *
+ * Entries are matched by location_id prefix (`de-live-` / `at-live-`)
+ * and only returned while still within their TTL window.
+ */
+export function listActiveLiveScans(ttlMs: number): Array<{
+  locationId: string;
+  lat: number;
+  lng: number;
+  fuelType: string;
+  stations: CachedStation[];
+  createdAt: number;
+  expiresAt: number;
+}> {
+  const now = Date.now();
+  const cutoff = now - ttlMs;
+  const out: Array<{
+    locationId: string;
+    lat: number;
+    lng: number;
+    fuelType: string;
+    stations: CachedStation[];
+    createdAt: number;
+    expiresAt: number;
+  }> = [];
+  for (const [id, entry] of getCache()) {
+    if (!id.startsWith('de-live-') && !id.startsWith('at-live-')) continue;
+    if (entry.timestamp < cutoff) continue;
+    out.push({
+      locationId: id,
+      lat: entry.lat,
+      lng: entry.lng,
+      fuelType: entry.fuelType,
+      stations: entry.stations,
+      createdAt: entry.timestamp,
+      expiresAt: entry.timestamp + ttlMs,
+    });
+  }
+  return out;
+}
+
 /** Count unique stations across all cached grid cells (cached for 30s). */
 let _uniqueCount = 0;
 let _uniqueCountTs = 0;

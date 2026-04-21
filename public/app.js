@@ -588,6 +588,10 @@ async function init() {
   // Restore manual-scan results that haven't expired yet so the markers
   // come back after a refresh.
   state.manualScans = loadStoredManualScans();
+  // Pull in any active scans from the shared backend cache so a peer's
+  // recent scan saves us a Tankerkönig request. Then poll every minute.
+  syncManualScansFromServer({ rerender: false });
+  setInterval(() => syncManualScansFromServer(), 60 * 1000);
   // Drop and re-render every 30 s so countdowns never overshoot their TTL.
   setInterval(() => {
     if (pruneManualScans() && state.map) {
@@ -1751,6 +1755,59 @@ function recordManualScan(lat, lng, stations) {
   const expiresAt = Date.now() + MANUAL_SCAN_TTL_MS;
   state.manualScans.push({ lat, lng, stations, expiresAt });
   persistManualScans();
+}
+
+// Manual scans are also exposed by the backend so any user (logged in or
+// not) can piggy-back on a peer's recent scan. Pull the active set in,
+// merge with whatever we have locally and de-dupe by rounded lat/lng so
+// repeated entries from the same area collapse.
+function manualScanKey(lat, lng) {
+  return `${Number(lat).toFixed(2)},${Number(lng).toFixed(2)}`;
+}
+
+function mergeIntoManualScans(remoteScans) {
+  if (!Array.isArray(remoteScans) || !remoteScans.length) return false;
+  if (!Array.isArray(state.manualScans)) state.manualScans = [];
+  const byKey = new Map();
+  for (const s of state.manualScans) {
+    if (!s || Number(s.expiresAt) <= Date.now()) continue;
+    byKey.set(manualScanKey(s.lat, s.lng), s);
+  }
+  let touched = false;
+  for (const r of remoteScans) {
+    if (!r || !Array.isArray(r.stations)) continue;
+    const exp = Number(r.expiresAt);
+    if (!(exp > Date.now())) continue;
+    const key = manualScanKey(r.lat, r.lng);
+    const existing = byKey.get(key);
+    // Keep whichever entry expires later (= scanned more recently).
+    if (!existing || exp > Number(existing.expiresAt)) {
+      byKey.set(key, { lat: r.lat, lng: r.lng, stations: r.stations, expiresAt: exp });
+      touched = true;
+    }
+  }
+  if (touched) {
+    state.manualScans = Array.from(byKey.values());
+    persistManualScans();
+  }
+  return touched;
+}
+
+let _manualScansFetchInflight = null;
+async function syncManualScansFromServer({ rerender = true } = {}) {
+  if (_manualScansFetchInflight) { try { await _manualScansFetchInflight; } catch {} return; }
+  _manualScansFetchInflight = (async () => {
+    try {
+      const res = await api(`/api/manual-scans?fuel=${state.fuelType}`);
+      const scans = Array.isArray(res?.scans) ? res.scans : [];
+      const changed = mergeIntoManualScans(scans);
+      if (changed && rerender && state.map && Array.isArray(state.stations)) {
+        renderStationsOnMap(state.stations, { skipFitBounds: true, skipRadiusFilter: true });
+        renderStationList(state.stations);
+      }
+    } catch { /* offline / endpoint missing — fall back to local-only */ }
+  })();
+  try { await _manualScansFetchInflight; } finally { _manualScansFetchInflight = null; }
 }
 
 // Drive the manual-scan freshness colour from the remaining-time fraction t

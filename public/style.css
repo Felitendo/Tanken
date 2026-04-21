@@ -957,9 +957,20 @@ body.logged-in .cloud-sync-hint {
 .station-fav-btn:hover { background: var(--color-bg-secondary); }
 .station-fav-btn.active { color: var(--color-accent); }
 
-/* Cloud-sync indicator nudged slightly off the star toggle. */
+/* Cloud-sync indicator sits right beside the star toggle. Only visible
+   during the syncing → synced burst, then fades back out — idle has no
+   point taking permanent visual space. */
 body.logged-in .station-fav-sync {
+  display: inline-flex;
   margin-right: 6px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+body.logged-in .station-fav-sync.syncing,
+body.logged-in .station-fav-sync.synced {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* === Chart === */
