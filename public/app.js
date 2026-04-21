@@ -1408,18 +1408,19 @@ function applyViewCountryUi() {
   document.documentElement.setAttribute('data-view-country', next);
 
   // Entering AT view: clear DE-only affordances the user can't use anyway.
+  // The cooldown timer keeps ticking silently — the button is hidden via
+  // CSS in AT mode; if the user returns to DE the countdown is still
+  // accurate (and survives a refresh via localStorage).
   if (next === 'at') {
     if (state._scanPicker) exitScanPickerMode();
     if (Array.isArray(state._scanQueue)) {
       state._scanQueue.forEach(item => { try { state.map.removeLayer(item.pin); } catch {} });
       state._scanQueue = [];
     }
-    if (state._searchHereCooldownTimer) {
-      clearInterval(state._searchHereCooldownTimer);
-      state._searchHereCooldownTimer = null;
-    }
-    const btn = document.getElementById('btn-search-here');
-    if (btn) { btn.disabled = false; setSearchBtnIdle(btn); }
+  } else if (next === 'de') {
+    // Coming back to DE: re-arm the cooldown UI from storage if the timer
+    // was never started this session (or was cleared somewhere).
+    if (!state._searchHereCooldownTimer) restoreSearchHereCooldown();
   }
 }
 
@@ -1802,6 +1803,9 @@ function setupSearchHereButton() {
     if (state._scanPicker) confirmScanPicker();
     else enterScanPickerMode();
   });
+
+  // Survive a refresh: pick the cooldown back up if it's still ticking.
+  restoreSearchHereCooldown();
 }
 
 function setSearchBtnIdle(btn) {
@@ -2058,30 +2062,52 @@ function animateRipple(circle, finalRadius, duration, onDone) {
   requestAnimationFrame(step);
 }
 
-function startSearchHereCooldown() {
+// Persist the cooldown's end timestamp so a refresh doesn't reset it.
+const COOLDOWN_STORAGE_KEY = 'tank_search_cooldown_until';
+
+function startSearchHereCooldown(endsAt) {
   const btn = document.getElementById('btn-search-here');
   if (!btn) return;
   if (state._searchHereCooldownTimer) clearInterval(state._searchHereCooldownTimer);
-  let remaining = SEARCH_HERE_COOLDOWN_SEC;
+
+  // Without an explicit endsAt this is a freshly-started cooldown — write
+  // it to localStorage so the next page load can pick it back up.
+  if (!Number.isFinite(endsAt)) {
+    endsAt = Date.now() + SEARCH_HERE_COOLDOWN_SEC * 1000;
+    try { localStorage.setItem(COOLDOWN_STORAGE_KEY, String(endsAt)); } catch {}
+  }
+
   btn.disabled = true;
   const baseLabel = t('searchHere');
   setSearchBtnIdle(btn);
-  const updateLabel = () => {
-    btn.innerHTML = `${SEARCH_ICON_SVG}<span>${baseLabel} (${remaining})</span>`;
-  };
-  updateLabel();
-  state._searchHereCooldownTimer = setInterval(() => {
-    remaining -= 1;
+  const tick = () => {
+    const remaining = Math.ceil((endsAt - Date.now()) / 1000);
     if (remaining <= 0) {
       clearInterval(state._searchHereCooldownTimer);
       state._searchHereCooldownTimer = null;
+      try { localStorage.removeItem(COOLDOWN_STORAGE_KEY); } catch {}
       btn.disabled = false;
       setSearchBtnIdle(btn);
       processScanQueue();
       return;
     }
-    updateLabel();
-  }, 1000);
+    btn.innerHTML = `${SEARCH_ICON_SVG}<span>${baseLabel} (${remaining})</span>`;
+  };
+  tick();
+  state._searchHereCooldownTimer = setInterval(tick, 1000);
+}
+
+// Re-arm the cooldown UI from a previously stored endsAt. Called once
+// after the search-here button has been wired up on app boot.
+function restoreSearchHereCooldown() {
+  let endsAt;
+  try { endsAt = Number(localStorage.getItem(COOLDOWN_STORAGE_KEY)); } catch { return; }
+  if (!Number.isFinite(endsAt)) return;
+  if (endsAt <= Date.now()) {
+    try { localStorage.removeItem(COOLDOWN_STORAGE_KEY); } catch {}
+    return;
+  }
+  startSearchHereCooldown(endsAt);
 }
 
 function showSearchHereIfMoved() {
