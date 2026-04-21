@@ -1471,9 +1471,10 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
         state.markers.forEach(m => state.map.removeLayer(m));
         state.markers = [];
       }
-      // Fire immediately (skip debounce) so zooming into a new area updates
-      // the list right away rather than after the moveend grace period.
-      if (state.map.getZoom() >= VIEWPORT_MIN_ZOOM) {
+      // Fire immediately (skip debounce) when zooming into a new area, but
+      // only if the centre actually shifted — pure zoom in/out at the same
+      // spot shouldn't re-thrash the list.
+      if (state.map.getZoom() >= VIEWPORT_MIN_ZOOM && viewportCenterMovedEnough()) {
         if (_viewportTimer) { clearTimeout(_viewportTimer); _viewportTimer = null; }
         loadStationsAroundCenter({ silent: true });
       }
@@ -1552,12 +1553,25 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
 const VIEWPORT_RADIUS_KM = 25;
 const VIEWPORT_DEBOUNCE_MS = 350;
 const VIEWPORT_MIN_ZOOM = 8;
+// Skip the viewport refresh when the map centre has barely moved since
+// the last successful load — pure zoom (no pan) and tiny adjustments
+// don't change the result, so re-fetching just thrashes the list.
+const VIEWPORT_MIN_MOVE_KM = 1.5;
 let _viewportTimer = null;
 let _viewportInflight = null;
+
+function viewportCenterMovedEnough() {
+  const last = state._lastViewportCenter;
+  if (!last) return true;
+  if (!state.map) return false;
+  const c = state.map.getCenter();
+  return distanceKm(last.lat, last.lng, c.lat, c.lng) >= VIEWPORT_MIN_MOVE_KM;
+}
 
 function scheduleViewportRefresh() {
   if (!state.map) return;
   if (state.map.getZoom() < VIEWPORT_MIN_ZOOM) return;
+  if (!viewportCenterMovedEnough()) return;
   if (_viewportTimer) clearTimeout(_viewportTimer);
   _viewportTimer = setTimeout(() => {
     _viewportTimer = null;
@@ -1631,6 +1645,7 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
       }
 
       state.stations = stations;
+      state._lastViewportCenter = { lat, lng };
       // DE shows the full scan-location set even when stations sit beyond
       // the user's 25 km circle, so skip the per-list radius filter there.
       const renderOpts = { skipFitBounds: true, skipRadiusFilter: true };
