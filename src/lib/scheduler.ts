@@ -285,14 +285,18 @@ class ScanScheduler {
   // ─── Main loop ──────────────────────────────────────────────────
 
   private async startScanLoop(): Promise<void> {
-    // AT grid cache is the ONLY source of truth for the AT viewport loader;
-    // if it's empty on startup (first deploy, DB wipe, or restart before the
-    // first 12:01 tick) the user sees zero stations on the map. Kick off an
-    // immediate AT scan so coverage is in place without waiting a day.
+    // AT grid cache is the ONLY source of truth for the AT viewport loader.
+    // If it's empty (first deploy, DB wipe, restart before noon) or missing
+    // any of the three fuel variants — our scan writes one cache entry per
+    // (grid point, fuel) so the UI fuel toggle always hits a match — run a
+    // full scan right away instead of waiting for the next 12:01 tick.
     let firstIteration = true;
     while (this.timer) {
-      const atCacheEmpty = !getAllCachedLocations().some(loc => loc.locationId.startsWith('at-'));
-      const runImmediately = firstIteration && atCacheEmpty;
+      const atEntries = getAllCachedLocations().filter(loc => loc.locationId.startsWith('at-'));
+      const hasAllFuels = (['diesel', 'e5', 'e10'] as const).every(fuel =>
+        atEntries.some(loc => loc.locationId.endsWith(`-${fuel}`))
+      );
+      const runImmediately = firstIteration && !hasAllFuels;
       firstIteration = false;
 
       if (!runImmediately) {
@@ -308,8 +312,9 @@ class ScanScheduler {
         await promise;
         this._waitingCancel = null;
       } else {
-        this.at.addLog('AT-Cache leer — Start-Scan sofort', 'info');
-        console.log('[Scheduler] AT cache empty on startup — running immediate scan');
+        const reason = atEntries.length === 0 ? 'AT-Cache leer' : 'AT-Cache unvollständig (fehlende Sorte)';
+        this.at.addLog(`${reason} — Start-Scan sofort`, 'info');
+        console.log(`[Scheduler] ${reason} on startup — running immediate scan`);
       }
       if (!this.timer) break;
 
@@ -321,7 +326,6 @@ class ScanScheduler {
       // Reload config per cycle so admin API-key changes take effect without restart
       const config = loadRepoConfig();
       const apiKey = config.api_key || process.env.TANKERKOENIG_API_KEY || '';
-      const defaultFuel = config.fuel_type || 'diesel';
 
       const tasks: Promise<void>[] = [];
       if (apiKey) {
@@ -329,7 +333,7 @@ class ScanScheduler {
       } else {
         this.de.addLog('Kein API-Key — DE-Scan übersprungen', 'warn');
       }
-      tasks.push(this.runAtGridCycle(defaultFuel));
+      tasks.push(this.runAtGridCycle());
 
       await Promise.all(tasks);
 
@@ -506,7 +510,15 @@ class ScanScheduler {
 
   // ─── Austria (batched parallel) ───────────────────────────────
 
-  private async runAtGridCycle(fuelType: string): Promise<void> {
+  /**
+   * Scans the AT grid for all three app fuel types. E-Control maps the app
+   * fuels to two upstream codes (diesel→DIE, e5/e10→SUP), so we issue one
+   * API call per upstream code per grid point and write three cache
+   * entries — one per app fuel — keyed as `${point.id}-${fuel}`. This way
+   * the `/api/stations?bounds=…&fuel=…` lookup finds a hit regardless of
+   * which fuel the user picked in the UI.
+   */
+  private async runAtGridCycle(): Promise<void> {
     const grid = generateAustriaGrid();
     const cs = this.at;
     cs.scanning = true;
@@ -515,8 +527,8 @@ class ScanScheduler {
     cs.callDurations = [];
     cs.gridPoints = grid.length;
     const totalBatches = Math.ceil(grid.length / AT_CONCURRENCY);
-    cs.addLog(`Scan gestartet: ${grid.length} Punkte (${AT_CONCURRENCY}× parallel)`, 'info');
-    console.log(`[AT] Starting: ${grid.length} points in ${totalBatches} batches, fuel: ${fuelType}`);
+    cs.addLog(`Scan gestartet: ${grid.length} Punkte × 3 Sorten (${AT_CONCURRENCY}× parallel)`, 'info');
+    console.log(`[AT] Starting: ${grid.length} points in ${totalBatches} batches, fuels: diesel/e5/e10`);
 
     const startTime = Date.now();
     let processed = 0;
@@ -533,18 +545,36 @@ class ScanScheduler {
         const results = await Promise.allSettled(
           batch.map(async (point) => {
             const t0 = Date.now();
-            const stations = await fetchStationsEControl({ lat: point.lat, lng: point.lng, fuelType });
+            // Two API calls per point cover all three app fuels:
+            // diesel→DIE directly, e5/e10 share the SUP response.
+            const [diesel, sup] = await Promise.all([
+              fetchStationsEControl({ lat: point.lat, lng: point.lng, fuelType: 'diesel' }),
+              fetchStationsEControl({ lat: point.lat, lng: point.lng, fuelType: 'e5' }),
+            ]);
             cs.callDurations.push(Date.now() - t0);
-            return { point, stations };
+            return { point, diesel, sup };
           })
         );
 
         for (const r of results) {
-          if (r.status === 'fulfilled' && r.value.stations.length > 0) {
-            const { point, stations } = r.value;
-            setCachedStations(point.id, { stations, lat: point.lat, lng: point.lng, radiusKm: 5, fuelType });
-            cs.addStations(stations);
-          } else if (r.status === 'rejected') {
+          if (r.status === 'fulfilled') {
+            const { point, diesel, sup } = r.value;
+            if (diesel.length > 0) {
+              setCachedStations(`${point.id}-diesel`, {
+                stations: diesel, lat: point.lat, lng: point.lng, radiusKm: 5, fuelType: 'diesel',
+              });
+              cs.addStations(diesel);
+            }
+            if (sup.length > 0) {
+              setCachedStations(`${point.id}-e5`, {
+                stations: sup, lat: point.lat, lng: point.lng, radiusKm: 5, fuelType: 'e5',
+              });
+              setCachedStations(`${point.id}-e10`, {
+                stations: sup, lat: point.lat, lng: point.lng, radiusKm: 5, fuelType: 'e10',
+              });
+              cs.addStations(sup);
+            }
+          } else {
             const msg = `batch ${b}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`;
             console.error(`[AT] ${msg}`);
             cs.addError(msg);
