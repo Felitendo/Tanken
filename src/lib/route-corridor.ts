@@ -78,21 +78,29 @@ function minDistanceKmToPolyline(
 /**
  * Pick scan points along the route based on total distance:
  *   < 25 km → 0 points (use cache only)
- *   25–49 km → 1 point
- *   50–74 km → 2 points
- *   ≥ 75 km → 3 points
+ *   25–49 km → 1 point  (destination)
+ *   50–74 km → 2 points (one mid-route + destination)
+ *   ≥ 75 km → 3 points  (two mid-route + destination)
  *
- * Each scan covers a 25 km radius, so where possible we snap the point to a
- * large city that falls inside its window — a 25 km scan at Nürnberg yields
- * far more cheapest-price candidates than the same scan at a random stretch
- * of farmland between cities. The route is split into `count` equal-width
- * progress windows; for each window we take the largest MAJOR_CITIES entry
- * projected within a forgiving distance of the polyline. Any window without
- * a city candidate falls back to the geometric midpoint of that window — so
- * a 75 km route with only two cities along it still gets three scans: two
- * in the cities plus one at the lonely stretch between / beside them.
+ * The last scan is always anchored on the destination: that's where the
+ * user will actually fill up, so guaranteeing fresh prices there is worth
+ * one of the three slots. A 25 km scan centred on the destination already
+ * pulls in any big city within reach, so we don't additionally snap the
+ * destination to MAJOR_CITIES — that would move the ripple away from
+ * where the user is really headed.
+ *
+ * Earlier slots snap to the largest MAJOR_CITIES entry inside their
+ * progress window (so a 25 km scan lands on a dense urban cluster instead
+ * of empty farmland). When no city qualifies we fall back to the slot's
+ * geometric midpoint.
+ *
+ * Final pass drops any earlier pick whose 25 km circle overlaps a later
+ * pick along the route — two scans inside one radius of each other burn
+ * the cooldown twice without surfacing distinct stations. The destination
+ * is locked in first, so conflicts resolve by dropping the earlier point.
  */
 const CITY_PROJECTION_MAX_DIST_KM = 10;
+const MIN_SCAN_SPACING_KM = 25;
 
 export function computeRouteScanPoints(
   polyline: [number, number][],
@@ -105,13 +113,22 @@ export function computeRouteScanPoints(
   else count = 3;
   if (count === 0 || polyline.length < 2) return [];
 
-  const halfWindow = 0.5 / (count + 1);
-  const cityCandidates = projectCitiesOnRoute(polyline, distanceKm);
+  // Reserve the destination as the last scan point.
+  const last = polyline[polyline.length - 1];
+  const destPoint = { lat: last[1], lng: last[0] };
+
+  // Evenly space the remaining (count - 1) slots between start and dest:
+  //   count = 1 → no earlier slots (dest only).
+  //   count = 2 → one earlier slot at 50 %.
+  //   count = 3 → two earlier slots at 33 % and 66 %.
+  const earlierCount = count - 1;
+  const halfWindow = 0.5 / count;
+  const cityCandidates = earlierCount > 0 ? projectCitiesOnRoute(polyline, distanceKm) : [];
   const usedCityIdx = new Set<number>();
 
-  const out: Array<{ lat: number; lng: number }> = [];
-  for (let i = 1; i <= count; i++) {
-    const frac = i / (count + 1);
+  const earlier: Array<{ lat: number; lng: number }> = [];
+  for (let i = 1; i <= earlierCount; i++) {
+    const frac = i / count;
     const windowMin = frac - halfWindow;
     const windowMax = frac + halfWindow;
 
@@ -130,12 +147,30 @@ export function computeRouteScanPoints(
     if (bestIdx >= 0) {
       const c = cityCandidates[bestIdx];
       usedCityIdx.add(bestIdx);
-      out.push({ lat: c.lat, lng: c.lng });
+      earlier.push({ lat: c.lat, lng: c.lng });
     } else {
-      out.push(interpolateAlongPolyline(polyline, distanceKm * frac));
+      earlier.push(interpolateAlongPolyline(polyline, distanceKm * frac));
     }
   }
-  return out;
+
+  // Merge earlier + destination. Walk end → start so the destination is
+  // locked in first, then earlier picks are kept only if they're at least
+  // MIN_SCAN_SPACING_KM away from every already-kept point.
+  const all = [...earlier, destPoint];
+  const kept: Array<{ lat: number; lng: number }> = [];
+  for (let i = all.length - 1; i >= 0; i--) {
+    const p = all[i];
+    let tooClose = false;
+    for (const k of kept) {
+      if (haversineKm(p.lat, p.lng, k.lat, k.lng) < MIN_SCAN_SPACING_KM) {
+        tooClose = true;
+        break;
+      }
+    }
+    if (!tooClose) kept.push(p);
+  }
+  kept.reverse();
+  return kept;
 }
 
 /**
