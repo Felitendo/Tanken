@@ -930,6 +930,24 @@ body.logged-in .cloud-sync-hint {
   white-space: nowrap;
 }
 
+.station-sort-label.is-route {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+  white-space: normal;
+  overflow: visible;
+  text-align: center;
+}
+
+.station-sort-label.is-route .station-count-sub {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
 .station-sort-btn {
   display: flex;
   align-items: center;

@@ -136,6 +136,7 @@ const i18n = {
     sortPrice: 'Preis',
     sortDistance: 'Entfernung',
     stationsFound: 'Tankstellen',
+    alongRoute: 'entlang der Route',
     addFavourite: 'Zu Favoriten hinzufügen',
     removeFavourite: 'Aus Favoriten entfernen',
     maxFavourites: 'Maximale Anzahl an Favoriten erreicht',
@@ -335,6 +336,7 @@ const i18n = {
     sortPrice: 'Price',
     sortDistance: 'Distance',
     stationsFound: 'Stations',
+    alongRoute: 'along the route',
     addFavourite: 'Add to favourites',
     removeFavourite: 'Remove from favourites',
     maxFavourites: 'Maximum number of favourites reached',
@@ -2489,7 +2491,15 @@ function renderStationList(stations) {
   const countLabel = document.getElementById('station-count');
   const open = stations.filter(s => s.isOpen && s.price);
 
-  if (countLabel) countLabel.textContent = `${open.length} ${t('stationsFound')}`;
+  if (countLabel) {
+    if (state.routeMode) {
+      countLabel.classList.add('is-route');
+      countLabel.innerHTML = `<span class="station-count-main">${open.length} ${t('stationsFound')}</span><span class="station-count-sub">${t('alongRoute')}</span>`;
+    } else {
+      countLabel.classList.remove('is-route');
+      countLabel.textContent = `${open.length} ${t('stationsFound')}`;
+    }
+  }
 
   if (!open.length) {
     list.innerHTML = `<div class="empty-state"><svg class="empty-state-icon" viewBox="0 0 24 24" width="48" height="48" fill="var(--color-hint)"><path d="M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33a2.5 2.5 0 002.5 2.5c.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14a2 2 0 00-2-2h-1V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16h10v-7.5h1.5v5a2.5 2.5 0 005 0V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5z"/></svg><div class="empty-state-text">${t('noOpenStations')}</div></div>`;
