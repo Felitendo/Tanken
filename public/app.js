@@ -4549,6 +4549,7 @@ async function processRouteScanPoints(scanPoints, start, dest) {
 
     let scanOk = false;
     let hadStations = false;
+    let rateLimited = false;
     try {
       const resp = await fetch('/api/route/scan-point', {
         method: 'POST',
@@ -4559,17 +4560,25 @@ async function processRouteScanPoints(scanPoints, start, dest) {
           fuel,
         }),
       });
+      const body = await resp.json().catch(() => ({}));
       if (resp.ok) {
-        const body = await resp.json().catch(() => ({}));
         scanOk = true;
         hadStations = (body.stationsFound ?? 0) > 0;
+      } else if (resp.status === 429 || body.rateLimited) {
+        // Tankerkönig soft rate-cap — the 30 s wait before the next scan
+        // usually clears it. Distinguish from a real failure so we don't
+        // scare the user with a red dot for a backend throttling event.
+        rateLimited = true;
       }
     } catch {
       // network error — treated as 'error' dot below
     }
 
     if (runId !== state.routeScanRunId || !state.routeMode) return;
-    setDotState(i, scanOk ? (hadStations ? 'done' : 'empty') : 'error');
+    const dotState = scanOk
+      ? (hadStations ? 'done' : 'empty')
+      : rateLimited ? 'empty' : 'error';
+    setDotState(i, dotState);
 
     // Refresh corridor list from the now-warmer cache.
     try {
