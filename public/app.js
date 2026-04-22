@@ -194,7 +194,7 @@ const i18n = {
     favouritesToggleTitle: 'Favoriten oben anzeigen',
     favouritesEmpty: 'Noch keine Favoriten – Tippe auf den Stern bei einer Tankstelle.',
     favouritesLoginRequired: 'Bitte einloggen, um Favoriten zu sehen.',
-    routePlan: 'Entlang Route suchen',
+    routePlan: 'Entlang der Route suchen',
     routeStartPlaceholder: 'Start (aktueller Standort)',
     routeDestPlaceholder: 'Ziel',
     routeCurrentLocation: 'Aktueller Standort',
