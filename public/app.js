@@ -194,6 +194,21 @@ const i18n = {
     favouritesToggleTitle: 'Favoriten oben anzeigen',
     favouritesEmpty: 'Noch keine Favoriten – Tippe auf den Stern bei einer Tankstelle.',
     favouritesLoginRequired: 'Bitte einloggen, um Favoriten zu sehen.',
+    routePlan: 'Entlang Route suchen',
+    routeStartPlaceholder: 'Start (aktueller Standort)',
+    routeDestPlaceholder: 'Ziel',
+    routeCurrentLocation: 'Aktueller Standort',
+    routeGo: 'Route finden',
+    cancel: 'Abbrechen',
+    routeLoading: 'Route wird berechnet…',
+    routeLoginRequired: 'Bitte einloggen, um die Routenplanung zu nutzen.',
+    routeNoOrs: 'Routenplanung nicht konfiguriert — bitte Admin um einen ORS-Key bitten.',
+    routeNoRoute: 'Route konnte nicht berechnet werden.',
+    routeNoStart: 'Bitte einen Startpunkt angeben.',
+    routeNoDest: 'Bitte ein Ziel angeben.',
+    routeNoStations: 'Keine Tankstellen entlang der Route gefunden.',
+    routeExit: 'Route beenden',
+    routeSummary: (km, min, count) => `${km.toFixed(0)} km · ${formatDuration(min)} · ${count} Tankstellen`,
   },
   en: {
     tabMap: 'Map',
@@ -377,6 +392,21 @@ const i18n = {
     favouritesToggleTitle: 'Pin favourites to top',
     favouritesEmpty: 'No favourites yet – tap the star on a station.',
     favouritesLoginRequired: 'Please log in to see your favourites.',
+    routePlan: 'Search along route',
+    routeStartPlaceholder: 'Start (current location)',
+    routeDestPlaceholder: 'Destination',
+    routeCurrentLocation: 'Current location',
+    routeGo: 'Find route',
+    cancel: 'Cancel',
+    routeLoading: 'Calculating route…',
+    routeLoginRequired: 'Please log in to use route planning.',
+    routeNoOrs: 'Route planning not configured — ask the admin for an ORS key.',
+    routeNoRoute: 'Could not calculate route.',
+    routeNoStart: 'Please enter a start point.',
+    routeNoDest: 'Please enter a destination.',
+    routeNoStations: 'No stations found along the route.',
+    routeExit: 'Exit route',
+    routeSummary: (km, min, count) => `${km.toFixed(0)} km · ${formatDuration(min)} · ${count} stations`,
   }
 };
 
@@ -553,7 +583,16 @@ const state = {
   selectedLocation: '',
   availableLocations: [],
   priceExtremes: null,
-  favourites: []
+  favourites: [],
+  // ── Route planner ────────────────────────────────────────────────
+  routeMode: false,         // true while a route is being displayed
+  routeLayer: null,         // Leaflet polyline
+  routeStart: null,         // { lat, lng, label }
+  routeDest: null,          // { lat, lng, label }
+  routeStartMarker: null,
+  routeDestMarker: null,
+  routeSummary: null,       // { distanceKm, durationMin, count }
+  _stationsBeforeRoute: null,
 };
 
 const localSettingsKey = 'tank_settings';
@@ -1500,6 +1539,7 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
 
     setupMapZoomGesture();
     setupMapSearch();
+    setupRoutePanel();
     setupSearchHereButton();
 
     // Markers are hidden when zoomed out past the world-view threshold so
@@ -1620,6 +1660,7 @@ function viewportCenterMovedEnough() {
 
 function scheduleViewportRefresh() {
   if (!state.map) return;
+  if (state.routeMode) return; // frozen list while route is active
   if (state.map.getZoom() < VIEWPORT_MIN_ZOOM) return;
   if (!viewportCenterMovedEnough()) return;
   if (_viewportTimer) clearTimeout(_viewportTimer);
@@ -1635,6 +1676,7 @@ function scheduleViewportRefresh() {
 
 async function loadStationsAroundCenter({ silent = true } = {}) {
   if (!state.map) return;
+  if (state.routeMode) return; // route mode freezes the station list
   const c = state.map.getCenter();
   const lat = c.lat;
   const lng = c.lng;
@@ -4133,6 +4175,317 @@ async function searchLocation(query) {
     resultsEl.innerHTML = `<div class="map-search-no-results">${t('noSearchResults')}</div>`;
     resultsEl.classList.remove('hidden');
   }
+}
+
+// ─── Route planner ────────────────────────────────────────────────
+
+function formatDuration(min) {
+  if (!Number.isFinite(min) || min < 1) return '<1 min';
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h} h`;
+  return `${h} h ${m} min`;
+}
+
+function setupRoutePanel() {
+  const chip = document.getElementById('map-route-chip');
+  const panel = document.getElementById('map-route-panel');
+  if (!chip || !panel || chip._setup) return;
+  chip._setup = true;
+
+  const startInput = document.getElementById('map-route-start-input');
+  const destInput = document.getElementById('map-route-dest-input');
+  const startResults = document.getElementById('map-route-start-results');
+  const destResults = document.getElementById('map-route-dest-results');
+  const goBtn = document.getElementById('map-route-go');
+  const closeBtn = document.getElementById('map-route-close');
+  const summaryEl = document.getElementById('map-route-summary');
+
+  chip.addEventListener('click', () => {
+    haptic('light');
+    const expanded = chip.getAttribute('aria-expanded') === 'true';
+    if (expanded) {
+      panel.classList.add('hidden');
+      chip.setAttribute('aria-expanded', 'false');
+    } else {
+      panel.classList.remove('hidden');
+      chip.setAttribute('aria-expanded', 'true');
+      // If user has GPS, pre-fill start as "current location" sentinel.
+      if (!startInput.value && (state.userLat != null && state.userLng != null)) {
+        startInput.value = t('routeCurrentLocation');
+        startInput.dataset.lat = String(state.userLat);
+        startInput.dataset.lng = String(state.userLng);
+        updateRouteGoButton();
+      }
+      destInput.focus();
+    }
+  });
+
+  closeBtn.addEventListener('click', () => {
+    haptic('light');
+    closeRoutePanel();
+    if (state.routeMode) exitRouteMode();
+  });
+
+  bindRouteAutocomplete(startInput, startResults, { allowCurrentLocation: true });
+  bindRouteAutocomplete(destInput, destResults, { allowCurrentLocation: false });
+
+  goBtn.addEventListener('click', async () => {
+    const start = getRouteInputCoords(startInput);
+    const dest = getRouteInputCoords(destInput);
+    if (!start) { showToast(t('routeNoStart')); return; }
+    if (!dest) { showToast(t('routeNoDest')); return; }
+    goBtn.disabled = true;
+    summaryEl.classList.remove('hidden');
+    summaryEl.textContent = t('routeLoading');
+    try {
+      await enterRouteMode(start, dest);
+    } catch (err) {
+      summaryEl.textContent = err?.message || t('routeNoRoute');
+    } finally {
+      goBtn.disabled = false;
+      updateRouteGoButton();
+    }
+  });
+
+  [startInput, destInput].forEach(i => i.addEventListener('input', updateRouteGoButton));
+
+  function updateRouteGoButton() {
+    const start = getRouteInputCoords(startInput);
+    const dest = getRouteInputCoords(destInput);
+    goBtn.disabled = !(start && dest);
+  }
+}
+
+function getRouteInputCoords(input) {
+  const lat = parseFloat(input.dataset.lat || '');
+  const lng = parseFloat(input.dataset.lng || '');
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng, label: input.value };
+}
+
+function bindRouteAutocomplete(input, resultsEl, { allowCurrentLocation }) {
+  let debounceTimer = null;
+
+  input.addEventListener('input', () => {
+    // Clear attached coords whenever the user types — they'll be re-set
+    // when the user picks a suggestion.
+    delete input.dataset.lat;
+    delete input.dataset.lng;
+    const q = input.value.trim();
+    clearTimeout(debounceTimer);
+    if (!q) {
+      resultsEl.classList.add('hidden');
+      resultsEl.innerHTML = '';
+      return;
+    }
+    debounceTimer = setTimeout(async () => {
+      try {
+        const resp = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&accept-language=${state.lang || 'de'}`);
+        const data = await resp.json();
+        renderRouteSuggestions(resultsEl, input, data, { allowCurrentLocation });
+      } catch {
+        resultsEl.innerHTML = `<div class="map-route-suggest-item">${t('noSearchResults')}</div>`;
+        resultsEl.classList.remove('hidden');
+      }
+    }, 350);
+  });
+
+  input.addEventListener('focus', () => {
+    if (allowCurrentLocation && state.userLat != null && state.userLng != null && !input.value.trim()) {
+      renderRouteSuggestions(resultsEl, input, [], { allowCurrentLocation });
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#map-route-panel')) {
+      resultsEl.classList.add('hidden');
+    }
+  });
+}
+
+function renderRouteSuggestions(resultsEl, input, data, { allowCurrentLocation }) {
+  const items = [];
+  if (allowCurrentLocation && state.userLat != null && state.userLng != null) {
+    items.push(`
+      <div class="map-route-suggest-item is-current-location" data-lat="${state.userLat}" data-lng="${state.userLng}" data-label="${t('routeCurrentLocation')}">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+        <span>${t('routeCurrentLocation')}</span>
+      </div>
+    `);
+  }
+  (data || []).forEach(item => {
+    items.push(`
+      <div class="map-route-suggest-item" data-lat="${item.lat}" data-lng="${item.lon}" data-label="${escapeHtml(item.display_name)}">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--color-hint)"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        <span>${escapeHtml(item.display_name)}</span>
+      </div>
+    `);
+  });
+  if (!items.length) {
+    resultsEl.innerHTML = `<div class="map-route-suggest-item">${t('noSearchResults')}</div>`;
+    resultsEl.classList.remove('hidden');
+    return;
+  }
+  resultsEl.innerHTML = items.join('');
+  resultsEl.classList.remove('hidden');
+
+  resultsEl.querySelectorAll('.map-route-suggest-item').forEach(el => {
+    el.addEventListener('click', () => {
+      input.value = el.dataset.label || el.querySelector('span').textContent;
+      input.dataset.lat = el.dataset.lat;
+      input.dataset.lng = el.dataset.lng;
+      resultsEl.classList.add('hidden');
+      document.getElementById('map-route-go').disabled =
+        !(getRouteInputCoords(document.getElementById('map-route-start-input'))
+          && getRouteInputCoords(document.getElementById('map-route-dest-input')));
+    });
+  });
+}
+
+async function enterRouteMode(start, dest) {
+  const resp = await fetch('/api/route', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      startLat: start.lat, startLng: start.lng,
+      destLat: dest.lat, destLng: dest.lng,
+      fuel: state.fuelType,
+      bufferKm: 3,
+    }),
+  });
+  if (resp.status === 401) throw new Error(t('routeLoginRequired'));
+  if (resp.status === 503) throw new Error(t('routeNoOrs'));
+  if (!resp.ok) throw new Error(t('routeNoRoute'));
+  const data = await resp.json();
+  if (!data.route?.coordinates?.length) throw new Error(t('routeNoRoute'));
+
+  // Capture pre-route state so exitRouteMode can restore it.
+  if (!state.routeMode) {
+    state._stationsBeforeRoute = state.stations;
+  }
+  state.routeMode = true;
+  state.routeStart = start;
+  state.routeDest = dest;
+  state.routeSummary = {
+    distanceKm: data.route.distanceKm,
+    durationMin: data.route.durationMin,
+    count: data.stations.length,
+  };
+
+  // Clear existing station markers / cluster / user pin so only the route
+  // and its corridor remain visible.
+  if (state.clusterGroup) { state.map.removeLayer(state.clusterGroup); state.clusterGroup = null; }
+  state.markers.forEach(m => state.map.removeLayer(m));
+  state.markers = [];
+
+  // Leaflet doesn't resolve CSS vars in SVG attributes — grab the computed value.
+  const accentColor = getComputedStyle(document.documentElement)
+    .getPropertyValue('--color-accent').trim() || '#007aff';
+
+  // Polyline — Leaflet takes [lat, lng] but ORS gives [lng, lat].
+  const latlngs = data.route.coordinates.map(([lng, lat]) => [lat, lng]);
+  if (state.routeLayer) state.map.removeLayer(state.routeLayer);
+  state.routeLayer = L.polyline(latlngs, {
+    color: accentColor,
+    weight: 5,
+    opacity: 0.85,
+    interactive: false,
+  }).addTo(state.map);
+
+  // Start/dest pin markers
+  if (state.routeStartMarker) state.map.removeLayer(state.routeStartMarker);
+  if (state.routeDestMarker) state.map.removeLayer(state.routeDestMarker);
+  state.routeStartMarker = L.marker([start.lat, start.lng], {
+    icon: L.divIcon({
+      className: '',
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:${accentColor};border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>`,
+      iconSize: [14, 14], iconAnchor: [7, 7],
+    }),
+  }).addTo(state.map);
+  state.routeDestMarker = L.marker([dest.lat, dest.lng], {
+    icon: L.divIcon({
+      className: '',
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid ${accentColor};box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>`,
+      iconSize: [14, 14], iconAnchor: [7, 7],
+    }),
+  }).addTo(state.map);
+
+  // Overlay stations from the corridor response into state.stations and render.
+  state.stations = data.stations;
+  renderStationsOnMap(data.stations, { skipFitBounds: true, skipRadiusFilter: true });
+  renderStationList(data.stations);
+
+  // Fit map to route + both pins.
+  state.map.fitBounds(state.routeLayer.getBounds().pad(0.1));
+
+  // Hide competing UI bits — the normal search/scan flow would clobber
+  // state.stations and erase the corridor.
+  document.getElementById('btn-search-here')?.classList.add('hidden');
+  document.getElementById('map-search-box')?.classList.add('hidden');
+  document.getElementById('map-loading')?.classList.add('hidden');
+
+  // Update panel summary + show exit button.
+  const summaryEl = document.getElementById('map-route-summary');
+  summaryEl.classList.remove('hidden');
+  summaryEl.textContent = t('routeSummary')(
+    state.routeSummary.distanceKm,
+    state.routeSummary.durationMin,
+    state.routeSummary.count,
+  );
+  showRouteExitButton();
+
+  if (!data.stations.length) {
+    showToast(t('routeNoStations'));
+  }
+}
+
+function exitRouteMode() {
+  if (!state.routeMode) return;
+  if (state.routeLayer) { state.map.removeLayer(state.routeLayer); state.routeLayer = null; }
+  if (state.routeStartMarker) { state.map.removeLayer(state.routeStartMarker); state.routeStartMarker = null; }
+  if (state.routeDestMarker) { state.map.removeLayer(state.routeDestMarker); state.routeDestMarker = null; }
+  state.routeMode = false;
+  state.routeStart = null;
+  state.routeDest = null;
+  state.routeSummary = null;
+
+  document.getElementById('btn-search-here')?.classList.remove('hidden');
+  document.getElementById('map-search-box')?.classList.remove('hidden');
+  hideRouteExitButton();
+
+  // Reload normal station list for current viewport.
+  state._stationsBeforeRoute = null;
+  loadStationsAroundCenter({ silent: false });
+}
+
+function closeRoutePanel() {
+  const chip = document.getElementById('map-route-chip');
+  const panel = document.getElementById('map-route-panel');
+  if (!chip || !panel) return;
+  panel.classList.add('hidden');
+  chip.setAttribute('aria-expanded', 'false');
+}
+
+function showRouteExitButton() {
+  let btn = document.getElementById('route-exit-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'route-exit-btn';
+    btn.className = 'route-exit-btn';
+    btn.type = 'button';
+    btn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg><span>${t('routeExit')}</span>`;
+    btn.addEventListener('click', () => { haptic('light'); exitRouteMode(); });
+    document.getElementById('map-container').appendChild(btn);
+  } else {
+    btn.classList.remove('hidden');
+  }
+}
+
+function hideRouteExitButton() {
+  const btn = document.getElementById('route-exit-btn');
+  if (btn) btn.classList.add('hidden');
 }
 
 function initAlertUI() {

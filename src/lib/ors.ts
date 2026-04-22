@@ -10,7 +10,9 @@
 import { CachedStation } from '@/lib/station-cache';
 
 const ORS_BASE = 'https://api.openrouteservice.org/v2/matrix/driving-car';
+const ORS_DIRECTIONS_BASE = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const ROUTE_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const COORD_PRECISION = 3; // round to ~111 m grid
 
 interface DistanceCacheEntry {
@@ -120,5 +122,103 @@ export async function enrichWithDrivingDistances(
   } catch (e) {
     console.warn('[ORS] Driving distance lookup failed, using beeline:', (e as Error).message);
     return stations.map(s => ({ ...s, distApprox: true }));
+  }
+}
+
+// ─── Directions API (route geometry) ──────────────────────────────────
+
+export interface RouteGeometry {
+  /** [lng, lat] pairs in GeoJSON order. */
+  coordinates: [number, number][];
+  distanceKm: number;
+  durationMin: number;
+}
+
+interface RouteCacheEntry {
+  route: RouteGeometry;
+  timestamp: number;
+}
+
+const routeCacheKey = '__tanken_ors_route_cache' as const;
+const rg = globalThis as unknown as Record<string, Map<string, RouteCacheEntry>>;
+
+function getRouteCache(): Map<string, RouteCacheEntry> {
+  if (!rg[routeCacheKey]) rg[routeCacheKey] = new Map();
+  return rg[routeCacheKey];
+}
+
+function routeCacheKeyFor(
+  start: { lat: number; lng: number },
+  dest: { lat: number; lng: number },
+): string {
+  return `${start.lat.toFixed(COORD_PRECISION)},${start.lng.toFixed(COORD_PRECISION)}→${dest.lat.toFixed(COORD_PRECISION)},${dest.lng.toFixed(COORD_PRECISION)}`;
+}
+
+function evictStaleRoutes(): void {
+  const now = Date.now();
+  for (const [key, entry] of getRouteCache()) {
+    if (now - entry.timestamp > ROUTE_CACHE_TTL_MS) getRouteCache().delete(key);
+  }
+}
+
+interface OrsDirectionsResponse {
+  features?: Array<{
+    geometry?: { coordinates?: [number, number][] };
+    properties?: { summary?: { distance?: number; duration?: number } };
+  }>;
+}
+
+/**
+ * Fetch a driving route (polyline + summary) from ORS Directions API.
+ * Returns null on any error so the caller can decide how to surface it.
+ */
+export async function fetchRoute(
+  orsApiKey: string,
+  start: { lat: number; lng: number },
+  dest: { lat: number; lng: number },
+): Promise<RouteGeometry | null> {
+  if (!orsApiKey) return null;
+
+  evictStaleRoutes();
+  const key = routeCacheKeyFor(start, dest);
+  const cached = getRouteCache().get(key);
+  if (cached) return cached.route;
+
+  try {
+    const response = await fetch(ORS_DIRECTIONS_BASE, {
+      method: 'POST',
+      headers: {
+        'Authorization': orsApiKey,
+        'Content-Type': 'application/json; charset=utf-8',
+        'Accept': 'application/json, application/geo+json',
+      },
+      body: JSON.stringify({
+        coordinates: [[start.lng, start.lat], [dest.lng, dest.lat]],
+        instructions: false,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      console.warn(`[ORS] Directions API responded ${response.status}`);
+      return null;
+    }
+
+    const data: OrsDirectionsResponse = await response.json();
+    const feat = data.features?.[0];
+    const coords = feat?.geometry?.coordinates;
+    const summary = feat?.properties?.summary;
+    if (!coords || !coords.length || !summary) return null;
+
+    const route: RouteGeometry = {
+      coordinates: coords,
+      distanceKm: (summary.distance ?? 0) / 1000,
+      durationMin: (summary.duration ?? 0) / 60,
+    };
+    getRouteCache().set(key, { route, timestamp: Date.now() });
+    return route;
+  } catch (e) {
+    console.warn('[ORS] Directions lookup failed:', (e as Error).message);
+    return null;
   }
 }

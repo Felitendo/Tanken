@@ -238,6 +238,26 @@ export function getAllUniqueStations(): CachedStation[] {
   return Array.from(map.values()).map(e => e.station);
 }
 
+/**
+ * Like getAllUniqueStations, but only considers cache entries whose fuelType
+ * matches. Needed by the route planner so a station's `price` reflects the
+ * fuel the user actually asked about (a station can sit in multiple fuel
+ * caches with different prices).
+ */
+export function getAllUniqueStationsForFuel(fuelType: string): CachedStation[] {
+  const map = new Map<string, { station: CachedStation; timestamp: number }>();
+  for (const entry of getCache().values()) {
+    if (entry.fuelType !== fuelType) continue;
+    for (const s of entry.stations) {
+      const existing = map.get(s.id);
+      if (!existing || entry.timestamp > existing.timestamp) {
+        map.set(s.id, { station: s, timestamp: entry.timestamp });
+      }
+    }
+  }
+  return Array.from(map.values()).map(e => e.station);
+}
+
 
 /** Max age for station price history. */
 const PRICE_HISTORY_RETENTION_DAYS = 30;
