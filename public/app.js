@@ -2998,7 +2998,7 @@ function showStationSheet(station) {
     </div>
 
     <div class="sheet-station-price" style="color:${color}">
-      ${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}
+      ${priceTrendBadge(station.price, station.avgPrice24h)}${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}
       <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>
     </div>
     <div class="sheet-info-row">
