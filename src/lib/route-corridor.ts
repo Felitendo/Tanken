@@ -75,42 +75,55 @@ function minDistanceKmToPolyline(
 }
 
 /**
- * Walk a polyline and emit evenly-spaced points at ~spacingKm intervals of
- * actual path distance (not vertex count). Always includes the first and
- * last polyline point so short routes still yield something useful.
+ * Pick evenly-spaced scan points along the route based on total distance:
+ *   < 25 km → 0 points (use cache only)
+ *   25–49 km → 1 point at the midpoint
+ *   50–74 km → 2 points at 1/3 and 2/3
+ *   ≥ 75 km → 3 points at 1/4, 1/2, 3/4
  *
- * Used by the route-search gap-fill to decide where we need live scans.
+ * Each point is the true polyline coordinate at that fractional distance,
+ * not an interpolated great-circle shortcut — keeps scans on the actual
+ * driven road rather than straight-line over terrain the car won't cross.
  */
-export function samplePolylineByDistance(
+export function computeRouteScanPoints(
   polyline: [number, number][],
-  spacingKm: number,
-): [number, number][] {
-  if (polyline.length === 0) return [];
-  if (polyline.length === 1) return [[...polyline[0]] as [number, number]];
+  distanceKm: number,
+): Array<{ lat: number; lng: number }> {
+  let count: number;
+  if (distanceKm < 25) count = 0;
+  else if (distanceKm < 50) count = 1;
+  else if (distanceKm < 75) count = 2;
+  else count = 3;
+  if (count === 0 || polyline.length < 2) return [];
 
-  const out: [number, number][] = [[...polyline[0]] as [number, number]];
+  const out: Array<{ lat: number; lng: number }> = [];
+  for (let i = 1; i <= count; i++) {
+    const frac = i / (count + 1);
+    out.push(interpolateAlongPolyline(polyline, distanceKm * frac));
+  }
+  return out;
+}
+
+function interpolateAlongPolyline(
+  polyline: [number, number][],
+  targetKm: number,
+): { lat: number; lng: number } {
   let accumulated = 0;
-  let nextThreshold = spacingKm;
-
   for (let i = 1; i < polyline.length; i++) {
     const [prevLng, prevLat] = polyline[i - 1];
     const [lng, lat] = polyline[i];
     const segKm = haversineKm(prevLat, prevLng, lat, lng);
-    while (segKm > 0 && nextThreshold <= accumulated + segKm) {
-      const t = (nextThreshold - accumulated) / segKm;
-      out.push([prevLng + t * (lng - prevLng), prevLat + t * (lat - prevLat)]);
-      nextThreshold += spacingKm;
+    if (accumulated + segKm >= targetKm) {
+      const t = segKm > 0 ? (targetKm - accumulated) / segKm : 0;
+      return {
+        lat: prevLat + t * (lat - prevLat),
+        lng: prevLng + t * (lng - prevLng),
+      };
     }
     accumulated += segKm;
   }
-
-  // Only append the endpoint if it's meaningfully farther than the last sample.
-  const last = out[out.length - 1];
-  const [endLng, endLat] = polyline[polyline.length - 1];
-  if (haversineKm(last[1], last[0], endLat, endLng) > spacingKm / 4) {
-    out.push([endLng, endLat]);
-  }
-  return out;
+  const [lng, lat] = polyline[polyline.length - 1];
+  return { lat, lng };
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {

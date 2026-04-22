@@ -592,6 +592,8 @@ const state = {
   routeStartMarker: null,
   routeDestMarker: null,
   routeSummary: null,       // { distanceKm, durationMin, count }
+  routeScanMarkers: null,   // Leaflet markers at scan points (yellow dots)
+  routeScanRunId: 0,        // guard against overlapping scan loops
   _stationsBeforeRoute: null,
 };
 
@@ -4436,16 +4438,139 @@ async function enterRouteMode(start, dest) {
   );
   showRouteExitButton();
 
-  if (!data.stations.length) {
+  // Kick off scan-point fills in the background. The function manages its own
+  // markers, sequential 30 s cooldown, and incremental corridor refresh — we
+  // don't await it because the UI is already interactive with cached results.
+  if (Array.isArray(data.scanPoints) && data.scanPoints.length > 0) {
+    processRouteScanPoints(data.scanPoints, start, dest);
+  } else if (!data.stations.length) {
     showToast(t('routeNoStations'));
   }
 }
 
+/**
+ * Walk the scan points returned by /api/route, dropping a yellow dot at each.
+ * Scan them one-by-one with a 30 s cooldown between calls; refresh the
+ * corridor list after each successful fill so the sidebar grows as new
+ * stations come in.
+ */
+async function processRouteScanPoints(scanPoints, start, dest) {
+  const runId = ++state.routeScanRunId;
+  const fuel = state.fuelType;
+
+  // Clean up any previous run's markers before placing new ones.
+  if (state.routeScanMarkers) {
+    state.routeScanMarkers.forEach((m) => state.map.removeLayer(m));
+  }
+  state.routeScanMarkers = scanPoints.map((p) => {
+    return L.marker([p.lat, p.lng], {
+      icon: L.divIcon({
+        className: 'route-scan-dot pending',
+        html: '<div class="route-scan-dot-inner"></div>',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      }),
+      interactive: false,
+      keyboard: false,
+    }).addTo(state.map);
+  });
+
+  const setDotState = (i, cls) => {
+    const m = state.routeScanMarkers?.[i];
+    const el = m?.getElement();
+    if (!el) return;
+    el.classList.remove('pending', 'scanning', 'done', 'empty', 'error');
+    el.classList.add(cls);
+  };
+
+  for (let i = 0; i < scanPoints.length; i++) {
+    if (runId !== state.routeScanRunId || !state.routeMode) return;
+    if (i > 0) {
+      await sleep(30000);
+      if (runId !== state.routeScanRunId || !state.routeMode) return;
+    }
+    setDotState(i, 'scanning');
+
+    let scanOk = false;
+    let hadStations = false;
+    try {
+      const resp = await fetch('/api/route/scan-point', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat: scanPoints[i].lat,
+          lng: scanPoints[i].lng,
+          fuel,
+        }),
+      });
+      if (resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        scanOk = true;
+        hadStations = (body.stationsFound ?? 0) > 0;
+      }
+    } catch {
+      // network error — treated as 'error' dot below
+    }
+
+    if (runId !== state.routeScanRunId || !state.routeMode) return;
+    setDotState(i, scanOk ? (hadStations ? 'done' : 'empty') : 'error');
+
+    // Refresh corridor list from the now-warmer cache.
+    try {
+      const resp = await fetch('/api/route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startLat: start.lat, startLng: start.lng,
+          destLat: dest.lat, destLng: dest.lng,
+          fuel, bufferKm: 3,
+        }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (runId !== state.routeScanRunId || !state.routeMode) return;
+        if (Array.isArray(data.stations)) {
+          state.stations = data.stations;
+          if (state.routeSummary) state.routeSummary.count = data.stations.length;
+          renderStationsOnMap(data.stations, { skipFitBounds: true, skipRadiusFilter: true });
+          renderStationList(data.stations);
+          const summaryEl = document.getElementById('map-route-summary');
+          if (summaryEl && state.routeSummary) {
+            summaryEl.textContent = t('routeSummary')(
+              state.routeSummary.distanceKm,
+              state.routeSummary.durationMin,
+              state.routeSummary.count,
+            );
+          }
+        }
+      }
+    } catch {
+      // keep going to next scan point — partial results are better than nothing
+    }
+  }
+
+  // Fade markers out a moment after the last scan so the user sees the final state.
+  setTimeout(() => {
+    if (runId !== state.routeScanRunId) return;
+    state.routeScanMarkers?.forEach((m) => state.map.removeLayer(m));
+    state.routeScanMarkers = null;
+  }, 3000);
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 function exitRouteMode() {
   if (!state.routeMode) return;
+  state.routeScanRunId++; // cancel in-flight scan loop
   if (state.routeLayer) { state.map.removeLayer(state.routeLayer); state.routeLayer = null; }
   if (state.routeStartMarker) { state.map.removeLayer(state.routeStartMarker); state.routeStartMarker = null; }
   if (state.routeDestMarker) { state.map.removeLayer(state.routeDestMarker); state.routeDestMarker = null; }
+  if (state.routeScanMarkers) {
+    state.routeScanMarkers.forEach((m) => state.map.removeLayer(m));
+    state.routeScanMarkers = null;
+  }
   state.routeMode = false;
   state.routeStart = null;
   state.routeDest = null;
