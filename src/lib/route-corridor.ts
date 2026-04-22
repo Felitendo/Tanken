@@ -98,13 +98,26 @@ function minDistanceKmToPolyline(
  * pick along the route — two scans inside one radius of each other burn
  * the cooldown twice without surfacing distinct stations. The destination
  * is locked in first, so conflicts resolve by dropping the earlier point.
+ *
+ * Points that fall inside an already-scheduled scan location's radius are
+ * dropped entirely (no fallback): the periodic scan already keeps that
+ * area fresh, so a route pin there would just burn the 30 s cooldown on
+ * data we already have. This applies to the destination too — if the
+ * user is headed to e.g. Berlin, the daily Berlin scan covers it.
  */
 const CITY_PROJECTION_MAX_DIST_KM = 10;
 const MIN_SCAN_SPACING_KM = 25;
 
+export interface CoveredArea {
+  lat: number;
+  lng: number;
+  radiusKm: number;
+}
+
 export function computeRouteScanPoints(
   polyline: [number, number][],
   distanceKm: number,
+  coveredAreas: CoveredArea[] = [],
 ): Array<{ lat: number; lng: number }> {
   let count: number;
   if (distanceKm < 25) count = 0;
@@ -155,11 +168,13 @@ export function computeRouteScanPoints(
 
   // Merge earlier + destination. Walk end → start so the destination is
   // locked in first, then earlier picks are kept only if they're at least
-  // MIN_SCAN_SPACING_KM away from every already-kept point.
+  // MIN_SCAN_SPACING_KM away from every already-kept point. Anything that
+  // already sits inside an enabled scan location's radius is dropped too.
   const all = [...earlier, destPoint];
   const kept: Array<{ lat: number; lng: number }> = [];
   for (let i = all.length - 1; i >= 0; i--) {
     const p = all[i];
+    if (isInsideCoveredArea(p.lat, p.lng, coveredAreas)) continue;
     let tooClose = false;
     for (const k of kept) {
       if (haversineKm(p.lat, p.lng, k.lat, k.lng) < MIN_SCAN_SPACING_KM) {
@@ -171,6 +186,17 @@ export function computeRouteScanPoints(
   }
   kept.reverse();
   return kept;
+}
+
+function isInsideCoveredArea(
+  lat: number,
+  lng: number,
+  coveredAreas: CoveredArea[],
+): boolean {
+  for (const area of coveredAreas) {
+    if (haversineKm(lat, lng, area.lat, area.lng) <= area.radiusKm) return true;
+  }
+  return false;
 }
 
 /**
