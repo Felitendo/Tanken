@@ -6,6 +6,7 @@ import { fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
 import { canMakeLiveCall, recordLiveCall } from '@/lib/rate-limit';
 import { getScheduler } from '@/lib/scheduler';
 import { enrichWithDrivingDistances } from '@/lib/ors';
+import { attachAvg24hPrices } from '@/lib/history-store';
 
 export const runtime = 'nodejs';
 
@@ -38,7 +39,8 @@ export async function GET(request: NextRequest) {
     const cached = getCachedStationsByLocation(`${locationId}-${fuel}`)
       ?? getCachedStationsByLocation(locationId);
     if (cached) {
-      return NextResponse.json(cached.stations, { headers: { 'X-Cache': 'hit' } });
+      const withTrend = await attachAvg24hPrices(cached.stations);
+      return NextResponse.json(withTrend, { headers: { 'X-Cache': 'hit' } });
     }
     return NextResponse.json([], { headers: { 'X-Cache': 'miss' } });
   }
@@ -51,7 +53,8 @@ export async function GET(request: NextRequest) {
       const [south, west, north, east] = parts;
       const result = findStationsInBounds({ south, west, north, east }, fuel);
       if (result && result.stations.length > 0) {
-        return NextResponse.json(result.stations, {
+        const withTrend = await attachAvg24hPrices(result.stations);
+        return NextResponse.json(withTrend, {
           headers: {
             'X-Cache': 'grid',
             'X-Data-Timestamp': new Date(result.oldestTimestamp).toISOString(),
@@ -67,7 +70,8 @@ export async function GET(request: NextRequest) {
   const nearby = findNearbyCachedStations(lat, lng, fuel);
   if (nearby) {
     const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, nearby.stations);
-    return NextResponse.json(enriched, {
+    const withTrend = await attachAvg24hPrices(enriched);
+    return NextResponse.json(withTrend, {
       headers: {
         'X-Cache': 'hit',
         'X-Data-Timestamp': new Date(nearby.timestamp).toISOString(),
@@ -87,7 +91,8 @@ export async function GET(request: NextRequest) {
       const cacheId = `at-live-${lat.toFixed(2)}-${lng.toFixed(2)}`;
       setCachedStations(cacheId, { stations, lat, lng, radiusKm: rad, fuelType: fuel });
       const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, stations);
-      return NextResponse.json(enriched, { headers: { 'X-Cache': 'live-at' } });
+      const withTrend = await attachAvg24hPrices(enriched);
+      return NextResponse.json(withTrend, { headers: { 'X-Cache': 'live-at' } });
     }
     // E-Control returned nothing → coordinates are likely in southern Germany.
     // Fall through to the Tankerkönig path below.
@@ -108,7 +113,8 @@ export async function GET(request: NextRequest) {
         const cacheId = `de-live-${lat.toFixed(2)}-${lng.toFixed(2)}`;
         setCachedStations(cacheId, { stations, lat, lng, radiusKm: rad, fuelType: fuel });
         const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, stations);
-        return NextResponse.json(enriched, { headers: { 'X-Cache': 'live' } });
+        const withTrend = await attachAvg24hPrices(enriched);
+        return NextResponse.json(withTrend, { headers: { 'X-Cache': 'live' } });
       }
     } catch {
       // Fall through to cached data
@@ -119,7 +125,8 @@ export async function GET(request: NextRequest) {
   const fallback = findCachedStations(lat, lng, fuel);
   if (fallback) {
     const enriched = await enrichWithDrivingDistances(orsKey, lat, lng, fallback.stations);
-    return NextResponse.json(enriched, { headers: { 'X-Cache': 'fallback' } });
+    const withTrend = await attachAvg24hPrices(enriched);
+    return NextResponse.json(withTrend, { headers: { 'X-Cache': 'fallback' } });
   }
 
   return NextResponse.json([], { headers: { 'X-Cache': 'miss' } });

@@ -18,6 +18,9 @@ export interface CachedStation {
   distApprox?: boolean;
   price: number | null;
   isOpen: boolean;
+  /** Mean price over the last 24 h; attached at response time from
+   *  station_prices, not persisted in the cache. */
+  avgPrice24h?: number;
 }
 
 interface LocationCache {

@@ -1050,6 +1050,19 @@ body.logged-in .cloud-sync-hint {
   vertical-align: super;
 }
 
+.price-trend {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-right: 3px;
+  vertical-align: 2px;
+}
+
+.price-trend-down { color: #2ea043; }
+.price-trend-up { color: #d73a49; }
+
 .fav-btn {
   background: none;
   border: none;
