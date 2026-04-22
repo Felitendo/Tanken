@@ -37,16 +37,26 @@ export async function fetchStationsLive(params: {
   return mapStations(data.stations);
 }
 
+export interface AllFuelPrices {
+  isOpen: boolean;
+  diesel: number | null;
+  e5: number | null;
+  e10: number | null;
+}
+
 /**
  * Fetch current prices for up to 10 stations by ID via Tankerkönig prices.php.
- * Much faster than list.php for daily price updates of known stations.
+ *
+ * A single call returns all three fuels per station, so this replaces 30 list.php
+ * calls (10 stations × 3 fuels) with one — the main lever we have against the
+ * undocumented rate limit. Use for periodic price refresh of already-known stations;
+ * new stations still require list.php discovery.
  */
-export async function fetchPricesByIds(params: {
+export async function fetchAllPricesByIds(params: {
   apiKey: string;
   ids: string[];
-  fuelType: string;
-}): Promise<Map<string, { price: number | null; isOpen: boolean }>> {
-  const { apiKey, ids, fuelType } = params;
+}): Promise<Map<string, AllFuelPrices>> {
+  const { apiKey, ids } = params;
   if (ids.length === 0 || ids.length > 10) {
     throw new Error(`ids muss 1–10 sein, bekommen: ${ids.length}`);
   }
@@ -59,14 +69,20 @@ export async function fetchPricesByIds(params: {
   if (!data.ok) {
     throw new Error(data.message || 'API-Fehler (ok=false)');
   }
-  const result = new Map<string, { price: number | null; isOpen: boolean }>();
+  const result = new Map<string, AllFuelPrices>();
   if (data.prices) {
+    const pick = (info: Record<string, unknown>, fuel: string): number | null => {
+      const v = info[fuel];
+      return typeof v === 'number' && v > 0 ? v : null;
+    };
     for (const [id, info] of Object.entries(data.prices)) {
-      const status = info.status as string;
-      const isOpen = status === 'open';
-      const rawPrice = info[fuelType];
-      const price = typeof rawPrice === 'number' && rawPrice > 0 ? rawPrice : null;
-      result.set(id, { price, isOpen });
+      const isOpen = info.status === 'open';
+      result.set(id, {
+        isOpen,
+        diesel: pick(info, 'diesel'),
+        e5: pick(info, 'e5'),
+        e10: pick(info, 'e10'),
+      });
     }
   }
   return result;

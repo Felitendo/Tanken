@@ -1,11 +1,13 @@
 import { loadRepoConfig } from '@/config';
-import { fetchStationsEControl, fetchStationsLive } from '@/lib/measure';
+import { fetchAllPricesByIds, fetchStationsEControl, fetchStationsLive } from '@/lib/measure';
 import {
   setCachedStations, getAllCachedLocations, countUniqueStations,
   persistPriceSnapshot, clearAllCache,
+  getCachedStationsByLocation, getDeStationIds, updateCachedPricesForFuel,
 } from '@/lib/station-cache';
 import { generateAustriaGrid } from '@/lib/grid';
 import { listScanLocations, recordScanResult, getScanLocation } from '@/lib/location-store';
+import type { ScanLocation } from '@/types';
 
 export interface ScanLogEntry {
   time: string;
@@ -67,6 +69,20 @@ const DE_LOC_MAX_RETRIES = 3;
 
 /** Fuels to scan per DE admin location — one list.php call per fuel. */
 const DE_FUELS = ['diesel', 'e5', 'e10'] as const;
+
+/**
+ * How often to re-run list.php discovery per location. Between discoveries we
+ * only run prices.php refresh (10 stations and all three fuels per call), which
+ * cuts our daily Tankerkönig call volume by ~30×. Discovery still matters for
+ * picking up newly-opened stations and corrections to coordinates/branding.
+ */
+const DE_DISCOVERY_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Spacing between prices.php batches (10 IDs each). ~10 req/min is polite. */
+const DE_REFRESH_BATCH_DELAY_MS = 6_000;
+
+/** Retries per price-refresh batch on rate-limit / transient errors. */
+const DE_REFRESH_MAX_RETRIES = 3;
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -348,7 +364,7 @@ class ScanScheduler {
 
       const tasks: Promise<void>[] = [];
       if (apiKey) {
-        tasks.push(this.runDeLocationScan(apiKey));
+        tasks.push(this.runDeCycle(apiKey));
       } else {
         this.de.addLog('Kein API-Key — DE-Scan übersprungen', 'warn');
       }
@@ -411,24 +427,177 @@ class ScanScheduler {
     return Math.max(5 * 60_000, target.getTime() - now.getTime());
   }
 
-  // ─── Germany: Admin-curated locations (via list.php) ────────────
+  // ─── Germany: Decide between list.php discovery and prices.php refresh ─
 
-  private async runDeLocationScan(apiKey: string): Promise<void> {
+  /**
+   * Pick the right DE scan mode for this cycle:
+   *  - Discovery (list.php) if any (location, fuel) cache is missing/empty,
+   *    OR if the oldest DE entry exceeds DE_DISCOVERY_INTERVAL_MS.
+   *  - Refresh (prices.php) otherwise — 30× cheaper in call budget since one
+   *    call covers 10 stations × 3 fuels.
+   */
+  private async runDeCycle(apiKey: string): Promise<void> {
+    let locs: ScanLocation[];
+    try {
+      locs = await listScanLocations({ enabledOnly: true, country: 'de' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.de.addError(`Standorte konnten nicht geladen werden: ${msg}`);
+      this.de.addLog(`Standortliste fehlgeschlagen: ${msg}`, 'error');
+      return;
+    }
+    if (locs.length === 0) {
+      this.de.addLog('Keine aktiven DE-Scan-Standorte — im Admin-Panel hinzufügen', 'warn');
+      return;
+    }
+
+    const needsDiscovery = this.deNeedsDiscovery(locs);
+    if (needsDiscovery) {
+      await this.runDeLocationScan(apiKey, locs);
+    } else {
+      await this.runDePriceRefresh(apiKey, locs);
+    }
+  }
+
+  private deNeedsDiscovery(locs: ScanLocation[]): boolean {
+    const now = Date.now();
+    for (const loc of locs) {
+      for (const fuel of DE_FUELS) {
+        const entry = getCachedStationsByLocation(`${loc.id}-${fuel}`);
+        if (!entry || entry.stations.length === 0) return true;
+        if (now - entry.timestamp > DE_DISCOVERY_INTERVAL_MS) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Refresh prices for all known DE stations via prices.php (10 IDs/call,
+   * all three fuels in one response). Does not discover new stations — that
+   * falls to runDeLocationScan, which runs at bootstrap and weekly.
+   */
+  private async runDePriceRefresh(apiKey: string, locs: ScanLocation[]): Promise<void> {
     const cs = this.de;
     cs.scanning = true;
     cs.mode = 'location-scan';
     cs.resetCycle();
     cs.callDurations = [];
 
-    let locs;
-    try {
-      locs = await listScanLocations({ enabledOnly: true, country: 'de' });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      cs.addError(`Standorte konnten nicht geladen werden: ${msg}`);
-      cs.addLog(`Standortliste fehlgeschlagen: ${msg}`, 'error');
+    const ids = getDeStationIds();
+    if (ids.length === 0) {
+      cs.addLog('Preisupdate übersprungen — keine Stationen im Cache', 'warn');
       cs.reset();
       return;
+    }
+
+    const BATCH_SIZE = 10;
+    const totalBatches = Math.ceil(ids.length / BATCH_SIZE);
+    cs.gridPoints = totalBatches;
+    cs.addLog(`Preisupdate per prices.php: ${ids.length} Stationen in ${totalBatches} Batches (alle 3 Sorten pro Call)`, 'info');
+    console.log(`[DE] Price refresh: ${ids.length} stations in ${totalBatches} batches`);
+
+    const startTime = Date.now();
+    let errors = 0;
+    let processed = 0;
+
+    try {
+      for (let b = 0; b < totalBatches; b++) {
+        if (!this.timer) break;
+        const batch = ids.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+        cs.progress = `${b + 1}/${totalBatches}`;
+        cs.estimatedEndAt = new Date(Date.now() + (totalBatches - b - 1) * DE_REFRESH_BATCH_DELAY_MS);
+
+        let attempt = 0;
+        let succeeded = false;
+        let lastErr: string | null = null;
+
+        while (attempt <= DE_REFRESH_MAX_RETRIES && this.timer) {
+          if (attempt > 0) {
+            const backoffMs = Math.min(
+              DE_LOC_MAX_DELAY_MS,
+              Math.max(10_000, DE_REFRESH_BATCH_DELAY_MS * Math.pow(3, attempt)),
+            );
+            cs.addLog(`Batch ${b + 1} Retry ${attempt}/${DE_REFRESH_MAX_RETRIES} in ${(backoffMs / 1000).toFixed(1)}s`, 'warn');
+            await sleep(backoffMs);
+            if (!this.timer) break;
+          }
+          try {
+            const t0 = Date.now();
+            const prices = await fetchAllPricesByIds({ apiKey, ids: batch });
+            cs.callDurations.push(Date.now() - t0);
+
+            for (const fuel of DE_FUELS) {
+              const fuelMap = new Map<string, { price: number | null; isOpen: boolean }>();
+              for (const [id, info] of prices) {
+                const price = fuel === 'diesel' ? info.diesel : fuel === 'e5' ? info.e5 : info.e10;
+                fuelMap.set(id, { price, isOpen: info.isOpen });
+              }
+              updateCachedPricesForFuel(fuel, fuelMap);
+            }
+
+            processed += batch.length;
+            cs.addStationCount(processed);
+            succeeded = true;
+            break;
+          } catch (err) {
+            lastErr = err instanceof Error ? err.message : String(err);
+            attempt++;
+          }
+        }
+
+        if (!succeeded && lastErr) {
+          errors++;
+          cs.addError(`Batch ${b + 1}: ${lastErr}`);
+          cs.addLog(`Batch ${b + 1} nach ${DE_REFRESH_MAX_RETRIES} Retries: ${lastErr}`, 'error');
+        }
+
+        if (b < totalBatches - 1 && this.timer) await sleep(DE_REFRESH_BATCH_DELAY_MS);
+      }
+
+      // Keep admin-panel "last scan" timestamps fresh even when we don't run
+      // discovery this cycle — otherwise the UI would look like scans stopped.
+      for (const loc of locs) {
+        const locIds = new Set<string>();
+        for (const fuel of DE_FUELS) {
+          const entry = getCachedStationsByLocation(`${loc.id}-${fuel}`);
+          if (entry) for (const s of entry.stations) locIds.add(s.id);
+        }
+        await recordScanResult(loc.id, { stationCount: locIds.size, error: null }).catch(() => {});
+      }
+
+      const dur = (Date.now() - startTime) / 1000;
+      cs.lastDurationSec = Math.round(dur);
+      cs.lastCompletedAt = new Date();
+      const errStr = errors > 0 ? `, ${errors} Fehler` : '';
+      cs.addLog(`Preisupdate fertig: ${processed.toLocaleString('de-DE')} Stationen in ${fmtDuration(dur)}${errStr}`, 'success');
+      console.log(`[DE] Price refresh complete: ${processed} stations in ${fmtDuration(dur)}`);
+    } finally {
+      cs.reset();
+    }
+  }
+
+  // ─── Germany: Admin-curated locations (via list.php) ────────────
+
+  private async runDeLocationScan(apiKey: string, preloadedLocs?: ScanLocation[]): Promise<void> {
+    const cs = this.de;
+    cs.scanning = true;
+    cs.mode = 'location-scan';
+    cs.resetCycle();
+    cs.callDurations = [];
+
+    let locs: ScanLocation[];
+    if (preloadedLocs) {
+      locs = preloadedLocs;
+    } else {
+      try {
+        locs = await listScanLocations({ enabledOnly: true, country: 'de' });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        cs.addError(`Standorte konnten nicht geladen werden: ${msg}`);
+        cs.addLog(`Standortliste fehlgeschlagen: ${msg}`, 'error');
+        cs.reset();
+        return;
+      }
     }
 
     if (locs.length === 0) {

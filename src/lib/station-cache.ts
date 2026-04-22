@@ -360,14 +360,24 @@ export function findStationsInBounds(
 }
 
 /**
- * Update prices in the in-memory cache from a price dump.
- * Returns number of station-entries updated (including duplicates across grid cells).
+ * Update prices in the in-memory cache for a specific fuel type.
+ *
+ * Each cache entry holds prices for one fuel — if we applied a diesel price
+ * dump to an e5 entry, we'd corrupt the displayed prices. So only entries
+ * whose fuelType matches are touched.
+ *
+ * Returns number of station-entries updated (counting each cache slot
+ * separately — one station may live in multiple locations' caches).
  */
-export function updateCachedPrices(priceMap: Map<string, { price: number | null; isOpen: boolean }>): number {
+export function updateCachedPricesForFuel(
+  fuelType: string,
+  priceMap: Map<string, { price: number | null; isOpen: boolean }>,
+): number {
   let updated = 0;
   const now = Date.now();
   const c = getCache();
   for (const [locationId, entry] of c) {
+    if (entry.fuelType !== fuelType) continue;
     let changed = false;
     for (const station of entry.stations) {
       const update = priceMap.get(station.id);
@@ -387,6 +397,26 @@ export function updateCachedPrices(priceMap: Map<string, { price: number | null;
   }
   invalidateUniqueCount();
   return updated;
+}
+
+/**
+ * Collect all unique station IDs from DE admin-location caches.
+ *
+ * DE admin location cache keys are `${loc.id}-${fuel}` where loc.id starts
+ * with `loc-` (see location-store.newId). We deliberately exclude:
+ *  - AT grid entries (`at-…`)
+ *  - Live/ad-hoc entries (`de-live-…`, `at-live-…`)
+ *  - History snapshots (`de-snapshot`, `at-snapshot`)
+ *
+ * Used by the scheduler to feed prices.php batches during periodic refresh.
+ */
+export function getDeStationIds(): string[] {
+  const ids = new Set<string>();
+  for (const [locationId, entry] of getCache()) {
+    if (!locationId.startsWith('loc-')) continue;
+    for (const s of entry.stations) ids.add(s.id);
+  }
+  return Array.from(ids);
 }
 
 // ─── Database persistence ────────────────────────────────────────────
