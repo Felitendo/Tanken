@@ -7,6 +7,7 @@
  */
 
 import type { CachedStation } from '@/lib/station-cache';
+import { MAJOR_CITIES } from '@/lib/major-cities';
 
 /** Station augmented with its minimum distance to the route polyline. */
 export interface StationOnRoute extends CachedStation {
@@ -75,16 +76,24 @@ function minDistanceKmToPolyline(
 }
 
 /**
- * Pick evenly-spaced scan points along the route based on total distance:
+ * Pick scan points along the route based on total distance:
  *   < 25 km → 0 points (use cache only)
- *   25–49 km → 1 point at the midpoint
- *   50–74 km → 2 points at 1/3 and 2/3
- *   ≥ 75 km → 3 points at 1/4, 1/2, 3/4
+ *   25–49 km → 1 point
+ *   50–74 km → 2 points
+ *   ≥ 75 km → 3 points
  *
- * Each point is the true polyline coordinate at that fractional distance,
- * not an interpolated great-circle shortcut — keeps scans on the actual
- * driven road rather than straight-line over terrain the car won't cross.
+ * Each scan covers a 25 km radius, so where possible we snap the point to a
+ * large city that falls inside its window — a 25 km scan at Nürnberg yields
+ * far more cheapest-price candidates than the same scan at a random stretch
+ * of farmland between cities. The route is split into `count` equal-width
+ * progress windows; for each window we take the largest MAJOR_CITIES entry
+ * projected within a forgiving distance of the polyline. Any window without
+ * a city candidate falls back to the geometric midpoint of that window — so
+ * a 75 km route with only two cities along it still gets three scans: two
+ * in the cities plus one at the lonely stretch between / beside them.
  */
+const CITY_PROJECTION_MAX_DIST_KM = 10;
+
 export function computeRouteScanPoints(
   polyline: [number, number][],
   distanceKm: number,
@@ -96,12 +105,135 @@ export function computeRouteScanPoints(
   else count = 3;
   if (count === 0 || polyline.length < 2) return [];
 
+  const halfWindow = 0.5 / (count + 1);
+  const cityCandidates = projectCitiesOnRoute(polyline, distanceKm);
+  const usedCityIdx = new Set<number>();
+
   const out: Array<{ lat: number; lng: number }> = [];
   for (let i = 1; i <= count; i++) {
     const frac = i / (count + 1);
-    out.push(interpolateAlongPolyline(polyline, distanceKm * frac));
+    const windowMin = frac - halfWindow;
+    const windowMax = frac + halfWindow;
+
+    let bestIdx = -1;
+    let bestPop = -1;
+    for (let j = 0; j < cityCandidates.length; j++) {
+      if (usedCityIdx.has(j)) continue;
+      const c = cityCandidates[j];
+      if (c.progress < windowMin || c.progress > windowMax) continue;
+      if (c.pop > bestPop) {
+        bestPop = c.pop;
+        bestIdx = j;
+      }
+    }
+
+    if (bestIdx >= 0) {
+      const c = cityCandidates[bestIdx];
+      usedCityIdx.add(bestIdx);
+      out.push({ lat: c.lat, lng: c.lng });
+    } else {
+      out.push(interpolateAlongPolyline(polyline, distanceKm * frac));
+    }
   }
   return out;
+}
+
+/**
+ * For each MAJOR_CITIES entry within CITY_PROJECTION_MAX_DIST_KM of the
+ * route, return its population plus where it sits along the route as a
+ * fraction in [0, 1] (0 = start, 1 = destination).
+ */
+function projectCitiesOnRoute(
+  polyline: [number, number][],
+  distanceKm: number,
+): Array<{ progress: number; pop: number; lat: number; lng: number }> {
+  if (distanceKm <= 0) return [];
+
+  // Bounding-box reject — vast majority of cities are thrown out cheaply.
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  for (const [lng, lat] of polyline) {
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+  }
+  const midLat = (minLat + maxLat) / 2;
+  const kmPerDegLng = EARTH_KM_PER_DEG_LAT * Math.cos((midLat * Math.PI) / 180);
+  const latBuf = CITY_PROJECTION_MAX_DIST_KM / EARTH_KM_PER_DEG_LAT;
+  const lngBuf = CITY_PROJECTION_MAX_DIST_KM / Math.max(kmPerDegLng, 0.0001);
+
+  const out: Array<{ progress: number; pop: number; lat: number; lng: number }> = [];
+  for (const city of MAJOR_CITIES) {
+    if (city.lat < minLat - latBuf || city.lat > maxLat + latBuf) continue;
+    if (city.lng < minLng - lngBuf || city.lng > maxLng + lngBuf) continue;
+    const proj = projectPointOnPolyline(city.lat, city.lng, polyline);
+    if (proj.distKm > CITY_PROJECTION_MAX_DIST_KM) continue;
+    out.push({
+      progress: Math.min(1, Math.max(0, proj.progressKm / distanceKm)),
+      pop: city.pop,
+      lat: city.lat,
+      lng: city.lng,
+    });
+  }
+  return out;
+}
+
+/**
+ * Closest point on the polyline to (pLat, pLng): returns both the km
+ * distance and how far along the polyline that closest point sits.
+ * Uses the same equirectangular-in-km trick as distanceKmPointToSegment.
+ */
+function projectPointOnPolyline(
+  pLat: number, pLng: number,
+  polyline: [number, number][],
+): { distKm: number; progressKm: number } {
+  let bestDist = Infinity;
+  let bestProgress = 0;
+  let accumulated = 0;
+  for (let i = 1; i < polyline.length; i++) {
+    const [aLng, aLat] = polyline[i - 1];
+    const [bLng, bLat] = polyline[i];
+    const segKm = haversineKm(aLat, aLng, bLat, bLng);
+    const proj = projectPointOnSegment(pLat, pLng, aLat, aLng, bLat, bLng);
+    if (proj.distKm < bestDist) {
+      bestDist = proj.distKm;
+      bestProgress = accumulated + proj.t * segKm;
+    }
+    accumulated += segKm;
+  }
+  return { distKm: bestDist, progressKm: bestProgress };
+}
+
+function projectPointOnSegment(
+  pLat: number, pLng: number,
+  aLat: number, aLng: number,
+  bLat: number, bLng: number,
+): { distKm: number; t: number } {
+  const midLat = (aLat + bLat) / 2;
+  const kmPerDegLng = EARTH_KM_PER_DEG_LAT * Math.cos((midLat * Math.PI) / 180);
+  const toXY = (lat: number, lng: number): [number, number] => [
+    lng * kmPerDegLng,
+    lat * EARTH_KM_PER_DEG_LAT,
+  ];
+  const [ax, ay] = toXY(aLat, aLng);
+  const [bx, by] = toXY(bLat, bLng);
+  const [px, py] = toXY(pLat, pLng);
+  const dx = bx - ax;
+  const dy = by - ay;
+  const segLenSq = dx * dx + dy * dy;
+  if (segLenSq === 0) {
+    const ex = px - ax;
+    const ey = py - ay;
+    return { distKm: Math.sqrt(ex * ex + ey * ey), t: 0 };
+  }
+  let t = ((px - ax) * dx + (py - ay) * dy) / segLenSq;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  const cx = ax + t * dx;
+  const cy = ay + t * dy;
+  const ex = px - cx;
+  const ey = py - cy;
+  return { distKm: Math.sqrt(ex * ex + ey * ey), t };
 }
 
 function interpolateAlongPolyline(
