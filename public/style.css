@@ -741,7 +741,6 @@ body.logged-in .cloud-sync-hint {
   pointer-events: none;
 }
 .route-scan-dot-inner {
-  position: relative;
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -749,26 +748,6 @@ body.logged-in .cloud-sync-hint {
   border: 2px solid #fff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   transition: background 0.3s ease, transform 0.3s ease, opacity 0.3s ease;
-}
-/* Sonar-style blue rings that keep pulsing outward while the dot is yellow
- * (pending or scanning). Two rings on staggered delays so there's always one
- * mid-flight. Rings are pseudo-elements on the dot itself — positioned with
- * `inset: 0` and scaled outward, so they stay centred without extra DOM. */
-.route-scan-dot.pending .route-scan-dot-inner::before,
-.route-scan-dot.pending .route-scan-dot-inner::after,
-.route-scan-dot.scanning .route-scan-dot-inner::before,
-.route-scan-dot.scanning .route-scan-dot-inner::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 50%;
-  border: 2px solid #007aff;
-  animation: route-scan-ring 1.8s ease-out infinite;
-  pointer-events: none;
-}
-.route-scan-dot.pending .route-scan-dot-inner::after,
-.route-scan-dot.scanning .route-scan-dot-inner::after {
-  animation-delay: 0.9s;
 }
 .route-scan-dot.pending .route-scan-dot-inner {
   animation: route-scan-pulse 1.6s ease-in-out infinite;
@@ -793,10 +772,6 @@ body.logged-in .cloud-sync-hint {
 @keyframes route-scan-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.35); opacity: 0.75; }
-}
-@keyframes route-scan-ring {
-  0%   { transform: scale(1);   opacity: 0.9; border-width: 2px; }
-  100% { transform: scale(2.8); opacity: 0;   border-width: 1px; }
 }
 
 #map-search-box.hidden { display: none; }

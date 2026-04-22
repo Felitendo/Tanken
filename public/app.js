@@ -4468,10 +4468,13 @@ async function processRouteScanPoints(scanPoints, start, dest) {
 
   // Clean up any previous run's markers before placing new ones.
   if (state.routeScanMarkers) {
-    state.routeScanMarkers.forEach((m) => state.map.removeLayer(m));
+    state.routeScanMarkers.forEach((entry) => {
+      try { state.map.removeLayer(entry.marker); } catch {}
+      entry.stopRipples?.();
+    });
   }
   state.routeScanMarkers = scanPoints.map((p) => {
-    return L.marker([p.lat, p.lng], {
+    const marker = L.marker([p.lat, p.lng], {
       icon: L.divIcon({
         className: 'route-scan-dot pending',
         html: '<div class="route-scan-dot-inner"></div>',
@@ -4481,14 +4484,26 @@ async function processRouteScanPoints(scanPoints, start, dest) {
       interactive: false,
       keyboard: false,
     }).addTo(state.map);
+    // Continuous ripple circles at the 25 km live-scan radius — same
+    // visual as the "Hier suchen" button so the user sees exactly what
+    // area each dot will cover. Cancelled when the dot transitions to
+    // done / empty / error.
+    const stopRipples = startRouteScanRipples(p.lat, p.lng);
+    return { marker, stopRipples, lat: p.lat, lng: p.lng };
   });
 
   const setDotState = (i, cls) => {
-    const m = state.routeScanMarkers?.[i];
-    const el = m?.getElement();
-    if (!el) return;
-    el.classList.remove('pending', 'scanning', 'done', 'empty', 'error');
-    el.classList.add(cls);
+    const entry = state.routeScanMarkers?.[i];
+    if (!entry) return;
+    const el = entry.marker.getElement();
+    if (el) {
+      el.classList.remove('pending', 'scanning', 'done', 'empty', 'error');
+      el.classList.add(cls);
+    }
+    if (cls === 'done' || cls === 'empty' || cls === 'error') {
+      entry.stopRipples?.();
+      entry.stopRipples = null;
+    }
   };
 
   for (let i = 0; i < scanPoints.length; i++) {
@@ -4560,9 +4575,80 @@ async function processRouteScanPoints(scanPoints, start, dest) {
   // Fade markers out a moment after the last scan so the user sees the final state.
   setTimeout(() => {
     if (runId !== state.routeScanRunId) return;
-    state.routeScanMarkers?.forEach((m) => state.map.removeLayer(m));
+    state.routeScanMarkers?.forEach((entry) => {
+      try { state.map.removeLayer(entry.marker); } catch {}
+      entry.stopRipples?.();
+    });
     state.routeScanMarkers = null;
   }, 3000);
+}
+
+/**
+ * Spawn continuously expanding L.circle ripples at (lat, lng) that grow to
+ * the 25 km live-scan radius — identical to the "Hier suchen" animation so
+ * users see exactly what geographic area each dot scans. Zoom changes keep
+ * the ripples at the correct ground size (L.circle uses meters).
+ * Returns a cancel function that stops the interval and removes live ripples.
+ */
+const ROUTE_SCAN_RIPPLE_RADIUS_KM = 25;
+const ROUTE_SCAN_RIPPLE_DURATION = 1800;
+const ROUTE_SCAN_RIPPLE_STAGGER = 900;
+function startRouteScanRipples(lat, lng) {
+  let stopped = false;
+  const live = new Set();
+  const finalRadius = ROUTE_SCAN_RIPPLE_RADIUS_KM * 1000;
+  const color = getAccentColor();
+
+  const spawn = () => {
+    if (stopped || !state.map) return;
+    let ripple;
+    try {
+      ripple = L.circle([lat, lng], {
+        radius: 0,
+        color,
+        weight: 2,
+        opacity: 0.8,
+        fillColor: color,
+        fillOpacity: 0.1,
+        interactive: false,
+      }).addTo(state.map);
+    } catch {
+      return;
+    }
+    live.add(ripple);
+    const t0 = performance.now();
+    const step = (now) => {
+      if (stopped) return;
+      const t = Math.min((now - t0) / ROUTE_SCAN_RIPPLE_DURATION, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      try {
+        ripple.setRadius(eased * finalRadius);
+        ripple.setStyle({
+          opacity: 0.8 * (1 - t * 0.8),
+          fillOpacity: 0.1 * (1 - t),
+        });
+      } catch {
+        live.delete(ripple);
+        return;
+      }
+      if (t < 1) requestAnimationFrame(step);
+      else {
+        try { state.map.removeLayer(ripple); } catch {}
+        live.delete(ripple);
+      }
+    };
+    requestAnimationFrame(step);
+  };
+
+  spawn();
+  const interval = setInterval(spawn, ROUTE_SCAN_RIPPLE_STAGGER);
+
+  return () => {
+    stopped = true;
+    clearInterval(interval);
+    live.forEach((r) => { try { state.map.removeLayer(r); } catch {} });
+    live.clear();
+  };
 }
 
 function sleep(ms) {
@@ -4576,7 +4662,10 @@ function exitRouteMode() {
   if (state.routeStartMarker) { state.map.removeLayer(state.routeStartMarker); state.routeStartMarker = null; }
   if (state.routeDestMarker) { state.map.removeLayer(state.routeDestMarker); state.routeDestMarker = null; }
   if (state.routeScanMarkers) {
-    state.routeScanMarkers.forEach((m) => state.map.removeLayer(m));
+    state.routeScanMarkers.forEach((entry) => {
+      try { state.map.removeLayer(entry.marker); } catch {}
+      entry.stopRipples?.();
+    });
     state.routeScanMarkers = null;
   }
   state.routeMode = false;
