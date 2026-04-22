@@ -1554,6 +1554,14 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     const MIN_ZOOM_FOR_STATIONS = 10;
     state.map.on('zoomend', () => {
       if (!state.map) return;
+      // Route mode pins the list to the corridor result — don't let zoom
+      // clear the markers or trigger a viewport reload that would clobber
+      // state.stations. Re-render so the corridor pins survive a zoom that
+      // would otherwise drop below MIN_ZOOM_FOR_STATIONS.
+      if (state.routeMode) {
+        renderStationsOnMap(state.stations || [], { skipFitBounds: true, skipRadiusFilter: true });
+        return;
+      }
       if (state.map.getZoom() < MIN_ZOOM_FOR_STATIONS) {
         if (state.clusterGroup) { state.map.removeLayer(state.clusterGroup); state.clusterGroup = null; }
         state.markers.forEach(m => state.map.removeLayer(m));
