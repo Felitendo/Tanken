@@ -74,6 +74,57 @@ function minDistanceKmToPolyline(
   return best;
 }
 
+/**
+ * Walk a polyline and emit evenly-spaced points at ~spacingKm intervals of
+ * actual path distance (not vertex count). Always includes the first and
+ * last polyline point so short routes still yield something useful.
+ *
+ * Used by the route-search gap-fill to decide where we need live scans.
+ */
+export function samplePolylineByDistance(
+  polyline: [number, number][],
+  spacingKm: number,
+): [number, number][] {
+  if (polyline.length === 0) return [];
+  if (polyline.length === 1) return [[...polyline[0]] as [number, number]];
+
+  const out: [number, number][] = [[...polyline[0]] as [number, number]];
+  let accumulated = 0;
+  let nextThreshold = spacingKm;
+
+  for (let i = 1; i < polyline.length; i++) {
+    const [prevLng, prevLat] = polyline[i - 1];
+    const [lng, lat] = polyline[i];
+    const segKm = haversineKm(prevLat, prevLng, lat, lng);
+    while (segKm > 0 && nextThreshold <= accumulated + segKm) {
+      const t = (nextThreshold - accumulated) / segKm;
+      out.push([prevLng + t * (lng - prevLng), prevLat + t * (lat - prevLat)]);
+      nextThreshold += spacingKm;
+    }
+    accumulated += segKm;
+  }
+
+  // Only append the endpoint if it's meaningfully farther than the last sample.
+  const last = out[out.length - 1];
+  const [endLng, endLat] = polyline[polyline.length - 1];
+  if (haversineKm(last[1], last[0], endLat, endLng) > spacingKm / 4) {
+    out.push([endLng, endLat]);
+  }
+  return out;
+}
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function distanceKmPointToSegment(
   pLat: number, pLng: number,
   aLat: number, aLng: number,

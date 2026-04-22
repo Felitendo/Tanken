@@ -5,6 +5,7 @@ import { getRequestContext } from '@/lib/request-context';
 import { fetchRoute } from '@/lib/ors';
 import { getAllUniqueStationsForFuel } from '@/lib/station-cache';
 import { filterStationsAlongRoute } from '@/lib/route-corridor';
+import { fillRouteCorridorGaps } from '@/lib/route-gap-fill';
 
 export const runtime = 'nodejs';
 
@@ -57,6 +58,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Fill coverage gaps along the route before filtering — DE is only scanned
+  // at admin-curated locations, so a long cross-country route typically hits
+  // un-scanned stretches that would otherwise show an empty corridor.
+  const gapFill = await fillRouteCorridorGaps({
+    apiKey: runtimeConfig.apiKey,
+    polyline: route.coordinates,
+    fuelType: fuel,
+  }).catch((err) => {
+    console.error('[route] gap fill failed:', err instanceof Error ? err.message : err);
+    return null;
+  });
+
   const candidates = getAllUniqueStationsForFuel(fuel)
     .filter(s => s.isOpen && typeof s.price === 'number' && s.price > 0);
 
@@ -70,5 +83,6 @@ export async function POST(request: NextRequest) {
     },
     stations,
     bufferKm,
+    corridorFill: gapFill,
   });
 }
