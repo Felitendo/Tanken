@@ -3,11 +3,11 @@ import { listActiveLiveScans } from '@/lib/station-cache';
 
 export const runtime = 'nodejs';
 
-const TTL_MS = 15 * 60 * 1000;
+const TTL_MS = 60 * 60 * 1000;
 
 /**
  * Returns the live (manual-scan / on-demand) cache entries that are still
- * inside their 15 min freshness window. Anyone hitting this endpoint can
+ * inside their 1 h freshness window. Anyone hitting this endpoint can
  * piggy-back on someone else's recent scan and skip a Tankerkönig
  * roundtrip — the data is the same regardless of who triggered it.
  *

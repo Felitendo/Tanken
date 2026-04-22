@@ -186,6 +186,7 @@ const i18n = {
     manualScanLabel: 'Manuell gescannt',
     manualScanExpiresIn: 'läuft in',
     manualScanExpiresSuffix: 'ab',
+    refreshNearby: 'Umgebung neu scannen',
     historyDefault: 'PREISVERLAUF',
     historyDefaultLabel: 'Standard-Ansicht',
     historyDefault24h: '24 Stunden',
@@ -384,6 +385,7 @@ const i18n = {
     manualScanLabel: 'Manually scanned',
     manualScanExpiresIn: 'expires in',
     manualScanExpiresSuffix: '',
+    refreshNearby: 'Rescan nearby',
     historyDefault: 'PRICE HISTORY',
     historyDefaultLabel: 'Default range',
     historyDefault24h: '24 hours',
@@ -1776,11 +1778,11 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
 
 // ─── Manual-scan persistence ───────────────────────────────────────
 //
-// Results from the "Hier suchen" picker are kept in localStorage for 15 min
+// Results from the "Hier suchen" picker are kept in localStorage for 1 h
 // so the markers come back after a refresh. Each station from such a scan
 // carries an _expiresAt timestamp the sheet UI uses to render a countdown.
 
-const MANUAL_SCAN_TTL_MS = 15 * 60 * 1000;
+const MANUAL_SCAN_TTL_MS = 60 * 60 * 1000;
 const MANUAL_SCANS_KEY = 'tank_manual_scans';
 
 function loadStoredManualScans() {
@@ -2950,13 +2952,18 @@ function showStationSheet(station) {
       </div>
       ${station.id ? `<button class="fav-btn sheet-fav-btn${sheetIsFav ? ' active' : ''}" data-station-id="${station.id}" aria-label="${sheetIsFav ? t('removeFavourite') : t('addFavourite')}"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
     </div>
-    ${station._expiresAt ? `<div class="sheet-manual-scan-banner-wrap">
-      <div class="sheet-manual-scan-banner" data-expires-at="${station._expiresAt}" data-ttl-ms="${MANUAL_SCAN_TTL_MS}">
+    <div class="sheet-manual-scan-banner-wrap">
+      ${station._expiresAt ? `<div class="sheet-manual-scan-banner" data-expires-at="${station._expiresAt}" data-ttl-ms="${MANUAL_SCAN_TTL_MS}">
         <span class="sheet-manual-scan-dot" aria-hidden="true"></span>
         <span class="sheet-manual-scan-text">${t('manualScanLabel')} · ${t('manualScanExpiresIn')} <strong class="sheet-manual-scan-countdown">–:––</strong>${t('manualScanExpiresSuffix') ? ' ' + t('manualScanExpiresSuffix') : ''}</span>
         <div class="sheet-manual-scan-progress" aria-hidden="true"><div class="sheet-manual-scan-progress-bar"></div></div>
-      </div>
-    </div>` : ''}
+      </div>` : ''}
+      <button class="sheet-refresh-btn" id="sheet-refresh-btn" type="button"${(isScanBusy() || state.routeMode) ? ' disabled' : ''}>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M17.65 6.35A7.958 7.958 0 0012 4C7.58 4 4.01 7.58 4.01 12S7.58 20 12 20c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        <span>${t('refreshNearby')}</span>
+      </button>
+    </div>
+
     <div class="sheet-station-price" style="color:${color}">
       ${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}
       <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>
@@ -3002,6 +3009,22 @@ function showStationSheet(station) {
   const sheetFavBtn = body.querySelector('.sheet-fav-btn');
   if (sheetFavBtn) {
     sheetFavBtn.addEventListener('click', () => toggleFavourite(sheetFavBtn.dataset.stationId));
+  }
+
+  // Rescan the 25 km circle around this station: same flow as "Hier suchen"
+  // but anchored on the tapped pin instead of the user's pick. Close the
+  // sheet first so the scan animation on the map is visible.
+  const refreshBtn = body.querySelector('#sheet-refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      if (refreshBtn.disabled) return;
+      if (isScanBusy() || state.routeMode || !state.map) return;
+      if (!(Number.isFinite(station.lat) && Number.isFinite(station.lng))) return;
+      haptic('light');
+      closeSheet();
+      state.map.flyTo([station.lat, station.lng], 13, { duration: 0.6 });
+      setTimeout(() => { runScanAt(station.lat, station.lng); }, 650);
+    });
   }
 
   // Clean up previous drag listeners if any
