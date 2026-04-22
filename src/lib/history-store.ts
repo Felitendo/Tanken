@@ -204,17 +204,17 @@ export async function getAvg24hByStationNames(names: string[]): Promise<Map<stri
  */
 export async function attachAvg24hPrices<T extends { name: string }>(
   stations: T[],
-): Promise<Array<T & { avgPrice24h?: number }>> {
-  if (stations.length === 0) return stations as Array<T & { avgPrice24h?: number }>;
+): Promise<Array<T & { avgPrice24h: number | null }>> {
+  if (stations.length === 0) return stations as Array<T & { avgPrice24h: number | null }>;
   try {
     const names = stations.map(s => s.name).filter(Boolean);
     const avgs = await getAvg24hByStationNames(names);
-    return stations.map(s => {
-      const avg = avgs.get(s.name);
-      return avg != null ? { ...s, avgPrice24h: avg } : s;
-    });
+    return stations.map(s => ({
+      ...s,
+      avgPrice24h: avgs.get(s.name) ?? null,
+    }));
   } catch {
-    return stations as Array<T & { avgPrice24h?: number }>;
+    return stations.map(s => ({ ...s, avgPrice24h: null }));
   }
 }
 

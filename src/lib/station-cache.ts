@@ -19,8 +19,9 @@ export interface CachedStation {
   price: number | null;
   isOpen: boolean;
   /** Mean price over the last 24 h; attached at response time from
-   *  station_prices, not persisted in the cache. */
-  avgPrice24h?: number;
+   *  station_prices, not persisted in the cache. `null` when no history
+   *  is available for this station_name in the last 24 h. */
+  avgPrice24h?: number | null;
 }
 
 interface LocationCache {
