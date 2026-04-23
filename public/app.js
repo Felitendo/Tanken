@@ -137,8 +137,6 @@ const i18n = {
     sortDistance: 'Entfernung',
     stationsFound: 'Tankstellen',
     alongRoute: 'entlang der Route',
-    priceTrendDown: 'günstiger als 24 h-Schnitt',
-    priceTrendUp: 'teurer als 24 h-Schnitt',
     addFavourite: 'Zu Favoriten hinzufügen',
     removeFavourite: 'Aus Favoriten entfernen',
     maxFavourites: 'Maximale Anzahl an Favoriten erreicht',
@@ -339,8 +337,6 @@ const i18n = {
     sortDistance: 'Distance',
     stationsFound: 'Stations',
     alongRoute: 'along the route',
-    priceTrendDown: 'cheaper than 24 h average',
-    priceTrendUp: 'higher than 24 h average',
     addFavourite: 'Add to favourites',
     removeFavourite: 'Remove from favourites',
     maxFavourites: 'Maximum number of favourites reached',
@@ -2463,24 +2459,6 @@ function priceColor(ratio) {
   return `rgb(${r},${g},${b})`;
 }
 
-// Arrow showing current price vs. 24 h average. The threshold (0.3 ct)
-// filters out noise from minute-scale price jitter so the indicator
-// only reacts to meaningful moves. Returns '' if no history is known
-// or the delta is within the noise band — the row then has no arrow.
-const PRICE_TREND_NOISE_EUR = 0.003;
-function priceTrendBadge(current, avg24h) {
-  if (!Number.isFinite(current) || !Number.isFinite(avg24h)) return '';
-  const delta = current - avg24h;
-  if (Math.abs(delta) < PRICE_TREND_NOISE_EUR) return '';
-  const cls = delta < 0 ? 'price-trend-down' : 'price-trend-up';
-  const label = delta < 0 ? t('priceTrendDown') : t('priceTrendUp');
-  const arrow = delta < 0
-    ? '<svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M5 9L1 3h8z"/></svg>'
-    : '<svg viewBox="0 0 10 10" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M5 1l4 6H1z"/></svg>';
-  const tooltip = `${label} (Ø 24h: ${avg24h.toFixed(2).replace('.', ',')})`;
-  return `<span class="price-trend ${cls}" title="${tooltip}" aria-label="${tooltip}">${arrow}</span>`;
-}
-
 function rankColor(ratio) {
   // green (#34c759) → orange (#ff9500) → red (#ff3b30)
   if (ratio <= 0.5) {
@@ -2552,7 +2530,6 @@ function renderStationList(stations) {
     const color = priceColor(ratio);
     const dist = s.dist ? `${s.distApprox ? '~' : ''}${s.dist.toFixed(1)} km` : '';
     const priceParts = formatPriceParts(s.price);
-    const trend = priceTrendBadge(s.price, s.avgPrice24h);
     const isFav = s.id && state.favourites.includes(s.id);
 
     return `
@@ -2565,7 +2542,7 @@ function renderStationList(stations) {
         <div style="text-align:right;display:flex;align-items:center;gap:4px">
           ${isFav && state.user ? `<button class="fav-btn active" data-station-id="${s.id}" aria-label="${t('removeFavourite')}"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
           <div>
-            <div class="station-price" style="color:${color}">${trend}${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}</div>
+            <div class="station-price" style="color:${color}">${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}</div>
             ${dist ? `<div class="station-dist">${dist}</div>` : ''}
           </div>
         </div>
@@ -2998,7 +2975,7 @@ function showStationSheet(station) {
     </div>
 
     <div class="sheet-station-price" style="color:${color}">
-      ${priceTrendBadge(station.price, station.avgPrice24h)}${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}
+      ${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}
       <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>
     </div>
     <div class="sheet-info-row">

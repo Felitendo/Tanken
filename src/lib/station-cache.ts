@@ -18,10 +18,6 @@ export interface CachedStation {
   distApprox?: boolean;
   price: number | null;
   isOpen: boolean;
-  /** Mean price over the last 24 h; attached at response time from
-   *  station_prices, not persisted in the cache. `null` when no history
-   *  is available for this station_name in the last 24 h. */
-  avgPrice24h?: number | null;
 }
 
 interface LocationCache {
@@ -60,10 +56,7 @@ export function setCachedStations(locationId: string, data: {
   getCache().set(locationId, entry);
   invalidateUniqueCount();
 
-  // Persist to database asynchronously (fire-and-forget)
-  persistToDb(locationId, entry).catch(err => {
-    console.error(`[StationCache] DB persist error for ${locationId}:`, err instanceof Error ? err.message : err);
-  });
+  schedulePersist(locationId, entry);
 }
 
 /** Get cached stations for a specific location ID. */
@@ -277,7 +270,8 @@ export async function persistPriceSnapshot(): Promise<number> {
 
   // Clean up old history
   await db.query(
-    `DELETE FROM station_prices WHERE timestamp < NOW() - INTERVAL '${PRICE_HISTORY_RETENTION_DAYS} days'`
+    `DELETE FROM station_prices WHERE timestamp < NOW() - ($1::int * INTERVAL '1 day')`,
+    [PRICE_HISTORY_RETENTION_DAYS]
   ).catch(err => {
     console.error('[StationCache] History cleanup error:', err instanceof Error ? err.message : err);
   });
@@ -394,9 +388,7 @@ export function updateCachedPricesForFuel(
     }
     if (changed) {
       entry.timestamp = now;
-      persistToDb(locationId, entry).catch(err => {
-        console.error(`[StationCache] DB persist error for ${locationId}:`, err instanceof Error ? err.message : err);
-      });
+      schedulePersist(locationId, entry);
     }
   }
   invalidateUniqueCount();
@@ -457,6 +449,25 @@ async function persistToDb(locationId: string, entry: LocationCache): Promise<vo
        fuel_type = EXCLUDED.fuel_type, stations = EXCLUDED.stations, updated_at = NOW()`,
     [locationId, entry.lat, entry.lng, entry.radiusKm, entry.fuelType, JSON.stringify(entry.stations)]
   );
+}
+
+// Serialize DB writes per locationId so two rapid updates can't land out of
+// order. Each key holds the tail promise of its write chain; new writes chain
+// onto that tail and replace it.
+const persistChains = new Map<string, Promise<void>>();
+
+function schedulePersist(locationId: string, entry: LocationCache): void {
+  const prev = persistChains.get(locationId) ?? Promise.resolve();
+  const next = prev
+    .catch(() => undefined)
+    .then(() => persistToDb(locationId, entry))
+    .catch(err => {
+      console.error(`[StationCache] DB persist error for ${locationId}:`, err instanceof Error ? err.message : err);
+    })
+    .finally(() => {
+      if (persistChains.get(locationId) === next) persistChains.delete(locationId);
+    });
+  persistChains.set(locationId, next);
 }
 
 /** Restore all cached stations from the database into memory. Called once at startup. */

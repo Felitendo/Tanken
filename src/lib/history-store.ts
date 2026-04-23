@@ -168,56 +168,6 @@ export async function getPriceExtremes(locationId?: string, country?: HistoryCou
   };
 }
 
-/**
- * Returns a map of station_name → average price over the last 24 hours.
- * Used by /api/stations and /api/route to decorate list entries with a
- * trend arrow (current vs. 24 h avg). One GROUP BY query over the
- * station_prices table — cheap because (station_name, timestamp) is
- * indexed and the time filter prunes the scan to ~24 h of rows.
- *
- * Stations missing from the returned map simply have no 24 h history
- * (too new, or not covered by any scan location) — the client just
- * hides the arrow in that case.
- */
-export async function getAvg24hByStationNames(names: string[]): Promise<Map<string, number>> {
-  if (names.length === 0) return new Map();
-  const result = await database.query<{ station_name: string; avg: string | number }>(
-    `SELECT station_name, AVG(price) AS avg
-     FROM station_prices
-     WHERE timestamp >= NOW() - INTERVAL '24 hours'
-       AND station_name = ANY($1)
-     GROUP BY station_name`,
-    [names]
-  );
-  const map = new Map<string, number>();
-  for (const row of result.rows) {
-    const avg = Number(row.avg);
-    if (Number.isFinite(avg)) map.set(row.station_name, avg);
-  }
-  return map;
-}
-
-/**
- * Best-effort decorator: attach `avgPrice24h` to each station by name.
- * Silently returns the input unchanged on DB errors — a missing trend
- * arrow is strictly better than a failed list request.
- */
-export async function attachAvg24hPrices<T extends { name: string }>(
-  stations: T[],
-): Promise<Array<T & { avgPrice24h: number | null }>> {
-  if (stations.length === 0) return stations as Array<T & { avgPrice24h: number | null }>;
-  try {
-    const names = stations.map(s => s.name).filter(Boolean);
-    const avgs = await getAvg24hByStationNames(names);
-    return stations.map(s => ({
-      ...s,
-      avgPrice24h: avgs.get(s.name) ?? null,
-    }));
-  } catch {
-    return stations.map(s => ({ ...s, avgPrice24h: null }));
-  }
-}
-
 export async function getAvailableLocations(country?: HistoryCountry): Promise<string[]> {
   const clauses: string[] = ['location_id IS NOT NULL'];
   const params: (string | number)[] = [];

@@ -6,7 +6,6 @@ import { fetchRoute } from '@/lib/ors';
 import { getAllUniqueStationsForFuel } from '@/lib/station-cache';
 import { computeRouteScanPoints, filterStationsAlongRoute } from '@/lib/route-corridor';
 import { listScanLocations } from '@/lib/location-store';
-import { attachAvg24hPrices } from '@/lib/history-store';
 
 export const runtime = 'nodejs';
 
@@ -68,8 +67,7 @@ export async function POST(request: NextRequest) {
   const candidates = getAllUniqueStationsForFuel(fuel)
     .filter(s => s.isOpen && typeof s.price === 'number' && s.price > 0);
 
-  const corridorStations = filterStationsAlongRoute(candidates, route.coordinates, bufferKm);
-  const stations = await attachAvg24hPrices(corridorStations);
+  const stations = filterStationsAlongRoute(candidates, route.coordinates, bufferKm);
 
   // Dedup scan locations by coordinates — the store keeps one row per fuel
   // type, but the radius is a per-location attribute, so we only need one
