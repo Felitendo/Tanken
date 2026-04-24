@@ -34,6 +34,9 @@ const i18n = {
     lowestPrice: 'Niedrigster Preis',
     highestPrice: 'Höchster Preis',
     unknown: 'Unbekannt',
+    currentAvg: 'Aktuell Ø',
+    vsLastWeek: 'vs. letzte Woche',
+    vsLastMonth: 'vs. letzter Monat',
     // Stats
     noStats: 'Keine Statistiken verfügbar',
     avgPrice: 'Durchschnittspreis',
@@ -242,6 +245,9 @@ const i18n = {
     lowestPrice: 'Lowest Price',
     highestPrice: 'Highest Price',
     unknown: 'Unknown',
+    currentAvg: 'Current Avg',
+    vsLastWeek: 'vs. last week',
+    vsLastMonth: 'vs. last month',
     noStats: 'No statistics available',
     avgPrice: 'Average Price',
     lowest: 'Lowest',
@@ -3672,6 +3678,8 @@ function renderChart(data) {
     if (state.chart) { state.chart.destroy(); state.chart = null; }
     if (state.hourChart) { state.hourChart.destroy(); state.hourChart = null; }
     document.getElementById('hour-chart-section').style.display = 'none';
+    const statsEl = document.getElementById('history-stats');
+    if (statsEl) { statsEl.style.display = 'none'; statsEl.innerHTML = ''; }
     const summary = document.getElementById('history-summary');
     summary.innerHTML = `
       <div style="text-align:center;padding:1.5rem 0 0.5rem;opacity:0.45;font-size:13px">${t('noHistory')}</div>
@@ -3720,6 +3728,8 @@ function renderChart(data) {
     entries: g.entries,
   }));
 
+  renderHistoryStats(data);
+
   const labels = daily.map(d => {
     const dt = new Date(d.timestamp);
     return `${dt.getDate()}.${dt.getMonth() + 1}`;
@@ -3729,9 +3739,17 @@ function renderChart(data) {
   const textColor = getComputedStyle(document.body).getPropertyValue('--color-text') || '#000';
   const hintColor = getComputedStyle(document.body).getPropertyValue('--color-hint') || '#999';
   const btnColor = getComputedStyle(document.body).getPropertyValue('--color-accent') || '#007aff';
+  const bgSecondary = getComputedStyle(document.body).getPropertyValue('--color-bg-secondary').trim() || '#f2f2f7';
   if (state.chart) state.chart.destroy();
   if (state.hourChart) { state.hourChart.destroy(); state.hourChart = null; }
   document.getElementById('hour-chart-section').style.display = 'none';
+
+  const lastIdx = daily.length - 1;
+  const minBaseRadius = daily.length < 20 ? 4 : 2;
+  const minPointRadius = daily.map((_, i) => i === lastIdx ? 7 : minBaseRadius);
+  const minPointHoverRadius = daily.map((_, i) => i === lastIdx ? 8 : minBaseRadius + 2);
+  const minPointBorderWidth = daily.map((_, i) => i === lastIdx ? 3 : 0);
+  const minPointBorderColor = daily.map(() => bgSecondary);
 
   state.chart = new Chart(ctx, {
     type: 'line',
@@ -3759,7 +3777,10 @@ function renderChart(data) {
           borderWidth: 2.5,
           fill: false,
           tension: 0.3,
-          pointRadius: daily.length < 20 ? 4 : 2,
+          pointRadius: minPointRadius,
+          pointHoverRadius: minPointHoverRadius,
+          pointBorderWidth: minPointBorderWidth,
+          pointBorderColor: minPointBorderColor,
           pointBackgroundColor: '#34c759',
           order: 2,
         },
@@ -3781,6 +3802,7 @@ function renderChart(data) {
         legend: {
           display: true,
           position: 'top',
+          align: 'end',
           labels: {
             color: textColor.trim() || '#000',
             font: { size: 12, family: '-apple-system, BlinkMacSystemFont, Roboto, sans-serif' },
@@ -3792,13 +3814,24 @@ function renderChart(data) {
           backgroundColor: 'rgba(0,0,0,0.8)',
           titleFont: { size: 13 },
           bodyFont: { size: 13 },
-          callbacks: { label: (c) => `${c.dataset.label}: ${formatPrice(c.parsed.y)}` },
+          callbacks: {
+            title: (items) => {
+              if (!items.length) return '';
+              const d = daily[items[0].dataIndex];
+              if (!d) return '';
+              const dt = new Date(d.timestamp);
+              const dayNames = t('dayNames') || [];
+              const name = dayNames[dt.getDay()] || '';
+              return `${name} ${dt.getDate()}.${dt.getMonth() + 1}.${dt.getFullYear()}`;
+            },
+            label: (c) => `${c.dataset.label}: ${formatPrice(c.parsed.y)}`
+          },
           footer: () => [t('tapForHours') || 'Tap for hourly detail'],
         }
       },
       scales: {
-        x: { ticks: { color: hintColor.trim() || '#999', font: { size: 11 }, maxTicksLimit: 8 }, grid: { display: false } },
-        y: { ticks: { color: hintColor.trim() || '#999', font: { size: 11 }, callback: v => formatPrice(v) }, grid: { color: 'rgba(128,128,128,0.1)' } }
+        x: { ticks: { color: hintColor.trim() || '#999', font: { size: 11 }, maxTicksLimit: 8 }, grid: { display: false }, border: { display: false } },
+        y: { ticks: { color: hintColor.trim() || '#999', font: { size: 11 }, callback: v => formatPrice(v) }, grid: { color: 'rgba(128,128,128,0.1)' }, border: { display: false } }
       }
     }
   });
@@ -3829,6 +3862,55 @@ function renderChart(data) {
       <div class="card-row" style="padding:4px 0">
         <div class="card-row-left"><div><div class="card-title">${t('highestPrice')}</div><div class="card-subtitle">${fixEnc(highestStation)}</div></div></div>
         <div class="card-value bad">${formatPrice(highestPrice)}</div>
+      </div>
+    </div>`;
+}
+
+function renderHistoryStats(data) {
+  const el = document.getElementById('history-stats');
+  if (!el || !data || !data.length) {
+    if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+    return;
+  }
+
+  const now = Date.now();
+  const dayMs = 86400000;
+  const avgInRange = (startDaysAgo, endDaysAgo) => {
+    const startTs = now - endDaysAgo * dayMs;
+    const endTs = now - startDaysAgo * dayMs;
+    const vals = [];
+    for (const d of data) {
+      const t = new Date(d.timestamp).getTime();
+      if (t >= startTs && t < endTs) vals.push(d.avg_price);
+    }
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  };
+
+  const sorted = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const currentAvg = sorted[0]?.avg_price;
+
+  const week = avgInRange(0, 7);
+  const prevWeek = avgInRange(7, 14);
+  const deltaWeek = (week != null && prevWeek != null) ? week - prevWeek : null;
+
+  const month = avgInRange(0, 30);
+  const prevMonth = avgInRange(30, 60);
+  const deltaMonth = (month != null && prevMonth != null) ? month - prevMonth : null;
+
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-card-value">${currentAvg != null ? formatPrice(currentAvg) : '–'}</div>
+        <div class="stat-card-label">${t('currentAvg')}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-value" style="color:${deltaColor(deltaWeek)}">${formatDelta(deltaWeek)}</div>
+        <div class="stat-card-label">${t('vsLastWeek')}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-value" style="color:${deltaColor(deltaMonth)}">${formatDelta(deltaMonth)}</div>
+        <div class="stat-card-label">${t('vsLastMonth')}</div>
       </div>
     </div>`;
 }
@@ -5303,6 +5385,15 @@ function showToast(message) {
 function fixEnc(s) { return (s || '').replace(/\x81/g, 'ü').replace(/\x9A/g, 'Ü').replace(/\x84/g, 'ä').replace(/\x8E/g, 'Ä').replace(/\x94/g, 'ö').replace(/\x99/g, 'Ö').replace(/\xE1/g, 'ß'); }
 function formatPrice(price) { return Number(price).toFixed(2).replace('.', ',') + '€'; }
 function formatPriceParts(price) { return { main: Number(price).toFixed(2).replace('.', ','), decimal: '' }; }
+function formatDelta(n) {
+  if (n == null || !isFinite(n)) return '–';
+  if (Math.abs(n) < 0.005) return '±0,00€';
+  return (n > 0 ? '+' : '−') + formatPrice(Math.abs(n));
+}
+function deltaColor(n) {
+  if (n == null || !isFinite(n) || Math.abs(n) < 0.005) return 'var(--color-hint)';
+  return n < 0 ? '#34c759' : '#ff3b30';
+}
 
 function formatDataAge(isoTimestamp) {
   if (!isoTimestamp) return null;

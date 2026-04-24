@@ -97,6 +97,7 @@ export const APP_SHELL = `
         <button type="button" class="chip" data-days="0" data-i18n="all">Alles</button>
       </div>
     </div>
+    <div id="history-stats" class="section" style="padding-top:0;display:none"></div>
     <div class="section">
       <div class="chart-container">
         <canvas id="price-chart"></canvas>
