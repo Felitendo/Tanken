@@ -1188,6 +1188,31 @@ body.logged-in .cloud-sync-hint {
   vertical-align: super;
 }
 
+.price-trend {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-right: 3px;
+  vertical-align: 2px;
+}
+
+.price-trend-down { color: #2ea043; }
+.price-trend-up { color: #d73a49; }
+
+.sheet-station-price .price-trend {
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  vertical-align: 6px;
+}
+
+.sheet-station-price .price-trend svg {
+  width: 16px;
+  height: 16px;
+}
+
 .fav-btn {
   background: none;
   border: none;
