@@ -75,6 +75,21 @@ const i18n = {
     madeWith: 'Gemacht mit',
     madeIn: 'in Deutschland',
     currentCheapest: 'Aktuell günstigster Preis',
+    fuelDecisionTitle: 'Tankentscheidung',
+    fuelDecisionBuy: 'Jetzt tanken',
+    fuelDecisionOkay: 'Okay',
+    fuelDecisionWait: 'Eher warten',
+    fuelDecisionNeutral: 'Noch keine klare Empfehlung',
+    fuelDecisionNoOpen: 'Keine offene Tankstelle',
+    fuelDecisionNoHistory: 'Zu wenig Verlaufsdaten in der N\u00e4he',
+    fuelDecisionNoNearbyHistory: 'Kein Scan-Standort in 30 km N\u00e4he',
+    fuelDecisionCurrentBest: 'Aktuell g\u00fcnstigste offene Station',
+    fuelDecisionComparedToAvg: 'zum 30-Tage-Schnitt',
+    fuelDecisionBestDay: 'Bester Tag',
+    fuelDecisionBestHour: 'Beste Uhrzeit',
+    fuelDecisionHistoryBasis: 'Vergleich mit',
+    fuelDecisionHistoryDays: '30 Tagen',
+    fuelDecisionNoRecommendation: 'Keine verl\u00e4ssliche Empfehlung m\u00f6glich.',
     // Account
     notLoggedIn: 'Nicht eingeloggt',
     loginSubline: 'Login optional, zum Sync deiner Einstellungen.',
@@ -281,6 +296,21 @@ const i18n = {
     madeWith: 'Made with',
     madeIn: 'in Germany',
     currentCheapest: 'Current cheapest price',
+    fuelDecisionTitle: 'Fuel decision',
+    fuelDecisionBuy: 'Refuel now',
+    fuelDecisionOkay: 'Okay',
+    fuelDecisionWait: 'Better wait',
+    fuelDecisionNeutral: 'No clear recommendation yet',
+    fuelDecisionNoOpen: 'No open station',
+    fuelDecisionNoHistory: 'Too little nearby history data',
+    fuelDecisionNoNearbyHistory: 'No scan location within 30 km',
+    fuelDecisionCurrentBest: 'Current cheapest open station',
+    fuelDecisionComparedToAvg: 'vs. 30-day average',
+    fuelDecisionBestDay: 'Best day',
+    fuelDecisionBestHour: 'Best time',
+    fuelDecisionHistoryBasis: 'Compared with',
+    fuelDecisionHistoryDays: '30 days',
+    fuelDecisionNoRecommendation: 'No reliable recommendation available.',
     notLoggedIn: 'Not logged in',
     loginSubline: 'Login optional, to sync your settings.',
     loggedIn: 'Logged in',
@@ -599,6 +629,9 @@ const state = {
   routeScanMarkers: null,   // Leaflet markers at scan points (yellow dots)
   routeScanRunId: 0,        // guard against overlapping scan loops
   _stationsBeforeRoute: null,
+  scanLocationsCache: null,
+  historyByLocation: {},
+  fuelDecisionLoadId: 0
 };
 
 const localSettingsKey = 'tank_settings';
@@ -1526,6 +1559,230 @@ function showStationSkeletons(count = 5) {
     </div>`).join('');
 }
 
+const FUEL_DECISION_HISTORY_DAYS = 30;
+const FUEL_DECISION_MAX_LOCATION_KM = 30;
+const FUEL_DECISION_MIN_HISTORY_ENTRIES = 5;
+
+function getOpenStationsForDecision(stations) {
+  const radiusKm = state.radiusKm || 25;
+  return (stations || [])
+    .filter(s => s && s.isOpen && typeof s.price === 'number' && (!s.dist || s.dist <= radiusKm))
+    .sort((a, b) => a.price - b.price);
+}
+
+function distanceKm(a, b) {
+  const lat1 = Number(a.lat);
+  const lng1 = Number(a.lng);
+  const lat2 = Number(b.lat);
+  const lng2 = Number(b.lng);
+  if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) return Infinity;
+  const toRad = deg => deg * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const r1 = toRad(lat1);
+  const r2 = toRad(lat2);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(r1) * Math.cos(r2) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+async function getPublicScanLocations() {
+  if (Array.isArray(state.scanLocationsCache)) return state.scanLocationsCache;
+  const res = await api('/api/scan-locations');
+  state.scanLocationsCache = Array.isArray(res.locations) ? res.locations : [];
+  return state.scanLocationsCache;
+}
+
+function findNearestScanLocation(coords, locations) {
+  let best = null;
+  for (const loc of locations || []) {
+    const distKm = distanceKm(coords, loc);
+    if (distKm <= FUEL_DECISION_MAX_LOCATION_KM && (!best || distKm < best.distKm)) {
+      best = { ...loc, distKm };
+    }
+  }
+  return best;
+}
+
+async function getHistoryForLocation(locationId) {
+  if (state.historyByLocation[locationId]) return state.historyByLocation[locationId];
+  const res = await api(`/api/history?location=${encodeURIComponent(locationId)}`);
+  const entries = Array.isArray(res) ? res : (Array.isArray(res.entries) ? res.entries : []);
+  state.historyByLocation[locationId] = entries;
+  return entries;
+}
+
+function getRecentHistoryPrices(entries) {
+  const cutoff = Date.now() - FUEL_DECISION_HISTORY_DAYS * 24 * 60 * 60 * 1000;
+  return (entries || [])
+    .filter(entry => new Date(entry.timestamp).getTime() >= cutoff)
+    .map(entry => ({
+      timestamp: entry.timestamp,
+      price: Number(entry.min_price)
+    }))
+    .filter(entry => Number.isFinite(entry.price));
+}
+
+function avg(values) {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function percentile(values, p) {
+  const sorted = [...values].sort((a, b) => a - b);
+  if (!sorted.length) return 0;
+  const idx = Math.floor((sorted.length - 1) * p);
+  return sorted[idx];
+}
+
+function bestDayLabel(recent) {
+  const buckets = {};
+  for (const entry of recent) {
+    const d = new Date(entry.timestamp);
+    if (Number.isNaN(d.getTime())) continue;
+    const day = d.getDay();
+    buckets[day] = buckets[day] || [];
+    buckets[day].push(entry.price);
+  }
+  const ranked = Object.entries(buckets)
+    .map(([day, prices]) => ({ day: Number(day), price: avg(prices) }))
+    .sort((a, b) => a.price - b.price);
+  const best = ranked[0];
+  return best ? (t('dayNames')[best.day] || '') : '';
+}
+
+function bestHourLabel(recent) {
+  const buckets = {};
+  for (const entry of recent) {
+    const d = new Date(entry.timestamp);
+    if (Number.isNaN(d.getTime())) continue;
+    const hour = d.getHours();
+    buckets[hour] = buckets[hour] || [];
+    buckets[hour].push(entry.price);
+  }
+  const hours = Object.keys(buckets);
+  if (hours.length < 3) return '';
+  const ranked = hours
+    .map(hour => ({ hour: Number(hour), price: avg(buckets[hour]) }))
+    .sort((a, b) => a.price - b.price);
+  const best = ranked[0];
+  if (!best) return '';
+  return t('oclock') ? `${best.hour}:00 ${t('oclock')}` : `${best.hour}:00`;
+}
+
+function formatSignedCents(deltaEuro) {
+  const cents = Math.round(deltaEuro * 100);
+  if (cents === 0) return '0 ct';
+  return `${cents > 0 ? '+' : ''}${cents} ct`;
+}
+
+function renderFuelDecisionCard(view) {
+  const card = document.getElementById('fuel-decision-card');
+  if (!card) return;
+  card.classList.remove('hidden', 'buy', 'okay', 'wait', 'neutral');
+  card.classList.add(view.tone || 'neutral');
+
+  const priceHtml = view.station
+    ? `<div class="fuel-decision-station">
+        <span>${escapeHtml(fixEnc(view.station.brand || view.station.name || t('unknown')))}</span>
+        <strong>${formatPrice(view.station.price)}</strong>
+      </div>`
+    : `<div class="fuel-decision-station muted"><span>${escapeHtml(view.emptyLabel || t('fuelDecisionNoOpen'))}</span></div>`;
+
+  const metrics = (view.metrics || []).map(metric => `
+    <div class="fuel-decision-metric">
+      <span>${escapeHtml(metric.label)}</span>
+      <strong>${escapeHtml(metric.value)}</strong>
+    </div>`).join('');
+
+  card.innerHTML = `
+    <div class="fuel-decision-head">
+      <div>
+        <div class="fuel-decision-kicker">${t('fuelDecisionTitle')}</div>
+        <div class="fuel-decision-title">${escapeHtml(view.title)}</div>
+      </div>
+      <div class="fuel-decision-pill">${escapeHtml(view.badge)}</div>
+    </div>
+    <div class="fuel-decision-body">
+      <div class="fuel-decision-label">${t('fuelDecisionCurrentBest')}</div>
+      ${priceHtml}
+      ${view.note ? `<div class="fuel-decision-note">${escapeHtml(view.note)}</div>` : ''}
+      ${metrics ? `<div class="fuel-decision-metrics">${metrics}</div>` : ''}
+    </div>`;
+}
+
+function renderFuelDecisionNeutral(station, noteKey) {
+  renderFuelDecisionCard({
+    tone: 'neutral',
+    title: station ? t('fuelDecisionNeutral') : t('fuelDecisionNoOpen'),
+    badge: station ? t('fuelDecisionOkay') : '-',
+    station,
+    emptyLabel: t('fuelDecisionNoOpen'),
+    note: t(noteKey || 'fuelDecisionNoRecommendation'),
+    metrics: []
+  });
+}
+
+async function updateFuelDecisionCard(stations, coords) {
+  const loadId = ++state.fuelDecisionLoadId;
+  const open = getOpenStationsForDecision(stations);
+  const cheapest = open[0] || null;
+
+  if (!cheapest) {
+    renderFuelDecisionNeutral(null, 'fuelDecisionNoRecommendation');
+    return;
+  }
+
+  try {
+    const locations = await getPublicScanLocations();
+    if (loadId !== state.fuelDecisionLoadId) return;
+    const nearest = findNearestScanLocation(coords, locations);
+    if (!nearest) {
+      renderFuelDecisionNeutral(cheapest, 'fuelDecisionNoNearbyHistory');
+      return;
+    }
+
+    const history = await getHistoryForLocation(nearest.id);
+    if (loadId !== state.fuelDecisionLoadId) return;
+    const recent = getRecentHistoryPrices(history);
+    if (recent.length < FUEL_DECISION_MIN_HISTORY_ENTRIES) {
+      renderFuelDecisionNeutral(cheapest, 'fuelDecisionNoHistory');
+      return;
+    }
+
+    const prices = recent.map(entry => entry.price);
+    const average = avg(prices);
+    const cheapQuartile = percentile(prices, 0.25);
+    const delta = cheapest.price - average;
+    let tone = 'okay';
+    let title = t('fuelDecisionOkay');
+    if (delta <= -0.03 || cheapest.price <= cheapQuartile) {
+      tone = 'buy';
+      title = t('fuelDecisionBuy');
+    } else if (delta > 0.02) {
+      tone = 'wait';
+      title = t('fuelDecisionWait');
+    }
+
+    const metrics = [
+      { label: t('fuelDecisionComparedToAvg'), value: formatSignedCents(delta) },
+    ];
+    const bestDay = bestDayLabel(recent);
+    if (bestDay) metrics.push({ label: t('fuelDecisionBestDay'), value: bestDay });
+    const bestHour = bestHourLabel(recent);
+    if (bestHour) metrics.push({ label: t('fuelDecisionBestHour'), value: bestHour });
+
+    renderFuelDecisionCard({
+      tone,
+      title,
+      badge: formatPrice(average),
+      station: cheapest,
+      note: `${t('fuelDecisionHistoryBasis')} ${fixEnc(nearest.name || nearest.id)} (${t('fuelDecisionHistoryDays')})`,
+      metrics
+    });
+  } catch {
+    if (loadId === state.fuelDecisionLoadId) renderFuelDecisionNeutral(cheapest, 'fuelDecisionNoHistory');
+  }
+}
+
 async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
   state.loaded.map = true;
   const coords = getActiveCoords();
@@ -1617,6 +1874,7 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     state.dataTimestamp = result._dataTimestamp || null;
     renderStationsOnMap(stations, { skipFitBounds });
     renderStationList(stations);
+    updateFuelDecisionCard(stations, coords);
     state._searchHereAnchor = { lat: coords.lat, lng: coords.lng };
     if (!stations.length) {
       loader.innerHTML = `<span style="font-size:13px;opacity:0.6">${t('noStationsYet')}</span>`;
@@ -1760,6 +2018,7 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
       const renderOpts = { skipFitBounds: true, skipRadiusFilter: true };
       renderStationsOnMap(stations, renderOpts);
       renderStationList(stations);
+      updateFuelDecisionCard(stations, { lat, lng });
       if (loader) {
         if (!stations.length && !silent) {
           loader.innerHTML = `<span style="font-size:13px;opacity:0.6">${t('noStationsYet')}</span>`;
@@ -2132,6 +2391,7 @@ async function runScanAt(lat, lng) {
     await animPromise;
     renderStationsOnMap(stations, { skipFitBounds: true });
     renderStationList(stations);
+    updateFuelDecisionCard(stations, { lat, lng });
     if (!stations.length) showToast(t('noStationsHere'));
   } catch {
     await animPromise;

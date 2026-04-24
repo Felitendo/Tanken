@@ -63,6 +63,7 @@ export const APP_SHELL = `
       </div>
     </div>
     <div class="desktop-station-panel">
+      <div id="fuel-decision-card" class="fuel-decision-card hidden" aria-live="polite"></div>
       <div class="station-sort-bar">
         <button type="button" class="station-fav-btn" id="station-fav-toggle" data-i18n-title="favouritesToggleTitle" data-i18n-aria-label="favouritesToggleTitle" title="Favoriten oben anzeigen" aria-label="Favoriten oben anzeigen" aria-pressed="false">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
