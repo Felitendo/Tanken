@@ -2097,10 +2097,12 @@ body.logged-in .station-fav-sync.synced {
 }
 .map-fab:active { opacity: 0.7; transform: scale(0.92); }
 
-/* "Search here" pill — appears after panning */
+/* "Search here" pill — appears after panning.
+   On mobile the route chip sits below the search box (inside #map-search-wrapper),
+   so the centered pill must clear that row to avoid overlapping it. */
 .map-search-here {
   position: absolute;
-  top: 68px;
+  top: 104px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
@@ -2148,7 +2150,7 @@ body.logged-in .station-fav-sync.synced {
 /* Round cancel pill placed left of the confirm button while picking */
 .map-scan-cancel {
   position: absolute;
-  top: 68px;
+  top: 104px;
   left: 50%;
   /* Sits just to the left of the confirm pill (which is centered) */
   transform: translateX(calc(-50% - 96px));
