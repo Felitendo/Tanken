@@ -187,6 +187,9 @@ const i18n = {
     stationNotScannedHint: 'Du kannst einen Scan-Standort dafür in den Einstellungen anfragen.',
     requestScanLocation: 'Standort anfragen',
     historyAccumulating: 'Noch keine Preisverlaufsdaten – sammelt sich mit der Zeit.',
+    noRecent24h: 'Keine Preisdaten in den letzten 24 Stunden.',
+    noRecent7d: 'Keine Preisdaten in den letzten 7 Tagen.',
+    noRecentRange: 'Keine Preisdaten in den letzten {days} Tagen.',
     manualScanLabel: 'Manuell gescannt',
     manualScanExpiresIn: 'läuft in',
     manualScanExpiresSuffix: 'ab',
@@ -390,6 +393,9 @@ const i18n = {
     stationNotScannedHint: 'You can request a scan location for it from the settings.',
     requestScanLocation: 'Request location',
     historyAccumulating: 'No price history yet – it builds up over time.',
+    noRecent24h: 'No price data in the last 24 hours.',
+    noRecent7d: 'No price data in the last 7 days.',
+    noRecentRange: 'No price data in the last {days} days.',
     manualScanLabel: 'Manually scanned',
     manualScanExpiresIn: 'expires in',
     manualScanExpiresSuffix: '',
@@ -3144,6 +3150,7 @@ function showStationSheet(station) {
 
   document.querySelectorAll('.sheet-toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      if (btn.classList.contains('disabled')) return;
       haptic('light');
       document.querySelectorAll('.sheet-toggle-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -3434,6 +3441,14 @@ function renderSheetChartEmptyState(loadingEl, station) {
   }
 }
 
+function updateSheetToggleAvailability({ has24h, has7d }) {
+  document.querySelectorAll('.sheet-toggle-btn').forEach(btn => {
+    const range = parseInt(btn.dataset.range, 10);
+    const enabled = range === 1 ? has24h : has7d;
+    btn.classList.toggle('disabled', !enabled);
+  });
+}
+
 async function loadSheetChart(stationName, days = 1) {
   if (state.sheetChart) { state.sheetChart.destroy(); state.sheetChart = null; }
   const loading = document.getElementById('sheet-chart-loading');
@@ -3452,6 +3467,7 @@ async function loadSheetChart(stationName, days = 1) {
     if (station && Number.isFinite(station.lat) && Number.isFinite(station.lng) && !isInAustria(station.lat, station.lng)) {
       const scanLocs = await ensureScanLocations();
       if (!isStationCovered(station, scanLocs)) {
+        updateSheetToggleAvailability({ has24h: false, has7d: false });
         renderSheetChartEmptyState(loading, station);
         return;
       }
@@ -3462,14 +3478,40 @@ async function loadSheetChart(stationName, days = 1) {
     // object {entries, extremes} otherwise. Treat both "no rows" cases the same.
     const hasSeries = Array.isArray(data) && data.length >= 2;
     if (!hasSeries) {
+      updateSheetToggleAvailability({ has24h: false, has7d: false });
       renderSheetChartEmptyState(loading, station);
       return;
     }
 
+    const countWithin = (d) => {
+      const c = new Date();
+      c.setDate(c.getDate() - d);
+      return data.filter(x => new Date(x.timestamp) >= c).length;
+    };
+    const has24h = countWithin(1) >= 2;
+    const has7d = countWithin(7) >= 2;
+    updateSheetToggleAvailability({ has24h, has7d });
+
+    // If the requested range is empty but the other has data, auto-switch
+    // rather than showing a stale fallback (= honest UX).
+    if (days <= 1 && !has24h && has7d) days = 7;
+    else if (days === 7 && !has7d && has24h) days = 1;
+
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    let filtered = data.filter(d => new Date(d.timestamp) >= cutoff);
-    if (filtered.length < 2) filtered = data.slice(-10);
+    const filtered = data.filter(d => new Date(d.timestamp) >= cutoff);
+    if (filtered.length < 2) {
+      loading.style.display = '';
+      canvas.style.display = 'none';
+      const msg = days <= 1 ? t('noRecent24h') : t('noRecent7d');
+      loading.innerHTML = `<span style="opacity:0.75">${msg}</span>`;
+      return;
+    }
+
+    // Sync the active toggle button with whichever range we ended up rendering.
+    document.querySelectorAll('.sheet-toggle-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.range, 10) === days);
+    });
 
     // For 7-day view: aggregate to 1 value per day (lowest price)
     let chartData;
@@ -3564,6 +3606,7 @@ async function loadSheetChart(stationName, days = 1) {
       }
     });
   } catch {
+    updateSheetToggleAvailability({ has24h: false, has7d: false });
     loading.innerHTML = `<span>${t('noHistory')}</span>`;
   }
 }
@@ -3704,7 +3747,20 @@ function renderChart(data) {
     cutoff.setDate(cutoff.getDate() - state.historyDays);
     filtered = data.filter(d => new Date(d.timestamp) >= cutoff);
   }
-  if (!filtered.length) filtered = data.slice(-5);
+  if (!filtered.length) {
+    if (state.chart) { state.chart.destroy(); state.chart = null; }
+    if (state.hourChart) { state.hourChart.destroy(); state.hourChart = null; }
+    document.getElementById('hour-chart-section').style.display = 'none';
+    const statsEl = document.getElementById('history-stats');
+    if (statsEl) { statsEl.style.display = 'none'; statsEl.innerHTML = ''; }
+    const summary = document.getElementById('history-summary');
+    const msg = state.historyDays > 0
+      ? t('noRecentRange').replace('{days}', String(state.historyDays))
+      : t('noHistory');
+    summary.innerHTML = `
+      <div style="text-align:center;padding:1.5rem 0 0.5rem;opacity:0.45;font-size:13px">${msg}</div>`;
+    return;
+  }
 
   // Aggregate by day
   const dayMap = {};

@@ -1468,6 +1468,11 @@ body.logged-in .station-fav-sync.synced {
   color: #fff;
 }
 
+.sheet-toggle-btn.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .sheet-chart-container {
   background: var(--color-bg-secondary);
   border-radius: 12px;
