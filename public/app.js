@@ -601,6 +601,14 @@ const state = {
   selectedLocation: '',
   availableLocations: [],
   priceExtremes: null,
+  // Price-color anchors. Each scan-location gets its own min/max computed
+  // from the FULL station set returned for that location, so a station's
+  // color reflects "cheap/expensive within its scan-location" — stable
+  // across zoom/pan. Stations that don't belong to a scan-location (AT
+  // bounds query, live calls, manual scans) use the fallback reference,
+  // which grows monotonically over the session. Both reset on fuel change.
+  colorReferenceByLocation: {},
+  colorReferenceFallback: null,
   favourites: [],
   // ── Route planner ────────────────────────────────────────────────
   routeMode: false,         // true while a route is being displayed
@@ -1750,13 +1758,18 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
             ),
           );
           const seen = new Set();
-          for (const r of results) {
+          for (let i = 0; i < results.length; i++) {
+            const r = results[i];
             if (r.status !== 'fulfilled') continue;
             const list = Array.isArray(r.value) ? r.value : [];
+            const locId = matching[i].id;
+            // Anchor colors to this scan-location's full price range.
+            setColorReferenceForLocation(locId, list);
             for (const s of list) {
               const k = s.id || `${s.lat},${s.lng}`;
               if (seen.has(k)) continue;
               seen.add(k);
+              s._locationId = locId;
               stations.push(s);
             }
           }
@@ -2337,9 +2350,9 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
   const radiusKm = state.radiusKm || 25;
   const filtered = skipRadiusFilter ? stations : stations.filter(s => !s.dist || s.dist <= radiusKm);
 
-  const prices = filtered.filter(s => s.price).map(s => s.price);
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
+  // Per-location anchors are set at fetch time; the fallback covers stations
+  // without a scan-location (AT bounds, live calls, manual scans).
+  expandFallbackColorReference(filtered.filter(s => !s._locationId));
 
   if (state.userLat && state.userLng) {
     const userIcon = L.divIcon({
@@ -2360,15 +2373,25 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
     showCoverageOnHover: false,
     iconCreateFunction: function(clusterObj) {
       const count = clusterObj.getChildCount();
-      // Compute average price for the cluster
+      // Compute average price + average ratio for the cluster. The cluster
+      // color uses each child's per-location ratio so a cluster mixing pins
+      // from multiple scan-locations still reflects the typical "rank" of
+      // its members within their own locations.
       const childMarkers = clusterObj.getAllChildMarkers();
       let totalPrice = 0, priceCount = 0;
+      let totalRatio = 0, ratioCount = 0;
       childMarkers.forEach(function(m) {
-        if (m._stationPrice) { totalPrice += m._stationPrice; priceCount++; }
+        if (!m._stationPrice) return;
+        totalPrice += m._stationPrice;
+        priceCount++;
+        const ref = colorRefFor(m._stationLocationId);
+        if (ref && ref.max > ref.min) {
+          totalRatio += Math.max(0, Math.min(1, (m._stationPrice - ref.min) / (ref.max - ref.min)));
+          ratioCount++;
+        }
       });
       const avgPrice = priceCount > 0 ? totalPrice / priceCount : 0;
-      const avgRatio = (maxPrice > minPrice && avgPrice > 0) ? (avgPrice - minPrice) / (maxPrice - minPrice) : 0;
-      const color = priceColor(avgRatio);
+      const color = ratioCount > 0 ? priceColor(totalRatio / ratioCount) : priceColor(0.5);
       const pParts = avgPrice > 0 ? formatPriceParts(avgPrice) : null;
       const size = count > 20 ? 56 : count > 5 ? 48 : 40;
       return L.divIcon({
@@ -2387,8 +2410,7 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
 
   filtered.forEach((s) => {
     if (!s.price || !s.isOpen) return;
-    const ratio = maxPrice > minPrice ? (s.price - minPrice) / (maxPrice - minPrice) : 0;
-    const color = priceColor(ratio);
+    const color = priceColorStable(s.price, s._locationId);
     const brand = fixEnc(s.brand || s.name).substring(0, 6);
     const pParts = formatPriceParts(s.price);
     const icon = L.divIcon({
@@ -2413,6 +2435,7 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
       });
 
     marker._stationPrice = s.price;
+    marker._stationLocationId = s._locationId;
 
     if (cluster) {
       cluster.addLayer(marker);
@@ -2471,6 +2494,51 @@ function priceColor(ratio) {
   const g = Math.round(199 - ratio * 140);
   const b = Math.round(89 - ratio * 41);
   return `rgb(${r},${g},${b})`;
+}
+
+// Replace the per-location color reference with min/max from this fetch's
+// FULL station set. Each /api/stations?location=X response is the complete
+// 25 km circle for that scan-location, so the anchor is intrinsic to the
+// location and doesn't drift with viewport changes.
+function setColorReferenceForLocation(locationId, stations) {
+  if (!locationId) return;
+  const prices = (stations || []).filter(s => s && s.isOpen && s.price > 0).map(s => s.price);
+  if (!prices.length) return;
+  state.colorReferenceByLocation[locationId] = {
+    min: Math.min(...prices),
+    max: Math.max(...prices),
+  };
+}
+
+// Grow the session-wide fallback reference (used for stations without a
+// scan-location, e.g. AT viewport queries or live calls). Never shrinks.
+function expandFallbackColorReference(stations) {
+  const prices = (stations || []).filter(s => s && s.isOpen && s.price > 0).map(s => s.price);
+  if (!prices.length) return;
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  if (!state.colorReferenceFallback) {
+    state.colorReferenceFallback = { min, max };
+    return;
+  }
+  if (min < state.colorReferenceFallback.min) state.colorReferenceFallback.min = min;
+  if (max > state.colorReferenceFallback.max) state.colorReferenceFallback.max = max;
+}
+
+function colorRefFor(locationId) {
+  if (locationId && state.colorReferenceByLocation[locationId]) {
+    return state.colorReferenceByLocation[locationId];
+  }
+  return state.colorReferenceFallback;
+}
+
+// Color a price using the stable reference for its scan-location, or the
+// session-wide fallback when no location is known.
+function priceColorStable(price, locationId) {
+  const ref = colorRefFor(locationId);
+  if (!ref || ref.max <= ref.min || !price) return priceColor(0.5);
+  const ratio = Math.max(0, Math.min(1, (price - ref.min) / (ref.max - ref.min)));
+  return priceColor(ratio);
 }
 
 function rankColor(ratio) {
@@ -2537,11 +2605,9 @@ function renderStationList(stations) {
     });
   }
 
-  const minPrice = Math.min(...open.map(s => s.price));
-  const maxPrice = Math.max(...open.map(s => s.price));
+  expandFallbackColorReference(open.filter(s => !s._locationId));
   list.innerHTML = open.slice(0, 15).map((s, i) => {
-    const ratio = maxPrice > minPrice ? (s.price - minPrice) / (maxPrice - minPrice) : 0;
-    const color = priceColor(ratio);
+    const color = priceColorStable(s.price, s._locationId);
     const dist = s.dist ? `${s.distApprox ? '~' : ''}${s.dist.toFixed(1)} km` : '';
     const priceParts = formatPriceParts(s.price);
     const isFav = s.id && state.favourites.includes(s.id);
@@ -2949,11 +3015,7 @@ function showStationSheet(station) {
   const sheet = document.getElementById('bottom-sheet');
   const body = document.getElementById('bottom-sheet-body');
   const priceParts = formatPriceParts(station.price);
-  const prices = state.stations.filter(s => s.price).map(s => s.price);
-  const minP = Math.min(...prices);
-  const maxP = Math.max(...prices);
-  const ratio = maxP > minP ? (station.price - minP) / (maxP - minP) : 0;
-  const color = priceColor(ratio);
+  const color = priceColorStable(station.price, station._locationId);
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
     || (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -3318,11 +3380,7 @@ async function refreshStationStatus(station) {
       const priceEl = document.querySelector('.sheet-station-price');
       if (priceEl) {
         const priceParts = formatPriceParts(freshPrice);
-        const prices = state.stations.filter(s => s.price).map(s => s.price);
-        const minP = Math.min(...prices);
-        const maxP = Math.max(...prices);
-        const ratio = maxP > minP ? (freshPrice - minP) / (maxP - minP) : 0;
-        priceEl.style.color = priceColor(ratio);
+        priceEl.style.color = priceColorStable(freshPrice, station._locationId);
         priceEl.innerHTML = `${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''} <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>`;
       }
     }
@@ -4229,6 +4287,9 @@ function setupSettings() {
       chip.classList.add('active');
       state.fuelType = chip.dataset.fuel;
       state.loaded.map = false;
+      // Different fuel ⇒ different price band; force fresh color anchors.
+      state.colorReferenceByLocation = {};
+      state.colorReferenceFallback = null;
       persistStateSettings({ fuelType: state.fuelType });
       if (state.currentTab === 'map') loadMapTab();
       refreshAlertUi();
