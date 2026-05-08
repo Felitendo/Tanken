@@ -2604,7 +2604,9 @@ function renderStationList(stations) {
   if (state.stationSort === 'distance') {
     open.sort((a, b) => (a.dist || 999) - (b.dist || 999));
   } else {
-    open.sort((a, b) => a.price - b.price);
+    // Price sort with distance as tiebreaker — equal-priced stations show
+    // the closer one first, which matches how a driver actually picks.
+    open.sort((a, b) => (a.price - b.price) || ((a.dist || 999) - (b.dist || 999)));
   }
 
   // Star toggle in the sort bar: when active, pin every favourite to the
