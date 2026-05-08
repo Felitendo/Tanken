@@ -1,5 +1,5 @@
 import { loadRepoConfig } from '@/config';
-import { fetchAllPricesByIds, fetchStationsEControl, fetchStationsLive } from '@/lib/measure';
+import { fetchAllPricesByIds, fetchStationsEControl, fetchStationsLive, recordPriceHistoryFromStations } from '@/lib/measure';
 import {
   setCachedStations, getAllCachedLocations, countUniqueStations,
   persistPriceSnapshot, clearAllCache,
@@ -386,6 +386,28 @@ class ScanScheduler {
         }
       } catch (err) {
         const eMsg = `History-Fehler: ${err instanceof Error ? err.message : String(err)}`;
+        this.de.addLog(eMsg, 'error');
+        console.error(`[Scheduler] ${eMsg}`);
+      }
+
+      // Aggregate per-location min/avg/max into price_history so the Verlauf
+      // chart has fresh data. Without this, price_history only ever fills
+      // when an admin triggers a manual measurement.
+      try {
+        const enabled = await listScanLocations({ enabledOnly: true });
+        let written = 0;
+        for (const loc of enabled) {
+          const entry = getCachedStationsByLocation(`${loc.id}-${loc.fuelType}`);
+          if (!entry?.stations?.length) continue;
+          if (await recordPriceHistoryFromStations(loc.id, entry.stations)) written++;
+        }
+        if (written > 0) {
+          const aMsg = `${written} Standort-Aggregate in price_history gespeichert`;
+          this.de.addLog(aMsg, 'info');
+          this.at.addLog(aMsg, 'info');
+        }
+      } catch (err) {
+        const eMsg = `price_history-Aggregat fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`;
         this.de.addLog(eMsg, 'error');
         console.error(`[Scheduler] ${eMsg}`);
       }

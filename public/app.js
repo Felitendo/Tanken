@@ -148,6 +148,7 @@ const i18n = {
     minutesAgoFmt: 'vor {n} Min.',
     hoursAgoFmt: 'vor {n} Std.',
     justNow: 'gerade eben',
+    unknownLocation: 'Unbekannter Standort',
     // Scan-Standorte
     scanLocations: 'SCAN-STANDORTE',
     historyLocations: 'STANDORTE MIT VERLAUFSDATEN',
@@ -354,6 +355,7 @@ const i18n = {
     minutesAgoFmt: '{n} min ago',
     hoursAgoFmt: '{n} h ago',
     justNow: 'just now',
+    unknownLocation: 'Unknown location',
     // Scan locations
     scanLocations: 'SCAN LOCATIONS',
     historyLocations: 'LOCATIONS WITH HISTORY DATA',
@@ -3614,8 +3616,13 @@ async function loadSheetChart(stationName, days = 1) {
 async function loadLocationPickers() {
   try {
     const country = state.activeCountry || getActiveCountry();
-    const res = await api(`/api/history?locations=list&country=${country}`);
-    const locations = res && res.locations ? res.locations : [];
+    const [histRes, scanRes] = await Promise.all([
+      api(`/api/history?locations=list&country=${country}`),
+      api('/api/scan-locations').catch(() => null),
+    ]);
+    const locations = histRes && histRes.locations ? histRes.locations : [];
+    const scanLocs = scanRes && Array.isArray(scanRes.locations) ? scanRes.locations : [];
+    const nameById = new Map(scanLocs.map(l => [l.id, l.name]));
     state.availableLocations = locations;
 
     ['history-location-picker', 'stats-location-picker'].forEach(id => {
@@ -3626,7 +3633,7 @@ async function loadLocationPickers() {
       locations.forEach(locId => {
         const opt = document.createElement('option');
         opt.value = locId;
-        opt.textContent = locId;
+        opt.textContent = nameById.get(locId) || t('unknownLocation');
         picker.appendChild(opt);
       });
       picker.value = state.selectedLocation;

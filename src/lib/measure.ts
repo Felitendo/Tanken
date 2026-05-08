@@ -172,6 +172,34 @@ function mapStations(stations: Record<string, unknown>[]): CachedStation[] {
   }));
 }
 
+/**
+ * Aggregate already-cached stations into a single price_history row.
+ * Used by the scheduler after each scan cycle so the Verlauf chart has
+ * fresh data without an extra Tankerkönig roundtrip.
+ *
+ * Returns true if a row was inserted, false if the location had no open
+ * stations with prices (nothing meaningful to record).
+ */
+export async function recordPriceHistoryFromStations(
+  locationId: string,
+  stations: CachedStation[],
+): Promise<boolean> {
+  const open = stations.filter(s => s.isOpen && s.price !== null && s.price > 0);
+  if (!open.length) return false;
+  const prices = open.map(s => s.price!);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+  const cheapest = open.reduce((a, b) => (a.price! <= b.price! ? a : b));
+  const timestamp = new Date().toISOString();
+  await database.query(
+    `INSERT INTO price_history (timestamp, min_price, avg_price, max_price, station, num_stations, location_id)
+     VALUES ($1::timestamptz, $2, $3, $4, $5, $6, $7)`,
+    [timestamp, minPrice, avgPrice, maxPrice, cheapest.name || '', open.length, locationId]
+  );
+  return true;
+}
+
 export async function measureLocation(params: {
   apiKey: string;
   lat: number;
