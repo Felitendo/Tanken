@@ -144,9 +144,9 @@ const i18n = {
     removeFavourite: 'Aus Favoriten entfernen',
     maxFavourites: 'Maximale Anzahl an Favoriten erreicht',
     loginRequiredFavourite: 'Bitte einloggen, um Favoriten zu speichern',
-    priceAge: 'Aktualisiert vor',
-    minutesAgo: 'Min.',
-    hoursAgo: 'Std.',
+    lastUpdated: 'Zuletzt aktualisiert',
+    minutesAgoFmt: 'vor {n} Min.',
+    hoursAgoFmt: 'vor {n} Std.',
     justNow: 'gerade eben',
     // Scan-Standorte
     scanLocations: 'SCAN-STANDORTE',
@@ -350,9 +350,9 @@ const i18n = {
     removeFavourite: 'Remove from favourites',
     maxFavourites: 'Maximum number of favourites reached',
     loginRequiredFavourite: 'Please log in to save favourites',
-    priceAge: 'Updated',
-    minutesAgo: 'min ago',
-    hoursAgo: 'h ago',
+    lastUpdated: 'Last updated',
+    minutesAgoFmt: '{n} min ago',
+    hoursAgoFmt: '{n} h ago',
     justNow: 'just now',
     // Scan locations
     scanLocations: 'SCAN LOCATIONS',
@@ -2999,9 +2999,9 @@ function showStationSheet(station) {
       <span id="sheet-status-text">${station.isOpen ? t('open') : t('closed')}</span>
       ${station.dist ? `<span style="margin-left:auto;color:var(--color-hint)">${station.distApprox ? '~' : ''}${station.dist.toFixed(1)} ${t('kmAway')}</span>` : ''}
     </div>
-    ${state.dataTimestamp ? `<div class="sheet-info-row" style="color:var(--color-hint)">
+    ${state.dataTimestamp ? `<div class="sheet-info-row">
       <svg class="sheet-info-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
-      <span>${formatDataAge(state.dataTimestamp)}</span>
+      <span><strong>${t('lastUpdated')}:</strong> ${formatDataAge(state.dataTimestamp)}</span>
     </div>` : ''}
     <div class="sheet-hours-section" id="sheet-hours-section"></div>
     <div class="sheet-nav-buttons${isAndroid ? ' android-only' : ''}">
@@ -5456,9 +5456,9 @@ function formatDataAge(isoTimestamp) {
   const seconds = Math.round((Date.now() - new Date(isoTimestamp).getTime()) / 1000);
   if (seconds < 60) return t('justNow');
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${t('priceAge')} ${minutes} ${t('minutesAgo')}`;
+  if (minutes < 60) return t('minutesAgoFmt').replace('{n}', minutes);
   const hours = Math.round(minutes / 60);
-  return `${t('priceAge')} ${hours} ${t('hoursAgo')}`;
+  return t('hoursAgoFmt').replace('{n}', hours);
 }
 
 if (document.getElementById('app')) {
