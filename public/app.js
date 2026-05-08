@@ -2496,18 +2496,31 @@ function priceColor(ratio) {
   return `rgb(${r},${g},${b})`;
 }
 
-// Replace the per-location color reference with min/max from this fetch's
-// FULL station set. Each /api/stations?location=X response is the complete
-// 25 km circle for that scan-location, so the anchor is intrinsic to the
-// location and doesn't drift with viewport changes.
+// Replace the per-location color reference with the 20th–80th percentile
+// price band from this fetch's FULL station set. Using percentiles instead
+// of raw min/max stops a single autobahn outlier from squashing the typical
+// 1,90–2,10€ range into one shade of green. Outliers below P20 / above P80
+// clamp to deep green / deep red.
 function setColorReferenceForLocation(locationId, stations) {
   if (!locationId) return;
   const prices = (stations || []).filter(s => s && s.isOpen && s.price > 0).map(s => s.price);
   if (!prices.length) return;
-  state.colorReferenceByLocation[locationId] = {
-    min: Math.min(...prices),
-    max: Math.max(...prices),
+  prices.sort((a, b) => a - b);
+  const quantile = (p) => {
+    const idx = (prices.length - 1) * p;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    return prices[lo] + (prices[hi] - prices[lo]) * (idx - lo);
   };
+  let min = quantile(0.20);
+  let max = quantile(0.80);
+  // Tiny samples or near-uniform prices: percentile band collapses, so fall
+  // back to absolute min/max to avoid divide-by-zero shading.
+  if (prices.length < 4 || max - min < 0.03) {
+    min = prices[0];
+    max = prices[prices.length - 1];
+  }
+  state.colorReferenceByLocation[locationId] = { min, max };
 }
 
 // Grow the session-wide fallback reference (used for stations without a
