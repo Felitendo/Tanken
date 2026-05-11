@@ -2547,15 +2547,15 @@ async function loadPriceBand() {
   }
 }
 
-// Three-stop gradient: green → yellow → red, slightly toned down from the
-// iOS system palette so a wall of bubbles reads as informative rather than
-// like phone notifications. Yellow (not orange) at the median keeps the
-// green↔red path away from olive/brown tones.
+// Three-stop gradient in a stake.com-ish casino palette: mint/win green →
+// warm gold → hot pink-red. Saturated enough to pop on a dark canvas
+// without being notification-yellow. Gold (not pure yellow) at the median
+// keeps the green↔red path away from olive/brown tones.
 function priceColor3(t) {
   const stops = [
-    { t: 0,   r:  76, g: 175, b: 100 },
-    { t: 0.5, r: 232, g: 192, b:  50 },
-    { t: 1,   r: 218, g:  80, b:  70 },
+    { t: 0,   r:  32, g: 218, b: 100 },
+    { t: 0.5, r: 246, g: 192, b:  72 },
+    { t: 1,   r: 237, g:  75, b:  92 },
   ];
   const x = Math.max(0, Math.min(1, t));
   let lo = stops[0], hi = stops[stops.length - 1];
@@ -2584,13 +2584,14 @@ function countryFromLocation(locationId, lat, lng) {
 }
 
 // Pick a readable foreground colour for any `rgb(r,g,b)` background.
-// YIQ brightness over 150 means the bubble is light enough (yellow,
-// lime, orange) that white text gets lost — switch to near-black there.
+// YIQ brightness above 160 (gold, lime, light orange) is where white text
+// starts to wash out — switch to near-black there. Stake-green and
+// pink-red stay below that, so they keep their white text.
 function contrastText(bgColor) {
   const m = /rgb\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)\)/.exec(bgColor);
   if (!m) return '#fff';
   const r = +m[1], g = +m[2], b = +m[3];
-  return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#1a1a1a' : '#fff';
+  return (r * 299 + g * 587 + b * 114) / 1000 > 160 ? '#1a1a1a' : '#fff';
 }
 
 // Map a price to t∈[0,1] across the country band. Below P10 saturates green,
