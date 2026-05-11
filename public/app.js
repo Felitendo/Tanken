@@ -2587,6 +2587,11 @@ function setupStationSort() {
 // for a heatmap signal — the price is shown, but uncoloured.
 const PRICE_COLOR_NEUTRAL = 'hsl(0, 0%, 72%)';
 
+// Minimum spread used by bandRatio so that a tight cluster (e.g. 1,82–1,85)
+// doesn't slam the most expensive station to full red just because it sits
+// at P90. Effectively caps "how dramatic" a small absolute delta can look.
+const MIN_BAND_SPREAD = 0.10;
+
 // Fetch the country-wide 24h price band for the current fuel and re-render
 // open views once it lands. There is no fallback: until the band arrives,
 // markers stay neutral grey rather than against a misleading session anchor.
@@ -2632,14 +2637,17 @@ function countryFromLocation(locationId, lat, lng) {
   return null;
 }
 
-// Map a price to t∈[0,1] linearly across the band [P10, P90]. Matches the
-// pre-band session anchor's "ratio across (min, max)" behaviour.
+// Map a price to t∈[0,1] linearly across the band [P10, P90], but never
+// using less than MIN_BAND_SPREAD as the divisor. A 3c real spread therefore
+// only consumes 30% of the gradient instead of the whole green→red range —
+// so tight clusters stay mostly green even at P90.
 function bandRatio(price, band) {
   const { p10, p90 } = band;
-  if (!(p90 > p10)) return 0.5;
+  if (!(p90 > p10)) return 0;
   if (price <= p10) return 0;
-  if (price >= p90) return 1;
-  return (price - p10) / (p90 - p10);
+  const spread = Math.max(p90 - p10, MIN_BAND_SPREAD);
+  const r = (price - p10) / spread;
+  return r >= 1 ? 1 : r;
 }
 
 // P10/P50/P90 over the stations actually on screen. Memoised by reference
@@ -2660,10 +2668,10 @@ function viewportBand() {
       return prices[lo] + (prices[hi] - prices[lo]) * (idx - lo);
     };
     const p10 = q(0.1), p50 = q(0.5), p90 = q(0.9);
-    // Require a meaningful spread before trusting the viewport. Below 10c
-    // we'd recreate the original "1,82 vs 1,84 looks dramatic" problem in
-    // a tight rural cluster — fall back to the country band instead.
-    if (p90 - p10 >= 0.10) band = { p10, p50, p90 };
+    // No spread threshold here: tight clusters are kept on the viewport
+    // band so 1,85 next to 1,82 doesn't get country-band-red. bandRatio's
+    // MIN_BAND_SPREAD floor handles the "1,82 vs 1,84 looks dramatic" case.
+    band = { p10, p50, p90 };
   }
   _viewportBandCache = { stations: state.stations, band };
   return band;
