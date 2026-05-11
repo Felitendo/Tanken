@@ -2424,7 +2424,7 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
       const size = count > 20 ? 56 : count > 5 ? 48 : 40;
       return L.divIcon({
         className: '',
-        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.8);filter:saturate(0.55) brightness(0.85)">
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.8)">
           <span style="font-size:${size > 48 ? 14 : 12}px;line-height:1">${count}</span>
           ${pParts ? `<span style="font-size:${size > 48 ? 11 : 10}px;line-height:1;opacity:0.9">~${pParts.main}<sup style="font-size:7px">${pParts.decimal}</sup></span>` : ''}
         </div>`,
@@ -2547,16 +2547,14 @@ async function loadPriceBand() {
   }
 }
 
-// Three-stop gradient anchored at the country's P10 / P50 / P90. Uses iOS
-// system traffic-light colours (green → orange → red) so the bubbles read
-// at a glance and match rankColor's palette in the rest of the app.
-// Near-median prices still cluster around orange instead of one extreme,
-// which was the original complaint — that's now driven by the band itself,
-// not by washing the middle stop out.
+// Three-stop gradient: green → yellow → red. iOS system palette but with
+// yellow (not orange) at the median, because RGB-interpolating green↔orange
+// passed through olive/khaki tones that read as "brown" on a dark map.
+// Green↔yellow stays lime; yellow↔red stays orange — no brown anywhere.
 function priceColor3(t) {
   const stops = [
     { t: 0,   r:  52, g: 199, b:  89 },
-    { t: 0.5, r: 255, g: 149, b:   0 },
+    { t: 0.5, r: 255, g: 204, b:   0 },
     { t: 1,   r: 255, g:  59, b:  48 },
   ];
   const x = Math.max(0, Math.min(1, t));
@@ -2585,18 +2583,19 @@ function countryFromLocation(locationId, lat, lng) {
   return null;
 }
 
-// Classify a price against the country band. 'cheap' / 'expensive' tag the
-// outer 10% on each side (turned into a glow + pulse / red halo in CSS);
-// 'muted' is the middle 80% (visually dimmed so deals stand out); null means
-// no band available → render with PRICE_COLOR_NEUTRAL, no class.
+// Below-median pricing gets a glow whose intensity scales with how cheap
+// the station is: 'cheap' (≤ P10) pulses prominently, 'discount' (between
+// P10 and the median) pulses softly. Above-median stations get no class —
+// their colour alone (yellow→red) does the talking. Returns null when no
+// band is available.
 function priceHighlight(price, locationId, lat, lng) {
   if (!price) return null;
   const country = countryFromLocation(locationId, lat, lng);
   const band = country && state.priceBand && state.priceBand[country];
-  if (!band || band.p10 == null || band.p90 == null) return null;
+  if (!band || band.p10 == null || band.p50 == null) return null;
   if (price <= band.p10) return 'cheap';
-  if (price >= band.p90) return 'expensive';
-  return 'muted';
+  if (price <= band.p50) return 'discount';
+  return null;
 }
 
 // Map a price to t∈[0,1] across the country band. Below P10 saturates green,

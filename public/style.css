@@ -1968,40 +1968,29 @@ body.logged-in .station-fav-sync.synced {
   border-top: 6px solid;
 }
 
-/* Most bubbles (middle 80% of the price band) get desaturated and dimmed
-   so the eye is drawn to actual deals instead of a colourful wall of pins. */
-.map-bubble.muted {
-  filter: saturate(0.45) brightness(0.82);
-}
-
-/* Cheapest ~10% — full-saturation green plus a pulsing halo. The animation
-   only ever runs on a handful of bubbles, so the map stays calm overall. */
+/* Below-median bubbles get a green halo whose intensity scales with how
+   cheap the station is. Animation is pure box-shadow — no transform — so
+   text stays crisp through the pulse. Above-median bubbles just rely on
+   their colour (orange/red) without any glow. */
 .map-bubble.cheap {
   animation: price-cheap-pulse 2.4s ease-in-out infinite;
 }
-
 @keyframes price-cheap-pulse {
-  0%, 100% {
-    box-shadow: 0 0 10px 2px rgba(52, 199, 89, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 22px 6px rgba(52, 199, 89, 0.95), 0 2px 10px rgba(0, 0, 0, 0.4);
-    transform: scale(1.06);
-  }
+  0%, 100% { box-shadow: 0 0 12px 3px rgba(52, 199, 89, 0.6),  0 2px 8px rgba(0, 0, 0, 0.4); }
+  50%      { box-shadow: 0 0 26px 8px rgba(52, 199, 89, 1),    0 2px 8px rgba(0, 0, 0, 0.4); }
 }
 
-/* Priciest ~10% — static red halo, no animation. You should notice it,
-   but it shouldn't yell. */
-.map-bubble.expensive {
-  box-shadow: 0 0 10px 2px rgba(255, 59, 48, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
+.map-bubble.discount {
+  animation: price-discount-pulse 3.6s ease-in-out infinite;
+}
+@keyframes price-discount-pulse {
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(52, 199, 89, 0.25), 0 2px 8px rgba(0, 0, 0, 0.4); }
+  50%      { box-shadow: 0 0 14px 3px rgba(52, 199, 89, 0.6),  0 2px 8px rgba(0, 0, 0, 0.4); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .map-bubble.cheap {
-    animation: none;
-    box-shadow: 0 0 14px 3px rgba(52, 199, 89, 0.85), 0 2px 8px rgba(0, 0, 0, 0.4);
-  }
+  .map-bubble.cheap    { animation: none; box-shadow: 0 0 16px 4px rgba(52, 199, 89, 0.85), 0 2px 8px rgba(0, 0, 0, 0.4); }
+  .map-bubble.discount { animation: none; box-shadow: 0 0 10px 2px rgba(52, 199, 89, 0.45), 0 2px 8px rgba(0, 0, 0, 0.4); }
 }
 
 /* Cluster marker overrides */
