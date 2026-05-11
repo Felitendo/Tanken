@@ -2163,7 +2163,12 @@ async function runScanAt(lat, lng) {
     }
 
     await animPromise;
-    renderStationsOnMap(stations, { skipFitBounds: true });
+    // skipRadiusFilter: manual scans are user-targeted at a specific point —
+    // filtering markers by *user-GPS* distance hides them entirely whenever
+    // the scan happens far from the user's actual location (e.g. tapping a
+    // station out of state). The list intentionally skips this filter for
+    // the same reason; keep them in sync.
+    renderStationsOnMap(stations, { skipFitBounds: true, skipRadiusFilter: true });
     renderStationList(stations);
     if (!stations.length) showToast(t('noStationsHere'));
   } catch {

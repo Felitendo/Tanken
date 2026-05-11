@@ -340,9 +340,12 @@ class ScanScheduler {
         // but unlimited drops throughout the day, so we run multiple scans to
         // catch the afternoon/evening drops.
         const next = this.nextScanTime();
-        const waitMs = Math.max(5 * 60_000, next.at.getTime() - Date.now());
+        const waitMs = Math.max(0, next.at.getTime() - Date.now());
         const waitH = Math.round(waitMs / 3_600_000 * 10) / 10;
-        this._nextCycleAt = new Date(Date.now() + waitMs);
+        // Display the actual configured scan time, not now+waitMs — they
+        // would match exactly anyway, but using next.at keeps the UI honest
+        // about *which* configured slot we're waiting for.
+        this._nextCycleAt = next.at;
         const logMsg = `Nächster Scan um ${next.hhmm} Uhr (in ${waitH} Std.)`;
         this.de.addLog(logMsg, 'info');
         this.at.addLog(logMsg, 'info');

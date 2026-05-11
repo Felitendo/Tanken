@@ -407,7 +407,6 @@ function LocationEditorModal({
 }) {
   const isEdit = !!initial;
   const [name, setName] = useState(initial?.name ?? '');
-  const [fuelType, setFuelType] = useState<'diesel' | 'e5' | 'e10'>(initial?.fuelType ?? 'diesel');
   const [country, setCountry] = useState<'de' | 'at'>(initial?.country ?? 'de');
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [value, setValue] = useState<LocationPickerValue>({
@@ -427,7 +426,6 @@ function LocationEditorModal({
       const body = {
         name: name.trim(),
         country,
-        fuelType,
         lat: value.lat,
         lng: value.lng,
         radiusKm: 25,
@@ -466,28 +464,18 @@ function LocationEditorModal({
               maxLength={80}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="loc-country">Land</Label>
-              <Select value={country} onValueChange={(v) => setCountry(v as 'de' | 'at')}>
-                <SelectTrigger id="loc-country" className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="de">Deutschland</SelectItem>
-                  <SelectItem value="at">Österreich</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="loc-fuel">Kraftstoff</Label>
-              <Select value={fuelType} onValueChange={(v) => setFuelType(v as 'diesel' | 'e5' | 'e10')}>
-                <SelectTrigger id="loc-fuel" className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="diesel">Diesel</SelectItem>
-                  <SelectItem value="e5">Super E5</SelectItem>
-                  <SelectItem value="e10">Super E10</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="grid gap-2">
+            <Label htmlFor="loc-country">Land</Label>
+            <Select value={country} onValueChange={(v) => setCountry(v as 'de' | 'at')}>
+              <SelectTrigger id="loc-country" className="w-full sm:w-56"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="de">Deutschland</SelectItem>
+                <SelectItem value="at">Österreich</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Alle drei Kraftstoffsorten (Diesel, Super E5, E10) werden pro Standort automatisch gescannt.
+            </p>
           </div>
           <LocationPicker value={value} onChange={setValue} heightClass="h-72" />
           <div className="flex items-center justify-between gap-4">
@@ -646,7 +634,7 @@ function LocationsQueue({
             {loc.lastScanError && <Badge variant="destructive">Fehler</Badge>}
           </div>
           <p className="font-mono text-[11px] text-muted-foreground">
-            {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)} · {loc.fuelType}
+            {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}
           </p>
           <p className="text-[11px] text-muted-foreground">
             {loc.lastScanAt
