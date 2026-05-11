@@ -2650,41 +2650,14 @@ function bandRatio(price, band) {
   return r >= 1 ? 1 : r;
 }
 
-// P10/P50/P90 over the stations actually on screen. Memoised by reference
-// so a single render pass doesn't sort the list once per marker.
-let _viewportBandCache = { stations: null, band: null };
-function viewportBand() {
-  if (!Array.isArray(state.stations)) return null;
-  if (_viewportBandCache.stations === state.stations) return _viewportBandCache.band;
-  const prices = state.stations
-    .filter(s => s && s.isOpen && typeof s.price === 'number' && s.price > 0)
-    .map(s => s.price)
-    .sort((a, b) => a - b);
-  let band = null;
-  if (prices.length >= 30) {
-    const q = (p) => {
-      const idx = (prices.length - 1) * p;
-      const lo = Math.floor(idx), hi = Math.ceil(idx);
-      return prices[lo] + (prices[hi] - prices[lo]) * (idx - lo);
-    };
-    const p10 = q(0.1), p50 = q(0.5), p90 = q(0.9);
-    // No spread threshold here: tight clusters are kept on the viewport
-    // band so 1,85 next to 1,82 doesn't get country-band-red. bandRatio's
-    // MIN_BAND_SPREAD floor handles the "1,82 vs 1,84 looks dramatic" case.
-    band = { p10, p50, p90 };
-  }
-  _viewportBandCache = { stations: state.stations, band };
-  return band;
-}
-
-// Ratio for a single station using the viewport band first (so München gets
-// compared to München, not to the country average), with the country band as
-// fallback when the viewport has too few stations to be meaningful. Returns
-// null when neither band is available — callers render neutral grey.
+// Ratio for a single station anchored to the country band (AT/DE 24h P10/P90).
+// Deliberately NOT viewport-relative: a station should keep the same colour
+// when the user pans, instead of being recoloured against whatever subset
+// happens to be on screen. bandRatio's MIN_BAND_SPREAD floor already prevents
+// small absolute deltas from spanning the gradient. Returns null when no
+// country band is available — callers render neutral grey.
 function stationBandRatio(price, locationId, lat, lng) {
   if (!price) return null;
-  const local = viewportBand();
-  if (local) return bandRatio(price, local);
   const country = countryFromLocation(locationId, lat, lng);
   const band = country && state.priceBand && state.priceBand[country];
   if (!band || band.p10 == null || band.p90 == null) return null;
