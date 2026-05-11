@@ -425,7 +425,8 @@ class ScanScheduler {
       // AT scans via grid cells (not scan_locations), so the per-location
       // loop above skips Austria entirely. Roll the whole country into one
       // sentinel-tagged row (`at-country`) so the Verlauf chart has AT data.
-      // Bounds match the AT bounding box used in history-store and station-cache.
+      // Bounds match the AT bounding box used in history-store and station-cache;
+      // see also getAvailableLocations which hides `%-country` from the picker.
       try {
         const atStations: CachedStation[] = [];
         const seen = new Set<string>();
