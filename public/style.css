@@ -409,6 +409,21 @@ body.logged-in .cloud-sync-hint {
   gap: 4px;
 }
 
+.country-chip-row {
+  margin-bottom: 10px;
+}
+
+.country-chip-row .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.country-flag {
+  font-size: 15px;
+  line-height: 1;
+}
+
 /* === Map === */
 #map-container {
   position: relative;

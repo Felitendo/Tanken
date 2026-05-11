@@ -80,6 +80,10 @@ export const APP_SHELL = `
 
   <div class="tab-view" id="view-history">
     <div class="section">
+      <div class="chip-row country-chip-row" id="history-country-chips" role="tablist" aria-label="Land">
+        <button type="button" class="chip" data-country="de"><span class="country-flag">🇩🇪</span><span data-i18n="countryDE">Deutschland</span></button>
+        <button type="button" class="chip" data-country="at"><span class="country-flag">🇦🇹</span><span data-i18n="countryAT">Österreich</span></button>
+      </div>
       <select id="history-location-picker" class="location-picker" aria-label="Standort filtern" style="display:none;margin-bottom:8px">
         <option value="">Alle Standorte</option>
       </select>
@@ -114,6 +118,10 @@ export const APP_SHELL = `
 
   <div class="tab-view" id="view-stats">
     <div class="section" style="padding-bottom:0">
+      <div class="chip-row country-chip-row" id="stats-country-chips" role="tablist" aria-label="Land">
+        <button type="button" class="chip" data-country="de"><span class="country-flag">🇩🇪</span><span data-i18n="countryDE">Deutschland</span></button>
+        <button type="button" class="chip" data-country="at"><span class="country-flag">🇦🇹</span><span data-i18n="countryAT">Österreich</span></button>
+      </div>
       <select id="stats-location-picker" class="location-picker" aria-label="Standort filtern" style="display:none">
         <option value="">Alle Standorte</option>
       </select>

@@ -25,6 +25,8 @@ const i18n = {
     dayAbbr: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
     // History
     timePeriod: 'ZEITRAUM',
+    countryDE: 'Deutschland',
+    countryAT: 'Österreich',
     days7: '7 Tage',
     days14: '14 Tage',
     days30: '30 Tage',
@@ -240,6 +242,8 @@ const i18n = {
     kmAway: 'km away',
     dayAbbr: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
     timePeriod: 'TIME PERIOD',
+    countryDE: 'Germany',
+    countryAT: 'Austria',
     days7: '7 Days',
     days14: '14 Days',
     days30: '30 Days',
@@ -587,6 +591,15 @@ const state = {
   lang: detectLanguage(),
   activeCountry: null,
   viewCountry: null,
+  // Manual override for activeCountry. When set ('de' | 'at'), wins over the
+  // GPS-pin-based default. Persisted in localStorage so the user's pick
+  // survives reloads.
+  manualCountry: (() => {
+    try {
+      const v = localStorage.getItem('tank_country');
+      return v === 'de' || v === 'at' ? v : null;
+    } catch { return null; }
+  })(),
   manualScans: [],
   favouritesOnTop: false,
   loaded: { map: false, history: false, stats: false, settings: false },
@@ -1485,8 +1498,54 @@ function isInAustria(lat, lng) {
 }
 
 function getActiveCountry() {
+  if (state.manualCountry === 'de' || state.manualCountry === 'at') {
+    return state.manualCountry;
+  }
   const c = getActiveCoords();
   return isInAustria(c.lat, c.lng) ? 'at' : 'de';
+}
+
+// Sync the active class on the country chips in both the Verlauf and Stats
+// tabs to match the current activeCountry. Called whenever applyCountryUi
+// runs and on tab init.
+function syncCountryChips() {
+  const country = state.activeCountry || getActiveCountry();
+  document.querySelectorAll('#history-country-chips .chip, #stats-country-chips .chip').forEach(chip => {
+    chip.classList.toggle('active', chip.dataset.country === country);
+  });
+}
+
+// Attach click handlers to the country chips in a given chip-row. Idempotent:
+// uses a dataset flag so re-running on the same row (e.g. on tab re-init)
+// doesn't stack listeners.
+function wireCountryChips(containerId) {
+  const row = document.getElementById(containerId);
+  if (!row || row.dataset.wired === '1') return;
+  row.dataset.wired = '1';
+  row.querySelectorAll('.chip[data-country]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      haptic('light');
+      setManualCountry(chip.dataset.country);
+    });
+  });
+}
+
+async function setManualCountry(next) {
+  if (next !== 'de' && next !== 'at') return;
+  if (state.manualCountry === next && state.activeCountry === next) return;
+  state.manualCountry = next;
+  try { localStorage.setItem('tank_country', next); } catch {}
+  applyCountryUi(); // resets selectedLocation + loaded flags when country changes
+  syncCountryChips();
+  // Reload data for whichever country-scoped tabs the user has already opened.
+  if (state.loaded.history === false) {
+    // applyCountryUi cleared the loaded flag — re-init the whole tab so the
+    // location picker is re-fetched for the new country.
+    if (state.currentTab === 'history') await loadHistoryTab();
+  }
+  if (state.loaded.stats === false) {
+    if (state.currentTab === 'stats') await loadStatsTab();
+  }
 }
 
 // "Active" country = where the user's pin is (from GPS or last explicit
@@ -1495,7 +1554,10 @@ function getActiveCountry() {
 function applyCountryUi() {
   const next = getActiveCountry();
   applyViewCountryUi(); // view-country always follows the map center
-  if (state.activeCountry === next) return;
+  if (state.activeCountry === next) {
+    syncCountryChips();
+    return;
+  }
   const prev = state.activeCountry;
   state.activeCountry = next;
   document.documentElement.setAttribute('data-active-country', next);
@@ -1506,6 +1568,7 @@ function applyCountryUi() {
     state.loaded.history = false;
     state.loaded.stats = false;
   }
+  syncCountryChips();
 }
 
 // "View" country = whatever the map centre is currently over. Drives the
@@ -3826,6 +3889,8 @@ async function loadHistoryTab() {
   await loadLocationPickers();
   state.history = await fetchHistoryData();
   renderChart(state.history);
+  syncCountryChips();
+  wireCountryChips('history-country-chips');
 
   const historyPicker = document.getElementById('history-location-picker');
   if (historyPicker) {
@@ -4254,6 +4319,8 @@ async function loadStatsTab() {
   state.loaded.stats = true;
   await loadLocationPickers();
   await reloadStats();
+  syncCountryChips();
+  wireCountryChips('stats-country-chips');
 
   const statsPicker = document.getElementById('stats-location-picker');
   if (statsPicker) {
