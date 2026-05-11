@@ -2420,11 +2420,12 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
       });
       const avgPrice = priceCount > 0 ? totalPrice / priceCount : 0;
       const color = ratioCount > 0 ? priceColor3(totalRatio / ratioCount) : PRICE_COLOR_NEUTRAL;
+      const textColor = contrastText(color);
       const pParts = avgPrice > 0 ? formatPriceParts(avgPrice) : null;
       const size = count > 20 ? 56 : count > 5 ? 48 : 40;
       return L.divIcon({
         className: '',
-        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.8)">
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;color:${textColor};font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.8)">
           <span style="font-size:${size > 48 ? 14 : 12}px;line-height:1">${count}</span>
           ${pParts ? `<span style="font-size:${size > 48 ? 11 : 10}px;line-height:1;opacity:0.9">~${pParts.main}<sup style="font-size:7px">${pParts.decimal}</sup></span>` : ''}
         </div>`,
@@ -2439,11 +2440,12 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
   filtered.forEach((s) => {
     if (!s.price || !s.isOpen) return;
     const color = priceColorStable(s.price, s._locationId, s.lat, s.lng);
+    const textColor = contrastText(color);
     const brand = fixEnc(s.brand || s.name).substring(0, 6);
     const pParts = formatPriceParts(s.price);
     const icon = L.divIcon({
       className: '',
-      html: `<div class="map-bubble" style="background:${color}">
+      html: `<div class="map-bubble" style="background:${color};color:${textColor}">
         <div class="map-bubble-brand">${brand}</div>
         <div class="map-bubble-price">${pParts.main}<sup>${pParts.decimal}</sup></div>
         <div class="map-bubble-arrow" style="border-top-color:${color}"></div>
@@ -2581,6 +2583,16 @@ function countryFromLocation(locationId, lat, lng) {
   return null;
 }
 
+// Pick a readable foreground colour for any `rgb(r,g,b)` background.
+// YIQ brightness over 150 means the bubble is light enough (yellow,
+// lime, orange) that white text gets lost — switch to near-black there.
+function contrastText(bgColor) {
+  const m = /rgb\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)\)/.exec(bgColor);
+  if (!m) return '#fff';
+  const r = +m[1], g = +m[2], b = +m[3];
+  return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#1a1a1a' : '#fff';
+}
+
 // Map a price to t∈[0,1] across the country band. Below P10 saturates green,
 // above P90 saturates red; between P10–P50 fills the first half, P50–P90 the
 // second half — that's what makes near-median prices look near-neutral.
@@ -2673,13 +2685,14 @@ function renderStationList(stations) {
 
   list.innerHTML = open.slice(0, 15).map((s, i) => {
     const color = priceColorStable(s.price, s._locationId, s.lat, s.lng);
+    const rankTextColor = contrastText(color);
     const dist = s.dist ? `${s.distApprox ? '~' : ''}${s.dist.toFixed(1)} km` : '';
     const priceParts = formatPriceParts(s.price);
     const isFav = s.id && state.favourites.includes(s.id);
 
     return `
       <div class="station-item" data-idx="${i}">
-        <div class="station-rank" style="background:${color}">${i + 1}</div>
+        <div class="station-rank" style="background:${color};color:${rankTextColor}">${i + 1}</div>
         <div class="station-info">
           <div class="station-name">${fixEnc(s.brand || s.name)}</div>
           <div class="station-addr">${fixEnc(s.street)} ${s.houseNumber || ''}, ${fixEnc(s.place)}</div>
