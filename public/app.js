@@ -3434,6 +3434,17 @@ async function refreshStationStatus(station) {
         priceEl.style.color = priceColorStable(freshPrice, station._locationId, station.lat, station.lng);
         priceEl.innerHTML = `${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''} <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>`;
       }
+      // Resync the marker on the map and the sidebar entry so the cached
+      // price doesn't keep claiming 1,91 while the sheet shows 2,08. Find
+      // the live entry in state.stations by station id and mutate it; the
+      // station passed into showStationSheet is often the same reference,
+      // but a defensive lookup keeps us correct when it isn't.
+      if (Array.isArray(state.stations) && station.id) {
+        const entry = state.stations.find(s => s && s.id === station.id);
+        if (entry && entry !== station) entry.price = freshPrice;
+        if (state.map) renderStationsOnMap(state.stations, { skipFitBounds: true, skipRadiusFilter: true });
+        renderStationList(state.stations);
+      }
     }
   } catch {
     // Silently fail — cached data stays as fallback
