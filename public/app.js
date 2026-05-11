@@ -2546,13 +2546,12 @@ async function loadPriceBand() {
 }
 
 // Smooth HSL hue rotation from green (140°) through yellow (70°) to red
-// (0°), constant saturation and lightness. Hue space goes through proper
-// yellow on the way, never olive/brown, and there are no discrete
-// checkpoint stops — the gradient reads as one continuous band.
+// (0°), constant saturation and lightness. Tuned to 45% / 62% so a wall
+// of bubbles reads as a quiet heatmap rather than neon highlights.
 function priceColor3(t) {
   const x = Math.max(0, Math.min(1, t));
   const hue = 140 - 140 * x;
-  return `hsl(${hue.toFixed(1)}, 65%, 55%)`;
+  return `hsl(${hue.toFixed(1)}, 45%, 62%)`;
 }
 
 function countryFromLocation(locationId, lat, lng) {
@@ -3384,10 +3383,30 @@ function parseOpeningTimes(openingTimes, wholeDay, isOpen) {
   return { label, todayTimes: todaySlots, allTimes };
 }
 
+const STATION_DETAIL_TTL_MS = 60 * 60 * 1000;
+
 async function refreshStationStatus(station) {
-  try {
-    const detail = await api(`/api/station/${station.id}`);
+  if (!station?.id) return;
+  // Cache detail responses per station-id for an hour. Opening the same
+  // sheet repeatedly (or hopping between siblings) shouldn't hammer
+  // Tankerkönig — the price/opening-times barely move within an hour and
+  // the scheduler refreshes the underlying scan cache on its own cycle.
+  state._stationDetailCache = state._stationDetailCache || {};
+  const now = Date.now();
+  const cached = state._stationDetailCache[station.id];
+  let detail;
+  if (cached && cached.expiresAt > now) {
+    detail = cached.detail;
+  } else {
+    try {
+      detail = await api(`/api/station/${station.id}`);
+    } catch {
+      return;
+    }
     if (!detail) return;
+    state._stationDetailCache[station.id] = { detail, expiresAt: now + STATION_DETAIL_TTL_MS };
+  }
+  try {
 
     const isOpen = Boolean(detail.isOpen);
 
