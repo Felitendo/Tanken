@@ -2464,9 +2464,10 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
     iconCreateFunction: function(clusterObj) {
       const count = clusterObj.getChildCount();
       // Average each child's bandRatio so a cluster gets the same gradient
-      // as its individual pins. Children without a country band contribute
-      // to the average price but not the color — if NO child has a band,
-      // the cluster renders neutral grey.
+      // as its individual pins — including the viewport-band fallback, so a
+      // cluster of stations all at the local cheap end stays green instead
+      // of going country-band-red. Children without any band contribute to
+      // the average price but not the color.
       const childMarkers = clusterObj.getAllChildMarkers();
       let totalPrice = 0, priceCount = 0;
       let totalRatio = 0, ratioCount = 0;
@@ -2474,10 +2475,9 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
         if (!m._stationPrice) return;
         totalPrice += m._stationPrice;
         priceCount++;
-        const country = countryFromLocation(m._stationLocationId, m._stationLat, m._stationLng);
-        const band = country && state.priceBand && state.priceBand[country];
-        if (band && band.p10 != null && band.p50 != null && band.p90 != null) {
-          totalRatio += bandRatio(m._stationPrice, band);
+        const r = stationBandRatio(m._stationPrice, m._stationLocationId, m._stationLat, m._stationLng);
+        if (r != null) {
+          totalRatio += r;
           ratioCount++;
         }
       });
@@ -2677,17 +2677,23 @@ function viewportBand() {
   return band;
 }
 
-// Color a price using the viewport band first (so München gets compared to
-// München, not to the country average), with the country band as fallback
-// when the viewport's spread is too tight to be meaningful.
-function priceColorStable(price, locationId, lat, lng) {
-  if (!price) return PRICE_COLOR_NEUTRAL;
+// Ratio for a single station using the viewport band first (so München gets
+// compared to München, not to the country average), with the country band as
+// fallback when the viewport has too few stations to be meaningful. Returns
+// null when neither band is available — callers render neutral grey.
+function stationBandRatio(price, locationId, lat, lng) {
+  if (!price) return null;
   const local = viewportBand();
-  if (local) return priceColor3(bandRatio(price, local));
+  if (local) return bandRatio(price, local);
   const country = countryFromLocation(locationId, lat, lng);
   const band = country && state.priceBand && state.priceBand[country];
-  if (!band || band.p10 == null || band.p90 == null) return PRICE_COLOR_NEUTRAL;
-  return priceColor3(bandRatio(price, band));
+  if (!band || band.p10 == null || band.p90 == null) return null;
+  return bandRatio(price, band);
+}
+
+function priceColorStable(price, locationId, lat, lng) {
+  const r = stationBandRatio(price, locationId, lat, lng);
+  return r == null ? PRICE_COLOR_NEUTRAL : priceColor3(r);
 }
 
 function rankColor(ratio) {
