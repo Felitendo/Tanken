@@ -1692,6 +1692,21 @@ const VIEWPORT_MIN_MOVE_KM = 1.5;
 let _viewportTimer = null;
 let _viewportInflight = null;
 
+// Sorted "id:price" fingerprint over a station set. Used by
+// loadStationsAroundCenter to detect a no-op re-render so the
+// MarkerCluster plugin's own zoom merge/split animation can play out
+// instead of being destroyed by a fresh cluster build.
+function stationFingerprint(stations) {
+  if (!Array.isArray(stations) || stations.length === 0) return '';
+  const parts = new Array(stations.length);
+  for (let i = 0; i < stations.length; i++) {
+    const s = stations[i];
+    parts[i] = `${s.id || `${s.lat},${s.lng}`}:${s.price || 0}`;
+  }
+  parts.sort();
+  return parts.join('|');
+}
+
 function viewportCenterMovedEnough() {
   const last = state._lastViewportCenter;
   if (!last) return true;
@@ -1786,13 +1801,24 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
       // centre, not the search-bar pick). When GPS is unknown the dist
       // field is stripped so no misleading "X km entfernt" appears.
       stations = withDistanceFromUser(stations);
+      // Skip rebuilding the cluster if the station set is bit-for-bit
+      // identical to what's already on the map. The MarkerCluster plugin
+      // has its own smooth merge/split animation on zoom — destroying and
+      // recreating the cluster on every viewport refresh kills that
+      // animation. Compare by sorted "id:price" fingerprint so price
+      // changes still trigger a real re-render.
+      const newFp = stationFingerprint(stations);
+      const oldFp = stationFingerprint(state.stations);
       state.stations = stations;
       state._lastViewportCenter = { lat, lng };
+      const skipRender = newFp === oldFp && !!state.clusterGroup;
       // DE shows the full scan-location set even when stations sit beyond
       // the user's 25 km circle, so skip the per-list radius filter there.
       const renderOpts = { skipFitBounds: true, skipRadiusFilter: true };
-      renderStationsOnMap(stations, renderOpts);
-      renderStationList(stations);
+      if (!skipRender) {
+        renderStationsOnMap(stations, renderOpts);
+        renderStationList(stations);
+      }
       if (loader) {
         if (!stations.length && !silent) {
           loader.innerHTML = `<span style="font-size:13px;opacity:0.6">${t('noStationsYet')}</span>`;
