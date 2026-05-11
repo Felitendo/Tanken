@@ -2439,13 +2439,11 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
   filtered.forEach((s) => {
     if (!s.price || !s.isOpen) return;
     const color = priceColorStable(s.price, s._locationId, s.lat, s.lng);
-    const highlight = priceHighlight(s.price, s._locationId, s.lat, s.lng);
-    const bubbleClass = highlight ? `map-bubble ${highlight}` : 'map-bubble';
     const brand = fixEnc(s.brand || s.name).substring(0, 6);
     const pParts = formatPriceParts(s.price);
     const icon = L.divIcon({
       className: '',
-      html: `<div class="${bubbleClass}" style="background:${color}">
+      html: `<div class="map-bubble" style="background:${color}">
         <div class="map-bubble-brand">${brand}</div>
         <div class="map-bubble-price">${pParts.main}<sup>${pParts.decimal}</sup></div>
         <div class="map-bubble-arrow" style="border-top-color:${color}"></div>
@@ -2547,15 +2545,15 @@ async function loadPriceBand() {
   }
 }
 
-// Three-stop gradient: green → yellow → red. iOS system palette but with
-// yellow (not orange) at the median, because RGB-interpolating green↔orange
-// passed through olive/khaki tones that read as "brown" on a dark map.
-// Green↔yellow stays lime; yellow↔red stays orange — no brown anywhere.
+// Three-stop gradient: green → yellow → red, slightly toned down from the
+// iOS system palette so a wall of bubbles reads as informative rather than
+// like phone notifications. Yellow (not orange) at the median keeps the
+// green↔red path away from olive/brown tones.
 function priceColor3(t) {
   const stops = [
-    { t: 0,   r:  52, g: 199, b:  89 },
-    { t: 0.5, r: 255, g: 204, b:   0 },
-    { t: 1,   r: 255, g:  59, b:  48 },
+    { t: 0,   r:  76, g: 175, b: 100 },
+    { t: 0.5, r: 232, g: 192, b:  50 },
+    { t: 1,   r: 218, g:  80, b:  70 },
   ];
   const x = Math.max(0, Math.min(1, t));
   let lo = stops[0], hi = stops[stops.length - 1];
@@ -2580,21 +2578,6 @@ function countryFromLocation(locationId, lat, lng) {
   if (Number.isFinite(lat) && Number.isFinite(lng)) {
     return isInAustria(lat, lng) ? 'at' : 'de';
   }
-  return null;
-}
-
-// Below-median pricing gets a glow whose intensity scales with how cheap
-// the station is: 'cheap' (≤ P10) pulses prominently, 'discount' (between
-// P10 and the median) pulses softly. Above-median stations get no class —
-// their colour alone (yellow→red) does the talking. Returns null when no
-// band is available.
-function priceHighlight(price, locationId, lat, lng) {
-  if (!price) return null;
-  const country = countryFromLocation(locationId, lat, lng);
-  const band = country && state.priceBand && state.priceBand[country];
-  if (!band || band.p10 == null || band.p50 == null) return null;
-  if (price <= band.p10) return 'cheap';
-  if (price <= band.p50) return 'discount';
   return null;
 }
 
