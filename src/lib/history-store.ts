@@ -1,5 +1,6 @@
 import { database } from '@/lib/server-runtime';
 import { HistoryEntry } from '@/types';
+import { getAllUniqueStationsForFuel } from '@/lib/station-cache';
 
 export type HistoryCountry = 'de' | 'at';
 
@@ -178,20 +179,29 @@ export interface PriceBand {
   samples: number;
 }
 
-// Need ≥50 station-price rows in the window before the band is statistically
-// useful. Below that the percentiles wobble enough that the heatmap would
-// look unstable; the frontend falls back to its session-local anchor instead.
+// Need ≥50 stations to make the percentile stable; below that the band
+// would wobble too much for a heatmap.
 const PRICE_BAND_MIN_SAMPLES = 50;
-const PRICE_BAND_CACHE_TTL_MS = 10 * 60 * 1000;
+const PRICE_BAND_CACHE_TTL_MS = 60 * 1000;
 const priceBandCache = new Map<string, { value: PriceBand | null; expiresAt: number }>();
 
+// Same bounding box used by persistPriceSnapshot to split AT and DE.
+function isInAustria(lat: number, lng: number): boolean {
+  return lat >= 46.3 && lat <= 49.1 && lng >= 9.4 && lng <= 17.2;
+}
+
 /**
- * P10/P50/P90 of station prices in the last 24 h, scoped to one country and
- * fuel type. Drives the heatmap so 1,82 € and 1,84 € don't look wildly
- * different just because a viewport happens to have a narrow price spread.
+ * P10/P50/P90 of currently cached open-station prices, split by country and
+ * fuel. Drives the heatmap colors: with the median at t=0.5, a 2-cent
+ * delta near the median lands as ~10% of the way to red instead of as
+ * "knallgrün vs braun".
  *
- * Returns null when there is too little data to be meaningful — callers
- * should fall back to a local (viewport-based) anchor in that case.
+ * Reads from the in-memory station cache rather than station_prices history
+ * so colors appear immediately after a deploy — no waiting for 24 h of
+ * fuel-tagged rows to accumulate.
+ *
+ * Returns null when too few stations are cached for one country/fuel — the
+ * frontend then renders neutral grey instead of a wobbly gradient.
  */
 export async function getCountryPriceBand(country: HistoryCountry, fuel: string): Promise<PriceBand | null> {
   const key = `${country}:${fuel}`;
@@ -199,35 +209,28 @@ export async function getCountryPriceBand(country: HistoryCountry, fuel: string)
   const now = Date.now();
   if (cached && cached.expiresAt > now) return cached.value;
 
-  const locationLike = country === 'at' ? 'at-%' : 'at-%';
-  const op = country === 'at' ? 'LIKE' : 'NOT LIKE';
-  const result = await database.query<{ p10: string | null; p50: string | null; p90: string | null; samples: string }>(
-    `
-      SELECT
-        percentile_cont(0.1) WITHIN GROUP (ORDER BY price) AS p10,
-        percentile_cont(0.5) WITHIN GROUP (ORDER BY price) AS p50,
-        percentile_cont(0.9) WITHIN GROUP (ORDER BY price) AS p90,
-        COUNT(*) AS samples
-      FROM station_prices
-      WHERE timestamp >= NOW() - INTERVAL '24 hours'
-        AND fuel_type = $1
-        AND location_id ${op} $2
-        AND price > 0
-    `,
-    [fuel, locationLike]
-  );
-  const row = result.rows[0];
-  const samples = row ? Number(row.samples) : 0;
+  const wantAustria = country === 'at';
+  const prices: number[] = [];
+  for (const s of getAllUniqueStationsForFuel(fuel)) {
+    if (!s.isOpen || s.price == null || s.price <= 0) continue;
+    if (!Number.isFinite(s.lat) || !Number.isFinite(s.lng)) continue;
+    if (isInAustria(s.lat, s.lng) !== wantAustria) continue;
+    prices.push(s.price);
+  }
+  prices.sort((a, b) => a - b);
+
   let band: PriceBand | null = null;
-  if (samples >= PRICE_BAND_MIN_SAMPLES && row?.p10 != null && row?.p50 != null && row?.p90 != null) {
-    const p10 = Number(row.p10);
-    const p50 = Number(row.p50);
-    const p90 = Number(row.p90);
-    // Degenerate spread (everyone within a cent of each other) → no useful
-    // gradient; let the frontend fall back.
-    if (p90 - p10 >= 0.02) {
-      band = { p10, p50, p90, samples };
-    }
+  if (prices.length >= PRICE_BAND_MIN_SAMPLES) {
+    const quantile = (p: number) => {
+      const idx = (prices.length - 1) * p;
+      const lo = Math.floor(idx);
+      const hi = Math.ceil(idx);
+      return prices[lo] + (prices[hi] - prices[lo]) * (idx - lo);
+    };
+    const p10 = quantile(0.1);
+    const p50 = quantile(0.5);
+    const p90 = quantile(0.9);
+    if (p90 - p10 >= 0.02) band = { p10, p50, p90, samples: prices.length };
   }
   priceBandCache.set(key, { value: band, expiresAt: now + PRICE_BAND_CACHE_TTL_MS });
   return band;
