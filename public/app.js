@@ -2579,15 +2579,43 @@ function bandRatio(price, band) {
   return (price - p10) / (p90 - p10);
 }
 
-// Color a price against the country-wide 24h band. No band → neutral grey.
-// No second source of truth.
+// P10/P50/P90 over the stations actually on screen. Memoised by reference
+// so a single render pass doesn't sort the list once per marker.
+let _viewportBandCache = { stations: null, band: null };
+function viewportBand() {
+  if (!Array.isArray(state.stations)) return null;
+  if (_viewportBandCache.stations === state.stations) return _viewportBandCache.band;
+  const prices = state.stations
+    .filter(s => s && s.isOpen && typeof s.price === 'number' && s.price > 0)
+    .map(s => s.price)
+    .sort((a, b) => a - b);
+  let band = null;
+  if (prices.length >= 30) {
+    const q = (p) => {
+      const idx = (prices.length - 1) * p;
+      const lo = Math.floor(idx), hi = Math.ceil(idx);
+      return prices[lo] + (prices[hi] - prices[lo]) * (idx - lo);
+    };
+    const p10 = q(0.1), p50 = q(0.5), p90 = q(0.9);
+    // Require a meaningful spread before trusting the viewport. Below 10c
+    // we'd recreate the original "1,82 vs 1,84 looks dramatic" problem in
+    // a tight rural cluster — fall back to the country band instead.
+    if (p90 - p10 >= 0.10) band = { p10, p50, p90 };
+  }
+  _viewportBandCache = { stations: state.stations, band };
+  return band;
+}
+
+// Color a price using the viewport band first (so München gets compared to
+// München, not to the country average), with the country band as fallback
+// when the viewport's spread is too tight to be meaningful.
 function priceColorStable(price, locationId, lat, lng) {
   if (!price) return PRICE_COLOR_NEUTRAL;
+  const local = viewportBand();
+  if (local) return priceColor3(bandRatio(price, local));
   const country = countryFromLocation(locationId, lat, lng);
   const band = country && state.priceBand && state.priceBand[country];
-  if (!band || band.p10 == null || band.p50 == null || band.p90 == null) {
-    return PRICE_COLOR_NEUTRAL;
-  }
+  if (!band || band.p10 == null || band.p90 == null) return PRICE_COLOR_NEUTRAL;
   return priceColor3(bandRatio(price, band));
 }
 
