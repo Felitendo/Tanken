@@ -2424,7 +2424,7 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
       const size = count > 20 ? 56 : count > 5 ? 48 : 40;
       return L.divIcon({
         className: '',
-        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.8)">
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.8);filter:saturate(0.55) brightness(0.85)">
           <span style="font-size:${size > 48 ? 14 : 12}px;line-height:1">${count}</span>
           ${pParts ? `<span style="font-size:${size > 48 ? 11 : 10}px;line-height:1;opacity:0.9">~${pParts.main}<sup style="font-size:7px">${pParts.decimal}</sup></span>` : ''}
         </div>`,
@@ -2439,11 +2439,13 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
   filtered.forEach((s) => {
     if (!s.price || !s.isOpen) return;
     const color = priceColorStable(s.price, s._locationId, s.lat, s.lng);
+    const highlight = priceHighlight(s.price, s._locationId, s.lat, s.lng);
+    const bubbleClass = highlight ? `map-bubble ${highlight}` : 'map-bubble';
     const brand = fixEnc(s.brand || s.name).substring(0, 6);
     const pParts = formatPriceParts(s.price);
     const icon = L.divIcon({
       className: '',
-      html: `<div class="map-bubble" style="background:${color}">
+      html: `<div class="${bubbleClass}" style="background:${color}">
         <div class="map-bubble-brand">${brand}</div>
         <div class="map-bubble-price">${pParts.main}<sup>${pParts.decimal}</sup></div>
         <div class="map-bubble-arrow" style="border-top-color:${color}"></div>
@@ -2581,6 +2583,20 @@ function countryFromLocation(locationId, lat, lng) {
     return isInAustria(lat, lng) ? 'at' : 'de';
   }
   return null;
+}
+
+// Classify a price against the country band. 'cheap' / 'expensive' tag the
+// outer 10% on each side (turned into a glow + pulse / red halo in CSS);
+// 'muted' is the middle 80% (visually dimmed so deals stand out); null means
+// no band available → render with PRICE_COLOR_NEUTRAL, no class.
+function priceHighlight(price, locationId, lat, lng) {
+  if (!price) return null;
+  const country = countryFromLocation(locationId, lat, lng);
+  const band = country && state.priceBand && state.priceBand[country];
+  if (!band || band.p10 == null || band.p90 == null) return null;
+  if (price <= band.p10) return 'cheap';
+  if (price >= band.p90) return 'expensive';
+  return 'muted';
 }
 
 // Map a price to t∈[0,1] across the country band. Below P10 saturates green,
