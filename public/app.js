@@ -604,11 +604,12 @@ const state = {
   // Price-color anchors. Each scan-location gets its own min/max computed
   // from the FULL station set returned for that location, so a station's
   // color reflects "cheap/expensive within its scan-location" — stable
-  // across zoom/pan. Stations that don't belong to a scan-location (AT
-  // bounds query, live calls, manual scans) use the fallback reference,
-  // which grows monotonically over the session. Both reset on fuel change.
+  // across zoom/pan. Stations without a scan-location (AT bounds query,
+  // live calls, manual scans) fall into country-scoped anchors keyed by
+  // '__at__' / '__de__', which grow monotonically over the session and
+  // keep the two markets from polluting each other's price band.
+  // Reset on fuel change.
   colorReferenceByLocation: {},
-  colorReferenceFallback: null,
   favourites: [],
   // ── Route planner ────────────────────────────────────────────────
   routeMode: false,         // true while a route is being displayed
@@ -2554,26 +2555,49 @@ function setColorReferenceForLocation(locationId, stations) {
   state.colorReferenceByLocation[locationId] = { min, max };
 }
 
-// Grow the session-wide fallback reference (used for stations without a
-// scan-location, e.g. AT viewport queries or live calls). Never shrinks.
-function expandFallbackColorReference(stations) {
+// Grow a country-scoped reference monotonically. Keeping AT and DE on
+// separate anchors stops one market's price band from washing out the
+// other — AT prices around 1,70–1,80€ shouldn't make every DE station
+// look red, and vice versa.
+function expandCountryColorReference(key, stations) {
   const prices = (stations || []).filter(s => s && s.isOpen && s.price > 0).map(s => s.price);
   if (!prices.length) return;
   const min = Math.min(...prices);
   const max = Math.max(...prices);
-  if (!state.colorReferenceFallback) {
-    state.colorReferenceFallback = { min, max };
+  const existing = state.colorReferenceByLocation[key];
+  if (!existing) {
+    state.colorReferenceByLocation[key] = { min, max };
     return;
   }
-  if (min < state.colorReferenceFallback.min) state.colorReferenceFallback.min = min;
-  if (max > state.colorReferenceFallback.max) state.colorReferenceFallback.max = max;
+  if (min < existing.min) existing.min = min;
+  if (max > existing.max) existing.max = max;
+}
+
+// Tag each fallback station with a country sentinel (__at__/__de__) and
+// grow the matching country anchor. Stations that already carry a real
+// scan-location id keep theirs and are skipped here.
+function expandFallbackColorReference(stations) {
+  const atList = [];
+  const deList = [];
+  for (const s of stations || []) {
+    if (!s || s._locationId) continue;
+    if (isInAustria(s.lat, s.lng)) {
+      s._locationId = '__at__';
+      atList.push(s);
+    } else {
+      s._locationId = '__de__';
+      deList.push(s);
+    }
+  }
+  if (atList.length) expandCountryColorReference('__at__', atList);
+  if (deList.length) expandCountryColorReference('__de__', deList);
 }
 
 function colorRefFor(locationId) {
   if (locationId && state.colorReferenceByLocation[locationId]) {
     return state.colorReferenceByLocation[locationId];
   }
-  return state.colorReferenceFallback;
+  return null;
 }
 
 // Color a price using the stable reference for its scan-location, or the
@@ -4345,7 +4369,6 @@ function setupSettings() {
       state.loaded.map = false;
       // Different fuel ⇒ different price band; force fresh color anchors.
       state.colorReferenceByLocation = {};
-      state.colorReferenceFallback = null;
       persistStateSettings({ fuelType: state.fuelType });
       if (state.currentTab === 'map') loadMapTab();
       refreshAlertUi();
