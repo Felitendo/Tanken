@@ -55,6 +55,13 @@ CREATE INDEX IF NOT EXISTS idx_station_prices_timestamp ON station_prices(timest
 CREATE INDEX IF NOT EXISTS idx_station_prices_location ON station_prices(location_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_station_prices_name ON station_prices(station_name, timestamp DESC);
 
+-- Tankerkönig station IDs disambiguate rows whose station_name collides
+-- across real-world branches (e.g. many rows named "JET TANKSTELLE"). Older
+-- rows have NULL here; readers should prefer station_id when available
+-- and fall back to station_name otherwise.
+ALTER TABLE station_prices ADD COLUMN IF NOT EXISTS station_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_station_prices_id ON station_prices(station_id, timestamp DESC);
+
 -- Persistent station cache (survives restarts, populated by admin scan locations + AT grid)
 CREATE TABLE IF NOT EXISTS station_cache (
   location_id TEXT PRIMARY KEY,

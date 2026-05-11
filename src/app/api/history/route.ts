@@ -18,10 +18,11 @@ export async function GET(request: NextRequest) {
   }
 
   const station = request.nextUrl.searchParams.get('station');
+  const stationId = request.nextUrl.searchParams.get('id') || undefined;
   const locationId = request.nextUrl.searchParams.get('location') || undefined;
 
   if (station) {
-    const stationEntries = await readPriceHistoryByStation(station);
+    const stationEntries = await readPriceHistoryByStation(station, stationId);
     if (stationEntries.length >= 2) {
       return NextResponse.json(stationEntries);
     }

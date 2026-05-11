@@ -296,11 +296,11 @@ export async function persistPriceSnapshot(): Promise<number> {
     let idx = 1;
     for (const s of batch) {
       const locationId = isAustria(s.lat, s.lng) ? 'at-snapshot' : 'de-snapshot';
-      values.push(`($${idx++}::timestamptz, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
-      params.push(timestamp, locationId, s.name, s.brand, s.price);
+      values.push(`($${idx++}::timestamptz, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
+      params.push(timestamp, locationId, s.id || null, s.name, s.brand, s.price);
     }
     await db.query(
-      `INSERT INTO station_prices (timestamp, location_id, station_name, station_brand, price) VALUES ${values.join(', ')}`,
+      `INSERT INTO station_prices (timestamp, location_id, station_id, station_name, station_brand, price) VALUES ${values.join(', ')}`,
       params
     );
     written += batch.length;

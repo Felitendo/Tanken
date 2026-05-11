@@ -244,11 +244,11 @@ export async function measureLocation(params: {
     const params: unknown[] = [];
     let idx = 1;
     for (const s of open) {
-      values.push(`($${idx++}::timestamptz, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
-      params.push(timestamp, locationId || null, s.name, s.brand, s.price);
+      values.push(`($${idx++}::timestamptz, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
+      params.push(timestamp, locationId || null, s.id || null, s.name, s.brand, s.price);
     }
     await database.query(
-      `INSERT INTO station_prices (timestamp, location_id, station_name, station_brand, price) VALUES ${values.join(', ')}`,
+      `INSERT INTO station_prices (timestamp, location_id, station_id, station_name, station_brand, price) VALUES ${values.join(', ')}`,
       params
     );
   }

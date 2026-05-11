@@ -3255,7 +3255,7 @@ function showStationSheet(station) {
 
   state.sheetStationName = station.name;
   state.sheetStation = station;
-  loadSheetChart(station.name, state.historyDefaultDays || 1);
+  loadSheetChart(station.name, state.historyDefaultDays || 1, station.id);
   if (station.id) refreshStationStatus(station);
 
   document.querySelectorAll('.sheet-toggle-btn').forEach(btn => {
@@ -3264,7 +3264,7 @@ function showStationSheet(station) {
       haptic('light');
       document.querySelectorAll('.sheet-toggle-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      loadSheetChart(state.sheetStationName, parseInt(btn.dataset.range, 10));
+      loadSheetChart(state.sheetStationName, parseInt(btn.dataset.range, 10), state.sheetStation?.id);
     });
   });
 
@@ -3555,7 +3555,7 @@ function updateSheetToggleAvailability({ has24h, has7d }) {
   });
 }
 
-async function loadSheetChart(stationName, days = 1) {
+async function loadSheetChart(stationName, days = 1, stationId) {
   if (state.sheetChart) { state.sheetChart.destroy(); state.sheetChart = null; }
   const loading = document.getElementById('sheet-chart-loading');
   const canvas = document.getElementById('sheet-price-chart');
@@ -3579,7 +3579,8 @@ async function loadSheetChart(stationName, days = 1) {
       }
     }
 
-    const data = await api(`/api/history?station=${encodeURIComponent(stationName)}`);
+    const idParam = stationId ? `&id=${encodeURIComponent(stationId)}` : '';
+    const data = await api(`/api/history?station=${encodeURIComponent(stationName)}${idParam}`);
     // Backend returns an array of station entries when ≥ 2 rows exist; an
     // object {entries, extremes} otherwise. Treat both "no rows" cases the same.
     const hasSeries = Array.isArray(data) && data.length >= 2;
@@ -3635,15 +3636,12 @@ async function loadSheetChart(stationName, days = 1) {
       chartData = filtered;
     }
 
-    const labels = chartData.map(d => {
-      const dt = new Date(d.timestamp);
-      if (days <= 1) return `${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}`;
-      return `${dt.getDate()}.${dt.getMonth() + 1}`;
-    });
-
     const hintColor = getComputedStyle(document.body).getPropertyValue('--color-hint') || '#999';
 
-    // Calculate Y-axis range with minimum visible spread (at least 0.06€)
+    // Feed Chart.js {x,y} points with a linear time x-axis so ticks land at
+    // even time intervals, not even data-index intervals. Avoids duplicate
+    // tick labels when many rows cluster in the same minute.
+    const points = chartData.map(d => ({ x: new Date(d.timestamp).getTime(), y: d.min_price }));
     const prices = chartData.map(d => d.min_price);
     const minP = Math.min(...prices);
     const maxP = Math.max(...prices);
@@ -3653,17 +3651,23 @@ async function loadSheetChart(stationName, days = 1) {
     const yMin = Math.max(0, Math.floor((minP - padding) * 100) / 100);
     const yMax = Math.ceil((maxP + padding) * 100) / 100;
 
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const formatX = (ms) => {
+      const dt = new Date(ms);
+      if (days <= 1) return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+      return `${dt.getDate()}.${dt.getMonth() + 1}`;
+    };
+
     loading.style.display = 'none';
     canvas.style.display = 'block';
 
     state.sheetChart = new Chart(canvas, {
       type: 'line',
       data: {
-        labels,
         datasets: [
           {
             label: 'Min',
-            data: prices,
+            data: points,
             borderColor: '#34c759',
             backgroundColor: 'rgba(52,199,89,0.08)',
             borderWidth: 2,
@@ -3687,11 +3691,11 @@ async function loadSheetChart(stationName, days = 1) {
             callbacks: {
               title: (items) => {
                 if (!items.length) return '';
-                const d = chartData[items[0].dataIndex];
-                if (!d) return '';
-                const dt = new Date(d.timestamp);
-                if (days <= 1) return `${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')} Uhr`;
-                return `${dt.getDate()}.${dt.getMonth() + 1}. ${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}`;
+                const ms = items[0].parsed?.x;
+                if (!Number.isFinite(ms)) return '';
+                const dt = new Date(ms);
+                if (days <= 1) return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())} Uhr`;
+                return `${dt.getDate()}.${dt.getMonth() + 1}. ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
               },
               label: (ctx) => formatPrice(ctx.parsed.y)
             }
@@ -3699,7 +3703,14 @@ async function loadSheetChart(stationName, days = 1) {
         },
         scales: {
           x: {
-            ticks: { color: hintColor.trim() || '#999', font: { size: 10 }, maxTicksLimit: state.sheetExpanded ? 8 : 5 },
+            type: 'linear',
+            ticks: {
+              color: hintColor.trim() || '#999',
+              font: { size: 10 },
+              maxTicksLimit: state.sheetExpanded ? 8 : 5,
+              autoSkip: true,
+              callback: (val) => formatX(val),
+            },
             grid: { display: false }
           },
           y: {

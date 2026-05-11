@@ -31,24 +31,27 @@ function mapRows(rows: HistoryRow[]): HistoryEntry[] {
   }));
 }
 
-export async function readPriceHistoryByStation(stationName: string): Promise<HistoryEntry[]> {
+export async function readPriceHistoryByStation(stationName: string, stationId?: string): Promise<HistoryEntry[]> {
   // Query individual station prices from station_prices table (has ALL stations),
   // not price_history which only stores the cheapest station's name.
-  // Uses exact match to leverage idx_station_prices_name index.
+  // Prefer station_id (precise — Tankerkönig IDs are unique) so chains like
+  // "JET TANKSTELLE" don't conflate rows from different real branches. Falls
+  // back to name match when no ID is given (legacy rows have NULL station_id).
+  const sql = stationId
+    ? `SELECT timestamp, price, station_name, location_id
+         FROM station_prices
+         WHERE station_id = $1
+         ORDER BY timestamp ASC`
+    : `SELECT timestamp, price, station_name, location_id
+         FROM station_prices
+         WHERE station_name = $1
+         ORDER BY timestamp ASC`;
   const result = await database.query<{
     timestamp: Date;
     price: number;
     station_name: string;
     location_id: string | null;
-  }>(
-    `
-      SELECT timestamp, price, station_name, location_id
-      FROM station_prices
-      WHERE station_name = $1
-      ORDER BY timestamp ASC
-    `,
-    [stationName]
-  );
+  }>(sql, [stationId ?? stationName]);
   return result.rows.map(row => ({
     timestamp: row.timestamp.toISOString(),
     min_price: Number(row.price),
