@@ -237,7 +237,11 @@ export async function getCountryPriceBand(country: HistoryCountry, fuel: string)
 }
 
 export async function getAvailableLocations(country?: HistoryCountry): Promise<string[]> {
-  const clauses: string[] = ['location_id IS NOT NULL'];
+  // `*-country` is a sentinel for country-wide aggregate rows (currently only
+  // `at-country`, written by the scheduler since AT has no scan_locations).
+  // Hide it from the picker so users still see only real locations and the
+  // implicit "Alle Standorte" option.
+  const clauses: string[] = ["location_id IS NOT NULL", "location_id NOT LIKE '%-country'"];
   const params: (string | number)[] = [];
   const cc = countryClause(country, params.length + 1);
   if (cc.sql) { params.push(...cc.params); clauses.push(cc.sql); }

@@ -4,6 +4,8 @@ import {
   setCachedStations, getAllCachedLocations, countUniqueStations,
   persistPriceSnapshot, clearAllCache,
   getCachedStationsByLocation, getDeStationIds, updateCachedPricesForFuel,
+  getAllUniqueStationsForFuel,
+  type CachedStation,
 } from '@/lib/station-cache';
 import { generateAustriaGrid } from '@/lib/grid';
 import { listScanLocations, recordScanResult, getScanLocation } from '@/lib/location-store';
@@ -417,6 +419,30 @@ class ScanScheduler {
       } catch (err) {
         const eMsg = `price_history-Aggregat fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`;
         this.de.addLog(eMsg, 'error');
+        console.error(`[Scheduler] ${eMsg}`);
+      }
+
+      // AT scans via grid cells (not scan_locations), so the per-location
+      // loop above skips Austria entirely. Roll the whole country into one
+      // sentinel-tagged row so the Verlauf chart has AT data.
+      try {
+        const atStations: CachedStation[] = [];
+        const seen = new Set<string>();
+        for (const fuel of ['diesel', 'e5', 'e10'] as const) {
+          for (const s of getAllUniqueStationsForFuel(fuel)) {
+            if (!s.isOpen || s.price == null || s.price <= 0) continue;
+            if (s.lat < 46.3 || s.lat > 49.1 || s.lng < 9.4 || s.lng > 17.2) continue;
+            if (seen.has(s.id)) continue;
+            seen.add(s.id);
+            atStations.push(s);
+          }
+        }
+        if (atStations.length > 0 && await recordPriceHistoryFromStations('at-country', atStations)) {
+          this.at.addLog(`AT-Aggregat in price_history gespeichert (${atStations.length} Stationen)`, 'info');
+        }
+      } catch (err) {
+        const eMsg = `AT-Aggregat fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`;
+        this.at.addLog(eMsg, 'error');
         console.error(`[Scheduler] ${eMsg}`);
       }
 
