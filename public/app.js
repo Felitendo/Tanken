@@ -145,9 +145,6 @@ const i18n = {
     maxFavourites: 'Maximale Anzahl an Favoriten erreicht',
     loginRequiredFavourite: 'Bitte einloggen, um Favoriten zu speichern',
     lastUpdated: 'Zuletzt aktualisiert',
-    lastRaise: 'Erhöht',
-    lastDrop: 'Gesenkt',
-    priceChangeAt: 'um',
     minutesAgoFmt: 'vor {n} Min.',
     hoursAgoFmt: 'vor {n} Std.',
     justNow: 'gerade eben',
@@ -355,9 +352,6 @@ const i18n = {
     maxFavourites: 'Maximum number of favourites reached',
     loginRequiredFavourite: 'Please log in to save favourites',
     lastUpdated: 'Last updated',
-    lastRaise: 'Raised',
-    lastDrop: 'Dropped',
-    priceChangeAt: 'at',
     minutesAgoFmt: '{n} min ago',
     hoursAgoFmt: '{n} h ago',
     justNow: 'just now',
@@ -3119,7 +3113,6 @@ function showStationSheet(station) {
       <svg class="sheet-info-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
       <span><strong>${t('lastUpdated')}:</strong> ${formatDataAge(state.dataTimestamp)}</span>
     </div>` : ''}
-    <div id="sheet-station-changes"></div>
     <div class="sheet-hours-section" id="sheet-hours-section"></div>
     <div class="sheet-nav-buttons${isAndroid ? ' android-only' : ''}">
       <a href="${gmapsUrl}" target="_blank" class="sheet-nav-btn gmaps">
@@ -3263,7 +3256,6 @@ function showStationSheet(station) {
   state.sheetStationName = station.name;
   state.sheetStation = station;
   loadSheetChart(station.name, state.historyDefaultDays || 1);
-  loadStationChanges(station.name);
   if (station.id) refreshStationStatus(station);
 
   document.querySelectorAll('.sheet-toggle-btn').forEach(btn => {
@@ -5583,41 +5575,6 @@ function formatDataAge(isoTimestamp) {
   return t('hoursAgoFmt').replace('{n}', hours);
 }
 
-// Surface the last raise and last drop for the station currently shown in
-// the bottom sheet. Under the 12-Uhr-Regel raises are restricted to noon
-// while drops can happen any time — splitting them gives a more honest view
-// than a generic "trend" arrow.
-async function loadStationChanges(stationName) {
-  const container = document.getElementById('sheet-station-changes');
-  if (!container || !stationName) return;
-  container.innerHTML = '';
-  let data;
-  try {
-    const res = await fetch('/api/station-changes?station=' + encodeURIComponent(stationName));
-    if (!res.ok) return;
-    data = await res.json();
-  } catch { return; }
-  // Sheet may have been closed or switched stations meanwhile.
-  if (!document.getElementById('sheet-station-changes')) return;
-  if (state.sheetStationName !== stationName) return;
-  if (!data || (!data.lastRaise && !data.lastDrop)) return;
-
-  const fmtTime = (iso) => {
-    const d = new Date(iso);
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  };
-  const fmtP = (p) => Number(p).toFixed(3).replace('.', ',') + '€';
-  const arrowUp = '<svg class="sheet-info-icon" viewBox="0 0 24 24" width="18" height="18" fill="#ff3b30" aria-hidden="true"><path d="M7 14l5-5 5 5z"/></svg>';
-  const arrowDown = '<svg class="sheet-info-icon" viewBox="0 0 24 24" width="18" height="18" fill="#34c759" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg>';
-  const rows = [];
-  if (data.lastRaise) {
-    rows.push(`<div class="sheet-info-row">${arrowUp}<span><strong>${t('lastRaise')}</strong> ${t('priceChangeAt')} ${fmtTime(data.lastRaise.at)}: ${fmtP(data.lastRaise.from)} → ${fmtP(data.lastRaise.to)}</span></div>`);
-  }
-  if (data.lastDrop) {
-    rows.push(`<div class="sheet-info-row">${arrowDown}<span><strong>${t('lastDrop')}</strong> ${t('priceChangeAt')} ${fmtTime(data.lastDrop.at)}: ${fmtP(data.lastDrop.from)} → ${fmtP(data.lastDrop.to)}</span></div>`);
-  }
-  container.innerHTML = rows.join('');
-}
 
 if (document.getElementById('app')) {
   init();
