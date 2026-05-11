@@ -601,15 +601,11 @@ const state = {
   selectedLocation: '',
   availableLocations: [],
   priceExtremes: null,
-  // Price-color anchors. Each scan-location gets its own min/max computed
-  // from the FULL station set returned for that location, so a station's
-  // color reflects "cheap/expensive within its scan-location" — stable
-  // across zoom/pan. Stations without a scan-location (AT bounds query,
-  // live calls, manual scans) fall into country-scoped anchors keyed by
-  // '__at__' / '__de__', which grow monotonically over the session and
-  // keep the two markets from polluting each other's price band.
-  // Reset on fuel change.
-  colorReferenceByLocation: {},
+  // Country-wide 24h percentile band per fuel: { fuel, at: {p10,p50,p90}|null, de: {...}|null }.
+  // Loaded from /api/price-band at boot and on fuel switch. Single source of
+  // truth for heatmap colors — when no band is available, stations render
+  // in a neutral gray rather than against a misleading session anchor.
+  priceBand: { fuel: null, at: null, de: null },
   favourites: [],
   // ── Route planner ────────────────────────────────────────────────
   routeMode: false,         // true while a route is being displayed
@@ -649,6 +645,11 @@ async function init() {
   state.fuelType = state.config.fuel_type;
   state.radiusKm = 25;
   state.smtpConfigured = !!state.config.smtpConfigured;
+
+  // Kick off the country-wide 24h price-band fetch. Non-blocking so boot
+  // isn't delayed; the band lands a beat later and recolors whatever has
+  // already rendered.
+  loadPriceBand();
 
   await refreshMe();
   await loadSettings();
@@ -1779,8 +1780,6 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
             if (r.status !== 'fulfilled') continue;
             const list = Array.isArray(r.value) ? r.value : [];
             const locId = matching[i].id;
-            // Anchor colors to this scan-location's full price range.
-            setColorReferenceForLocation(locId, list);
             for (const s of list) {
               const k = s.id || `${s.lat},${s.lng}`;
               if (seen.has(k)) continue;
@@ -2382,10 +2381,6 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
   const radiusKm = state.radiusKm || 25;
   const filtered = skipRadiusFilter ? stations : stations.filter(s => !s.dist || s.dist <= radiusKm);
 
-  // Per-location anchors are set at fetch time; the fallback covers stations
-  // without a scan-location (AT bounds, live calls, manual scans).
-  expandFallbackColorReference(filtered.filter(s => !s._locationId));
-
   if (state.userLat && state.userLng) {
     const userIcon = L.divIcon({
       className: '',
@@ -2405,10 +2400,10 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
     showCoverageOnHover: false,
     iconCreateFunction: function(clusterObj) {
       const count = clusterObj.getChildCount();
-      // Compute average price + average ratio for the cluster. The cluster
-      // color uses each child's per-location ratio so a cluster mixing pins
-      // from multiple scan-locations still reflects the typical "rank" of
-      // its members within their own locations.
+      // Average each child's bandRatio so a cluster gets the same gradient
+      // as its individual pins. Children without a country band contribute
+      // to the average price but not the color — if NO child has a band,
+      // the cluster renders neutral grey.
       const childMarkers = clusterObj.getAllChildMarkers();
       let totalPrice = 0, priceCount = 0;
       let totalRatio = 0, ratioCount = 0;
@@ -2416,14 +2411,15 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
         if (!m._stationPrice) return;
         totalPrice += m._stationPrice;
         priceCount++;
-        const ref = colorRefFor(m._stationLocationId);
-        if (ref && ref.max > ref.min) {
-          totalRatio += Math.max(0, Math.min(1, (m._stationPrice - ref.min) / (ref.max - ref.min)));
+        const country = countryFromLocation(m._stationLocationId, m._stationLat, m._stationLng);
+        const band = country && state.priceBand && state.priceBand[country];
+        if (band && band.p10 != null && band.p50 != null && band.p90 != null) {
+          totalRatio += bandRatio(m._stationPrice, band);
           ratioCount++;
         }
       });
       const avgPrice = priceCount > 0 ? totalPrice / priceCount : 0;
-      const color = ratioCount > 0 ? priceColor(totalRatio / ratioCount) : priceColor(0.5);
+      const color = ratioCount > 0 ? priceColor3(totalRatio / ratioCount) : PRICE_COLOR_NEUTRAL;
       const pParts = avgPrice > 0 ? formatPriceParts(avgPrice) : null;
       const size = count > 20 ? 56 : count > 5 ? 48 : 40;
       return L.divIcon({
@@ -2442,7 +2438,7 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
 
   filtered.forEach((s) => {
     if (!s.price || !s.isOpen) return;
-    const color = priceColorStable(s.price, s._locationId);
+    const color = priceColorStable(s.price, s._locationId, s.lat, s.lng);
     const brand = fixEnc(s.brand || s.name).substring(0, 6);
     const pParts = formatPriceParts(s.price);
     const icon = L.divIcon({
@@ -2468,6 +2464,8 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
 
     marker._stationPrice = s.price;
     marker._stationLocationId = s._locationId;
+    marker._stationLat = s.lat;
+    marker._stationLng = s.lng;
 
     if (cluster) {
       cluster.addLayer(marker);
@@ -2521,92 +2519,90 @@ function setupStationSort() {
   });
 }
 
-function priceColor(ratio) {
-  const r = Math.round(52 + ratio * 203);
-  const g = Math.round(199 - ratio * 140);
-  const b = Math.round(89 - ratio * 41);
-  return `rgb(${r},${g},${b})`;
-}
+// Shown when no country band is available (cold start, API failure,
+// degenerate spread). Deliberately a flat neutral so it can't be mistaken
+// for a heatmap signal — the price is shown, but uncoloured.
+const PRICE_COLOR_NEUTRAL = 'hsl(0, 0%, 72%)';
 
-// Replace the per-location color reference with the 20th–80th percentile
-// price band from this fetch's FULL station set. Using percentiles instead
-// of raw min/max stops a single autobahn outlier from squashing the typical
-// 1,90–2,10€ range into one shade of green. Outliers below P20 / above P80
-// clamp to deep green / deep red.
-function setColorReferenceForLocation(locationId, stations) {
-  if (!locationId) return;
-  const prices = (stations || []).filter(s => s && s.isOpen && s.price > 0).map(s => s.price);
-  if (!prices.length) return;
-  prices.sort((a, b) => a - b);
-  const quantile = (p) => {
-    const idx = (prices.length - 1) * p;
-    const lo = Math.floor(idx);
-    const hi = Math.ceil(idx);
-    return prices[lo] + (prices[hi] - prices[lo]) * (idx - lo);
-  };
-  let min = quantile(0.20);
-  let max = quantile(0.80);
-  // Tiny samples or near-uniform prices: percentile band collapses, so fall
-  // back to absolute min/max to avoid divide-by-zero shading.
-  if (prices.length < 4 || max - min < 0.03) {
-    min = prices[0];
-    max = prices[prices.length - 1];
-  }
-  state.colorReferenceByLocation[locationId] = { min, max };
-}
-
-// Grow a country-scoped reference monotonically. Keeping AT and DE on
-// separate anchors stops one market's price band from washing out the
-// other — AT prices around 1,70–1,80€ shouldn't make every DE station
-// look red, and vice versa.
-function expandCountryColorReference(key, stations) {
-  const prices = (stations || []).filter(s => s && s.isOpen && s.price > 0).map(s => s.price);
-  if (!prices.length) return;
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  const existing = state.colorReferenceByLocation[key];
-  if (!existing) {
-    state.colorReferenceByLocation[key] = { min, max };
-    return;
-  }
-  if (min < existing.min) existing.min = min;
-  if (max > existing.max) existing.max = max;
-}
-
-// Tag each fallback station with a country sentinel (__at__/__de__) and
-// grow the matching country anchor. Stations that already carry a real
-// scan-location id keep theirs and are skipped here.
-function expandFallbackColorReference(stations) {
-  const atList = [];
-  const deList = [];
-  for (const s of stations || []) {
-    if (!s || s._locationId) continue;
-    if (isInAustria(s.lat, s.lng)) {
-      s._locationId = '__at__';
-      atList.push(s);
-    } else {
-      s._locationId = '__de__';
-      deList.push(s);
+// Fetch the country-wide 24h price band for the current fuel and re-render
+// open views once it lands. There is no fallback: until the band arrives,
+// markers stay neutral grey rather than against a misleading session anchor.
+async function loadPriceBand() {
+  const fuel = state.fuelType;
+  try {
+    const res = await fetch(`/api/price-band?fuel=${encodeURIComponent(fuel)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    // Ignore late responses for a fuel the user has since switched away from.
+    if (state.fuelType !== fuel) return;
+    state.priceBand = { fuel, at: data.at || null, de: data.de || null };
+    if (state.stations && state.stations.length) {
+      if (state.map) renderStationsOnMap(state.stations, { skipFitBounds: true, skipRadiusFilter: true });
+      renderStationList(state.stations);
     }
+  } catch (err) {
+    console.warn('[priceBand] load failed:', err && err.message || err);
   }
-  if (atList.length) expandCountryColorReference('__at__', atList);
-  if (deList.length) expandCountryColorReference('__de__', deList);
 }
 
-function colorRefFor(locationId) {
-  if (locationId && state.colorReferenceByLocation[locationId]) {
-    return state.colorReferenceByLocation[locationId];
+// Three-stop HSL gradient anchored at the country's 24h P10 / P50 / P90.
+// t=0 → sattes Grün (well under median), t=0.5 → blasses Pastellgelb
+// (right at median, intentionally neutral so 1,82€ and 1,84€ near a 1,80€
+// median look almost identical), t=1 → sattes Rot.
+function priceColor3(t) {
+  const stops = [
+    { t: 0,   h: 130, s: 55, l: 52 },
+    { t: 0.5, h:  54, s: 70, l: 78 },
+    { t: 1,   h:   3, s: 78, l: 55 },
+  ];
+  const x = Math.max(0, Math.min(1, t));
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (x >= stops[i].t && x <= stops[i + 1].t) { lo = stops[i]; hi = stops[i + 1]; break; }
+  }
+  const span = hi.t - lo.t || 1;
+  const k = (x - lo.t) / span;
+  const h = lo.h + (hi.h - lo.h) * k;
+  const s = lo.s + (hi.s - lo.s) * k;
+  const l = lo.l + (hi.l - lo.l) * k;
+  return `hsl(${h.toFixed(1)}, ${s.toFixed(1)}%, ${l.toFixed(1)}%)`;
+}
+
+function countryFromLocation(locationId, lat, lng) {
+  if (locationId === '__at__') return 'at';
+  if (locationId === '__de__') return 'de';
+  if (typeof locationId === 'string') {
+    if (locationId.startsWith('at-')) return 'at';
+    if (locationId.startsWith('de-')) return 'de';
+  }
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return isInAustria(lat, lng) ? 'at' : 'de';
   }
   return null;
 }
 
-// Color a price using the stable reference for its scan-location, or the
-// session-wide fallback when no location is known.
-function priceColorStable(price, locationId) {
-  const ref = colorRefFor(locationId);
-  if (!ref || ref.max <= ref.min || !price) return priceColor(0.5);
-  const ratio = Math.max(0, Math.min(1, (price - ref.min) / (ref.max - ref.min)));
-  return priceColor(ratio);
+// Map a price to t∈[0,1] across the country band. Below P10 saturates green,
+// above P90 saturates red; between P10–P50 fills the first half, P50–P90 the
+// second half — that's what makes near-median prices look near-neutral.
+function bandRatio(price, band) {
+  const { p10, p50, p90 } = band;
+  if (!(p90 > p10) || !(p50 >= p10) || !(p90 >= p50)) return 0.5;
+  if (price <= p10) return 0;
+  if (price >= p90) return 1;
+  if (price <= p50) return 0.5 * (price - p10) / (p50 - p10);
+  return 0.5 + 0.5 * (price - p50) / (p90 - p50);
+}
+
+// Color a price against the country-wide 24h band. No band → neutral grey.
+// No second source of truth.
+function priceColorStable(price, locationId, lat, lng) {
+  if (!price) return PRICE_COLOR_NEUTRAL;
+  const country = countryFromLocation(locationId, lat, lng);
+  const band = country && state.priceBand && state.priceBand[country];
+  if (!band || band.p10 == null || band.p50 == null || band.p90 == null) {
+    return PRICE_COLOR_NEUTRAL;
+  }
+  return priceColor3(bandRatio(price, band));
 }
 
 function rankColor(ratio) {
@@ -2675,9 +2671,8 @@ function renderStationList(stations) {
     });
   }
 
-  expandFallbackColorReference(open.filter(s => !s._locationId));
   list.innerHTML = open.slice(0, 15).map((s, i) => {
-    const color = priceColorStable(s.price, s._locationId);
+    const color = priceColorStable(s.price, s._locationId, s.lat, s.lng);
     const dist = s.dist ? `${s.distApprox ? '~' : ''}${s.dist.toFixed(1)} km` : '';
     const priceParts = formatPriceParts(s.price);
     const isFav = s.id && state.favourites.includes(s.id);
@@ -3085,7 +3080,7 @@ function showStationSheet(station) {
   const sheet = document.getElementById('bottom-sheet');
   const body = document.getElementById('bottom-sheet-body');
   const priceParts = formatPriceParts(station.price);
-  const color = priceColorStable(station.price, station._locationId);
+  const color = priceColorStable(station.price, station._locationId, station.lat, station.lng);
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
     || (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -3450,7 +3445,7 @@ async function refreshStationStatus(station) {
       const priceEl = document.querySelector('.sheet-station-price');
       if (priceEl) {
         const priceParts = formatPriceParts(freshPrice);
-        priceEl.style.color = priceColorStable(freshPrice, station._locationId);
+        priceEl.style.color = priceColorStable(freshPrice, station._locationId, station.lat, station.lng);
         priceEl.innerHTML = `${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''} <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>`;
       }
     }
@@ -4367,8 +4362,10 @@ function setupSettings() {
       chip.classList.add('active');
       state.fuelType = chip.dataset.fuel;
       state.loaded.map = false;
-      // Different fuel ⇒ different price band; force fresh color anchors.
-      state.colorReferenceByLocation = {};
+      // Different fuel ⇒ different price band; refetch and drop the old one
+      // so the heatmap stays neutral until the new band lands.
+      state.priceBand = { fuel: null, at: null, de: null };
+      loadPriceBand();
       persistStateSettings({ fuelType: state.fuelType });
       if (state.currentTab === 'map') loadMapTab();
       refreshAlertUi();

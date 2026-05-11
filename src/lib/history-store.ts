@@ -171,6 +171,68 @@ export async function getPriceExtremes(locationId?: string, country?: HistoryCou
   };
 }
 
+export interface PriceBand {
+  p10: number;
+  p50: number;
+  p90: number;
+  samples: number;
+}
+
+// Need ≥50 station-price rows in the window before the band is statistically
+// useful. Below that the percentiles wobble enough that the heatmap would
+// look unstable; the frontend falls back to its session-local anchor instead.
+const PRICE_BAND_MIN_SAMPLES = 50;
+const PRICE_BAND_CACHE_TTL_MS = 10 * 60 * 1000;
+const priceBandCache = new Map<string, { value: PriceBand | null; expiresAt: number }>();
+
+/**
+ * P10/P50/P90 of station prices in the last 24 h, scoped to one country and
+ * fuel type. Drives the heatmap so 1,82 € and 1,84 € don't look wildly
+ * different just because a viewport happens to have a narrow price spread.
+ *
+ * Returns null when there is too little data to be meaningful — callers
+ * should fall back to a local (viewport-based) anchor in that case.
+ */
+export async function getCountryPriceBand(country: HistoryCountry, fuel: string): Promise<PriceBand | null> {
+  const key = `${country}:${fuel}`;
+  const cached = priceBandCache.get(key);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) return cached.value;
+
+  const locationLike = country === 'at' ? 'at-%' : 'at-%';
+  const op = country === 'at' ? 'LIKE' : 'NOT LIKE';
+  const result = await database.query<{ p10: string | null; p50: string | null; p90: string | null; samples: string }>(
+    `
+      SELECT
+        percentile_cont(0.1) WITHIN GROUP (ORDER BY price) AS p10,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY price) AS p50,
+        percentile_cont(0.9) WITHIN GROUP (ORDER BY price) AS p90,
+        COUNT(*) AS samples
+      FROM station_prices
+      WHERE timestamp >= NOW() - INTERVAL '24 hours'
+        AND fuel_type = $1
+        AND location_id ${op} $2
+        AND price > 0
+    `,
+    [fuel, locationLike]
+  );
+  const row = result.rows[0];
+  const samples = row ? Number(row.samples) : 0;
+  let band: PriceBand | null = null;
+  if (samples >= PRICE_BAND_MIN_SAMPLES && row?.p10 != null && row?.p50 != null && row?.p90 != null) {
+    const p10 = Number(row.p10);
+    const p50 = Number(row.p50);
+    const p90 = Number(row.p90);
+    // Degenerate spread (everyone within a cent of each other) → no useful
+    // gradient; let the frontend fall back.
+    if (p90 - p10 >= 0.02) {
+      band = { p10, p50, p90, samples };
+    }
+  }
+  priceBandCache.set(key, { value: band, expiresAt: now + PRICE_BAND_CACHE_TTL_MS });
+  return band;
+}
+
 export async function getAvailableLocations(country?: HistoryCountry): Promise<string[]> {
   const clauses: string[] = ['location_id IS NOT NULL'];
   const params: (string | number)[] = [];

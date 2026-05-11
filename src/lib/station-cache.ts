@@ -276,11 +276,8 @@ export async function persistPriceSnapshot(): Promise<number> {
     console.error('[StationCache] History cleanup error:', err instanceof Error ? err.message : err);
   });
 
-  const stations = getAllUniqueStations().filter(s => s.isOpen && s.price != null && s.price > 0);
-  if (!stations.length) return 0;
-
   const timestamp = new Date().toISOString();
-  const BATCH_SIZE = 5000; // ~5 params each → well within PG's 65535 param limit
+  const BATCH_SIZE = 5000; // ~6 params each → well within PG's 65535 param limit
   let written = 0;
 
   // Tag every snapshot row with a country sentinel so country-scoped history
@@ -289,24 +286,32 @@ export async function persistPriceSnapshot(): Promise<number> {
   const isAustria = (lat: number, lng: number) =>
     lat >= 46.3 && lat <= 49.1 && lng >= 9.4 && lng <= 17.2;
 
-  for (let i = 0; i < stations.length; i += BATCH_SIZE) {
-    const batch = stations.slice(i, i + BATCH_SIZE);
-    const values: string[] = [];
-    const params: unknown[] = [];
-    let idx = 1;
-    for (const s of batch) {
-      const locationId = isAustria(s.lat, s.lng) ? 'at-snapshot' : 'de-snapshot';
-      values.push(`($${idx++}::timestamptz, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
-      params.push(timestamp, locationId, s.id || null, s.name, s.brand, s.price);
+  // Persist each fuel separately so fuel_type is correct per row. A station
+  // can sit in all three fuel caches at different prices; aggregating them
+  // into one snapshot would lose the fuel association the heatmap needs.
+  for (const fuel of ['diesel', 'e5', 'e10'] as const) {
+    const stations = getAllUniqueStationsForFuel(fuel).filter(s => s.isOpen && s.price != null && s.price > 0);
+    if (!stations.length) continue;
+
+    for (let i = 0; i < stations.length; i += BATCH_SIZE) {
+      const batch = stations.slice(i, i + BATCH_SIZE);
+      const values: string[] = [];
+      const params: unknown[] = [];
+      let idx = 1;
+      for (const s of batch) {
+        const locationId = isAustria(s.lat, s.lng) ? 'at-snapshot' : 'de-snapshot';
+        values.push(`($${idx++}::timestamptz, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
+        params.push(timestamp, locationId, s.id || null, s.name, s.brand, s.price, fuel);
+      }
+      await db.query(
+        `INSERT INTO station_prices (timestamp, location_id, station_id, station_name, station_brand, price, fuel_type) VALUES ${values.join(', ')}`,
+        params
+      );
+      written += batch.length;
     }
-    await db.query(
-      `INSERT INTO station_prices (timestamp, location_id, station_id, station_name, station_brand, price) VALUES ${values.join(', ')}`,
-      params
-    );
-    written += batch.length;
   }
 
-  console.log(`[StationCache] Persisted ${written} station prices to history`);
+  if (written) console.log(`[StationCache] Persisted ${written} station prices to history`);
   return written;
 }
 

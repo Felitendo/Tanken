@@ -62,6 +62,26 @@ CREATE INDEX IF NOT EXISTS idx_station_prices_name ON station_prices(station_nam
 ALTER TABLE station_prices ADD COLUMN IF NOT EXISTS station_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_station_prices_id ON station_prices(station_id, timestamp DESC);
 
+-- fuel_type is needed for country-wide price-band aggregation (color heatmap).
+-- New rows are written with the fuel they were scanned for; the two UPDATEs
+-- backfill historical rows from scan_locations (DE admin-curated) and
+-- station_cache (AT grid + DE cached). Both UPDATEs are no-ops once all rows
+-- have a fuel_type, so they are safe to leave in the boot path.
+ALTER TABLE station_prices ADD COLUMN IF NOT EXISTS fuel_type TEXT;
+CREATE INDEX IF NOT EXISTS idx_station_prices_fuel_time ON station_prices(fuel_type, timestamp DESC);
+
+UPDATE station_prices sp
+   SET fuel_type = sl.fuel_type
+  FROM scan_locations sl
+ WHERE sp.location_id = sl.id
+   AND sp.fuel_type IS NULL;
+
+UPDATE station_prices sp
+   SET fuel_type = sc.fuel_type
+  FROM station_cache sc
+ WHERE sp.location_id = sc.location_id
+   AND sp.fuel_type IS NULL;
+
 -- Persistent station cache (survives restarts, populated by admin scan locations + AT grid)
 CREATE TABLE IF NOT EXISTS station_cache (
   location_id TEXT PRIMARY KEY,
