@@ -8,12 +8,22 @@ import {
   RotateCcw, Play, Square, Zap, Check, ArrowRight, ArrowLeft,
   Lock, Plus, X, Pencil, Inbox, ListOrdered, Loader2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { LocationPicker, type LocationPickerValue } from '@/components/LocationPicker';
 import { RequestMapPreview } from '@/components/RequestMapPreview';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
+} from '@/components/ui/card';
+import {
+  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
+  SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
+  SidebarProvider, SidebarTrigger,
+} from '@/components/ui/sidebar';
+import { Separator } from '@/components/ui/separator';
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -250,46 +260,8 @@ function IconBox({ children, className = '' }: { children: React.ReactNode; clas
   );
 }
 
-// ─── Feedback Toast ────────────────────────────────────────────────
-
-function FeedbackToast({ message, type, onDismiss }: { message: string; type: FeedbackType; onDismiss: () => void }) {
-  const [leaving, setLeaving] = useState(false);
-
-  useEffect(() => {
-    if (type === 'success') {
-      const timer = setTimeout(() => {
-        setLeaving(true);
-        setTimeout(onDismiss, 300);
-      }, 3500);
-      return () => clearTimeout(timer);
-    }
-  }, [type, onDismiss]);
-
-  const bgColor = type === 'success'
-    ? 'bg-emerald-500 text-white'
-    : type === 'error'
-      ? 'bg-red-500 text-white'
-      : 'bg-card text-card-foreground border border-border';
-
-  const icon = type === 'success'
-    ? <Check className="h-4 w-4" />
-    : type === 'error'
-      ? <span className="text-sm">!</span>
-      : null;
-
-  return (
-    <div className={`admin-toast ${leaving ? 'admin-toast--leaving' : ''}`}>
-      <button
-        type="button"
-        onClick={() => { setLeaving(true); setTimeout(onDismiss, 300); }}
-        className={`flex items-center gap-2.5 px-4 py-2.5 rounded-full shadow-lg ${bgColor} text-sm font-medium cursor-pointer`}
-      >
-        {icon}
-        {message}
-      </button>
-    </div>
-  );
-}
+// Feedback now flows through sonner; see Toaster in admin/layout.tsx and
+// `showFeedback` in the main page component.
 
 // ─── Settings Group (iOS inset grouped) ────────────────────────────
 
@@ -1218,9 +1190,60 @@ function ScannerConsole() {
   );
 }
 
+// ─── TimeInput (HH:MM, native picker-frei) ─────────────────────────
+
+function TimeInput({ value, onChange, className = '' }: { value: string; onChange: (v: string) => void; className?: string }) {
+  const [hStr, mStr] = (value || '00:00').split(':');
+  const hh = (hStr ?? '00').padStart(2, '0');
+  const mm = (mStr ?? '00').padStart(2, '0');
+
+  const clamp = (raw: string, max: number) => {
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isFinite(n)) return '00';
+    return String(Math.min(Math.max(n, 0), max)).padStart(2, '0');
+  };
+
+  const numCls =
+    'w-7 bg-transparent text-center outline-none ' +
+    '[appearance:textfield] [-moz-appearance:textfield] ' +
+    '[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+
+  return (
+    <div
+      className={
+        'inline-flex h-9 items-center gap-0.5 rounded-md border border-input bg-background px-2.5 text-sm font-mono tabular-nums shadow-xs transition-[color,box-shadow] ' +
+        'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 ' +
+        'dark:bg-input/30 ' +
+        className
+      }
+    >
+      <Clock className="mr-1.5 size-3.5 text-muted-foreground" aria-hidden="true" />
+      <input
+        type="number"
+        min={0}
+        max={23}
+        value={hh}
+        aria-label="Stunden"
+        onChange={(e) => onChange(`${clamp(e.target.value, 23)}:${mm}`)}
+        className={numCls}
+      />
+      <span className="text-muted-foreground">:</span>
+      <input
+        type="number"
+        min={0}
+        max={59}
+        value={mm}
+        aria-label="Minuten"
+        onChange={(e) => onChange(`${hh}:${clamp(e.target.value, 59)}`)}
+        className={numCls}
+      />
+    </div>
+  );
+}
+
 // ─── Scan Times (12-Uhr-Regel awareness) ───────────────────────────
 
-function ScanTimesGroup({ config, onChange }: { config: AdminConfig; onChange: (patch: Partial<AdminConfig>) => void }) {
+function ScanTimesCard({ config, onChange }: { config: AdminConfig; onChange: (patch: Partial<AdminConfig>) => void }) {
   const times = config.scanTimes ?? [];
   const updateAt = (idx: number, value: string) => {
     const next = [...times];
@@ -1237,52 +1260,47 @@ function ScanTimesGroup({ config, onChange }: { config: AdminConfig; onChange: (
   };
 
   return (
-    <SettingsGroup title="Scan-Zeiten">
-      <div className="admin-settings-row" style={{ display: 'block' }}>
-        <p className="text-[11px] text-muted-foreground" style={{ marginBottom: '8px' }}>
-          Seit April 2026 dürfen DE-Tankstellen Preise nur 1×/Tag um 12:00 erhöhen, Senkungen sind jederzeit erlaubt (AT analog). Mehrere Scan-Zeitpunkte erfassen die Senkungen am Nachmittag/Abend.
-        </p>
+    <Card>
+      <CardHeader>
+        <CardTitle>Scan-Zeiten</CardTitle>
+        <CardDescription>
+          Seit April 2026 dürfen DE-Tankstellen Preise nur 1×/Tag um 12:00 erhöhen,
+          Senkungen sind jederzeit erlaubt (AT analog). Mehrere Scan-Zeitpunkte
+          erfassen die Senkungen am Nachmittag/Abend.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
         <div className="space-y-2">
-          {times.map((time, idx) => {
-            const valid = SCAN_TIME_REGEX.test(time);
-            return (
-              <div key={idx} className="flex items-center gap-2">
-                <Input
-                  type="time"
-                  value={time}
-                  onChange={(e) => updateAt(idx, e.target.value)}
-                  className={`w-32 font-mono ${valid ? '' : 'border-red-500'}`}
-                  placeholder="HH:MM"
-                />
-                {!valid && <span className="text-[11px] text-red-500">HH:MM</span>}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="admin-btn shrink-0"
-                  onClick={() => removeRow(idx)}
-                  disabled={times.length <= 1}
-                  aria-label="Scan-Zeit entfernen"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            );
-          })}
+          {times.map((time, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <TimeInput value={time} onChange={(v) => updateAt(idx, v)} />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => removeRow(idx)}
+                disabled={times.length <= 1}
+                aria-label="Scan-Zeit entfernen"
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 />
+              </Button>
+            </div>
+          ))}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="admin-btn"
             onClick={addRow}
             disabled={times.length >= 12}
+            className="mt-1"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus />
             Scan-Zeit hinzufügen
           </Button>
         </div>
-      </div>
-    </SettingsGroup>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1300,78 +1318,161 @@ function AppConfigSection({
   testingApiKey?: boolean;
 }) {
   return (
-    <div className="space-y-5 admin-stagger">
-      <SettingsGroup title="API-Schlüssel">
-        <SettingsRow label="Tankerkönig API Key" hint={<>Kostenlos unter <a href="https://creativecommons.tankerkoenig.de" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">tankerkoenig.de</a></>}>
-          <div className="flex gap-2">
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>API-Schlüssel</CardTitle>
+          <CardDescription>Zugangsdaten für Datenquellen und Session-Signatur.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="cfg-api-key">Tankerkönig API Key</Label>
+            <div className="flex gap-2">
+              <Input
+                id="cfg-api-key"
+                value={config.apiKey}
+                onChange={(e) => onChange({ apiKey: e.target.value })}
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                className="font-mono text-xs"
+              />
+              {onTestApiKey && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="default"
+                  className="shrink-0"
+                  onClick={onTestApiKey}
+                  disabled={testingApiKey || !config.apiKey}
+                >
+                  {testingApiKey ? <Loader2 className="animate-spin" /> : <KeyRound />}
+                  {testingApiKey ? 'Teste…' : 'Testen'}
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Kostenlos unter{' '}
+              <a
+                href="https://creativecommons.tankerkoenig.de"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                tankerkoenig.de
+              </a>
+              .
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="cfg-ors-key">OpenRouteService Key</Label>
             <Input
-              value={config.apiKey}
-              onChange={(e) => onChange({ apiKey: e.target.value })}
-              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              id="cfg-ors-key"
+              value={config.orsApiKey}
+              onChange={(e) => onChange({ orsApiKey: e.target.value })}
+              placeholder="Für Fahrtdistanzen statt Luftlinie"
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional — unter{' '}
+              <a
+                href="https://openrouteservice.org/dev/#/signup"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                openrouteservice.org
+              </a>{' '}
+              registrieren.
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="cfg-session-secret">Session Secret</Label>
+            <Input
+              id="cfg-session-secret"
+              value={config.sessionSecret}
+              onChange={(e) => onChange({ sessionSecret: e.target.value })}
+              placeholder="Wird automatisch generiert"
               className="font-mono text-xs"
             />
-            {onTestApiKey && (
-              <Button type="button" variant="outline" size="sm" className="admin-btn shrink-0" onClick={onTestApiKey} disabled={testingApiKey || !config.apiKey}>
-                <KeyRound className="h-3.5 w-3.5" />
-                {testingApiKey ? 'Teste...' : 'Testen'}
-              </Button>
-            )}
           </div>
-        </SettingsRow>
-        <SettingsRow label="OpenRouteService Key" hint={<>Optional — unter <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">openrouteservice.org</a> registrieren</>}>
-          <Input
-            value={config.orsApiKey}
-            onChange={(e) => onChange({ orsApiKey: e.target.value })}
-            placeholder="Für Fahrtdistanzen statt Luftlinie"
-          />
-        </SettingsRow>
-        <SettingsRow label="Session Secret">
-          <Input
-            value={config.sessionSecret}
-            onChange={(e) => onChange({ sessionSecret: e.target.value })}
-            placeholder="Wird automatisch generiert"
-            className="font-mono text-xs"
-          />
-        </SettingsRow>
-      </SettingsGroup>
+        </CardContent>
+      </Card>
 
-      <SettingsGroup title="Suche">
-        <SettingsRow label="Kraftstoff">
-          <Select value={config.fuelType} onValueChange={(v) => onChange({ fuelType: v })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="diesel">Diesel</SelectItem>
-              <SelectItem value="e5">Super E5</SelectItem>
-              <SelectItem value="e10">Super E10</SelectItem>
-            </SelectContent>
-          </Select>
-        </SettingsRow>
-        <SettingsRow label="Scan-Intervall" inline>
-          <div className="flex items-center gap-2">
-            <Input type="number" min={1} value={config.refreshIntervalMinutes} onChange={(e) => onChange({ refreshIntervalMinutes: Number(e.target.value) || 60 })} className="w-20 text-right" />
-            <span className="text-sm text-muted-foreground">Min.</span>
+      <Card>
+        <CardHeader>
+          <CardTitle>Suche</CardTitle>
+          <CardDescription>Standard-Kraftstoff und Refresh-Intervall der Web-App.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="cfg-fuel">Kraftstoff</Label>
+            <Select value={config.fuelType} onValueChange={(v) => onChange({ fuelType: v })}>
+              <SelectTrigger id="cfg-fuel" className="w-full sm:w-56">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="diesel">Diesel</SelectItem>
+                <SelectItem value="e5">Super E5</SelectItem>
+                <SelectItem value="e10">Super E10</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </SettingsRow>
-      </SettingsGroup>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label htmlFor="cfg-refresh">Refresh-Intervall</Label>
+              <p className="text-xs text-muted-foreground">Wie oft die Web-App neue Daten holt.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                id="cfg-refresh"
+                type="number"
+                min={1}
+                value={config.refreshIntervalMinutes}
+                onChange={(e) => onChange({ refreshIntervalMinutes: Number(e.target.value) || 60 })}
+                className="w-20 text-right font-mono tabular-nums"
+              />
+              <span className="text-sm text-muted-foreground">Min.</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      <ScanTimesGroup config={config} onChange={onChange} />
+      <ScanTimesCard config={config} onChange={onChange} />
 
-      <SettingsGroup title="Schwellenwerte">
-        <SettingsRow label="Gut unter Durchschnitt" inline>
-          <div className="flex items-center gap-2">
-            <Input type="number" value={config.thresholds.goodBelowAvgCents} onChange={(e) => onChange({ thresholds: { ...config.thresholds, goodBelowAvgCents: Number(e.target.value) || 3 } })} className="w-20 text-right" />
-            <span className="text-sm text-muted-foreground">ct</span>
+      <Card>
+        <CardHeader>
+          <CardTitle>Schwellenwerte</CardTitle>
+          <CardDescription>Wie weit unter Durchschnitt ein Preis als „gut" oder „okay" gilt.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="cfg-good" className="font-normal">Gut unter Durchschnitt</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="cfg-good"
+                type="number"
+                value={config.thresholds.goodBelowAvgCents}
+                onChange={(e) => onChange({ thresholds: { ...config.thresholds, goodBelowAvgCents: Number(e.target.value) || 3 } })}
+                className="w-20 text-right font-mono tabular-nums"
+              />
+              <span className="text-sm text-muted-foreground">ct</span>
+            </div>
           </div>
-        </SettingsRow>
-        <SettingsRow label="Okay unter Durchschnitt" inline>
-          <div className="flex items-center gap-2">
-            <Input type="number" value={config.thresholds.okayBelowAvgCents} onChange={(e) => onChange({ thresholds: { ...config.thresholds, okayBelowAvgCents: Number(e.target.value) || 1 } })} className="w-20 text-right" />
-            <span className="text-sm text-muted-foreground">ct</span>
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="cfg-okay" className="font-normal">Okay unter Durchschnitt</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="cfg-okay"
+                type="number"
+                value={config.thresholds.okayBelowAvgCents}
+                onChange={(e) => onChange({ thresholds: { ...config.thresholds, okayBelowAvgCents: Number(e.target.value) || 1 } })}
+                className="w-20 text-right font-mono tabular-nums"
+              />
+              <span className="text-sm text-muted-foreground">ct</span>
+            </div>
           </div>
-        </SettingsRow>
-      </SettingsGroup>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -1519,88 +1620,106 @@ function SetupPanel({
   const steps = ['Account', 'API & Suche', 'Erweitert'];
 
   return (
-    <div className="admin-panel-enter max-w-xl mx-auto">
-      {/* Step indicator */}
-      <div className="flex items-center justify-center gap-2 mb-8">
-        {steps.map((s, i) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setStep(i)}
-            className="flex items-center gap-2 group"
-          >
-            <div className={`admin-step-dot ${i === step ? 'admin-step-dot--active' : i < step ? 'admin-step-dot--done' : ''}`} />
-            <span className={`text-xs font-medium transition-colors ${i === step ? 'text-foreground' : 'text-muted-foreground'}`}>
-              {s}
-            </span>
-            {i < steps.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground/40 mx-1" />}
-          </button>
-        ))}
-      </div>
-
-      <form onSubmit={onSubmit}>
-        {/* Header */}
-        <div className="text-center mb-8">
-          <IconBox className="admin-icon-box--lg bg-primary/10 mx-auto mb-4">
-            <UserPlus className="h-6 w-6 text-primary" />
-          </IconBox>
-          <h2 className="text-xl font-semibold tracking-tight">Erstkonfiguration</h2>
-          <p className="text-sm text-muted-foreground mt-1">Admin anlegen und Tanken einrichten.</p>
-        </div>
-
-        {/* Step 0: Account */}
-        <div className={step === 0 ? 'admin-section-enter' : 'hidden'}>
-          <SettingsGroup title="Admin-Account">
-            <SettingsRow label="Benutzername">
-              <Input autoComplete="username" required minLength={3} value={username} onChange={(e) => onUsernameChange(e.target.value)} />
-            </SettingsRow>
-            <SettingsRow label="Passwort">
-              <Input type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => onPasswordChange(e.target.value)} />
-            </SettingsRow>
-          </SettingsGroup>
-        </div>
-
-        {/* Step 1: API & Search */}
-        <div className={step === 1 ? 'admin-section-enter' : 'hidden'}>
-          <AppConfigSection config={config} onChange={onChange} />
-        </div>
-
-        {/* Step 2: Advanced */}
-        <div className={step === 2 ? 'admin-section-enter' : 'hidden'}>
-          <div className="space-y-5">
-            <OidcSection config={config} onChange={onChange} />
-            <SmtpSection config={config} onChange={onChange} />
+    <div className="flex min-h-svh items-center justify-center p-6">
+      <Card className="w-full max-w-2xl">
+        <CardHeader className="items-center text-center">
+          <div className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <UserPlus className="size-5" />
           </div>
-        </div>
+          <CardTitle>Erstkonfiguration</CardTitle>
+          <CardDescription>Admin anlegen und Tanken einrichten.</CardDescription>
 
-        {/* Navigation */}
-        <div className="flex items-center justify-between mt-8">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setStep(Math.max(0, step - 1))}
-            className={step === 0 ? 'invisible' : ''}
-          >
-            <ArrowLeft className="h-4 w-4" /> Zurück
-          </Button>
-          {step < steps.length - 1 ? (
+          {/* Step indicator */}
+          <div className="mt-4 flex items-center justify-center gap-3">
+            {steps.map((label, i) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setStep(i)}
+                className="flex items-center gap-2 text-xs font-medium"
+              >
+                <span
+                  className={
+                    'flex size-6 items-center justify-center rounded-full border text-[11px] transition-colors ' +
+                    (i === step
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : i < step
+                        ? 'border-primary/40 bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground')
+                  }
+                >
+                  {i < step ? <Check className="size-3" /> : i + 1}
+                </span>
+                <span className={i === step ? 'text-foreground' : 'text-muted-foreground'}>{label}</span>
+                {i < steps.length - 1 && <ChevronRight className="size-3 text-muted-foreground/40" />}
+              </button>
+            ))}
+          </div>
+        </CardHeader>
+
+        <form onSubmit={onSubmit}>
+          <CardContent className="space-y-6">
+            <div className={step === 0 ? 'grid gap-4' : 'hidden'}>
+              <div className="grid gap-2">
+                <Label htmlFor="setup-username">Benutzername</Label>
+                <Input
+                  id="setup-username"
+                  autoComplete="username"
+                  required
+                  minLength={3}
+                  value={username}
+                  onChange={(e) => onUsernameChange(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Mindestens 3 Zeichen.</p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="setup-password">Passwort</Label>
+                <Input
+                  id="setup-password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => onPasswordChange(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Mindestens 8 Zeichen.</p>
+              </div>
+            </div>
+
+            <div className={step === 1 ? '' : 'hidden'}>
+              <AppConfigSection config={config} onChange={onChange} />
+            </div>
+
+            <div className={step === 2 ? 'space-y-6' : 'hidden'}>
+              <OidcSection config={config} onChange={onChange} />
+              <SmtpSection config={config} onChange={onChange} />
+            </div>
+          </CardContent>
+
+          <CardFooter className="justify-between">
             <Button
               type="button"
+              variant="ghost"
               size="sm"
-              className="admin-btn admin-btn-primary"
-              onClick={() => setStep(step + 1)}
+              onClick={() => setStep(Math.max(0, step - 1))}
+              className={step === 0 ? 'invisible' : ''}
             >
-              Weiter <ArrowRight className="h-4 w-4" />
+              <ArrowLeft /> Zurück
             </Button>
-          ) : (
-            <Button type="submit" className="admin-btn admin-btn-primary" disabled={submitting}>
-              <Save className="h-4 w-4" />
-              {submitting ? 'Speichert...' : 'Setup abschließen'}
-            </Button>
-          )}
-        </div>
-      </form>
+            {step < steps.length - 1 ? (
+              <Button type="button" size="sm" onClick={() => setStep(step + 1)}>
+                Weiter <ArrowRight />
+              </Button>
+            ) : (
+              <Button type="submit" size="sm" disabled={submitting}>
+                {submitting ? <Loader2 className="animate-spin" /> : <Save />}
+                {submitting ? 'Speichert…' : 'Setup abschließen'}
+              </Button>
+            )}
+          </CardFooter>
+        </form>
+      </Card>
     </div>
   );
 }
@@ -1623,30 +1742,47 @@ function LoginPanel({
   submitting: boolean;
 }) {
   return (
-    <div className="admin-panel-enter flex items-center justify-center min-h-[70vh]">
-      <div className="admin-glass-card w-full max-w-sm p-8">
-        <div className="text-center mb-6">
-          <IconBox className="admin-icon-box--lg bg-primary/10 mx-auto mb-4">
-            <Lock className="h-6 w-6 text-primary" />
-          </IconBox>
-          <h2 className="text-xl font-semibold tracking-tight">Admin Login</h2>
-          <p className="text-sm text-muted-foreground mt-1">Mit lokalem Account anmelden.</p>
-        </div>
-
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="login-username" className="text-sm">Benutzername</Label>
-            <Input id="login-username" autoComplete="username" required value={username} onChange={(e) => onUsernameChange(e.target.value)} className="h-11" />
+    <div className="flex min-h-svh items-center justify-center p-6">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="items-center text-center">
+          <div className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Lock className="size-5" />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="login-password" className="text-sm">Passwort</Label>
-            <Input id="login-password" type="password" autoComplete="current-password" required value={password} onChange={(e) => onPasswordChange(e.target.value)} className="h-11" />
-          </div>
-          <Button type="submit" className="w-full h-11 admin-btn admin-btn-primary mt-2" disabled={submitting}>
-            {submitting ? 'Einloggen...' : 'Einloggen'}
+          <CardTitle>Admin Login</CardTitle>
+          <CardDescription>Mit lokalem Account anmelden.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form id="admin-login-form" onSubmit={onSubmit} className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="login-username">Benutzername</Label>
+              <Input
+                id="login-username"
+                autoComplete="username"
+                required
+                value={username}
+                onChange={(e) => onUsernameChange(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="login-password">Passwort</Label>
+              <Input
+                id="login-password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => onPasswordChange(e.target.value)}
+              />
+            </div>
+          </form>
+        </CardContent>
+        <CardFooter>
+          <Button form="admin-login-form" type="submit" className="w-full" disabled={submitting}>
+            {submitting && <Loader2 className="animate-spin" />}
+            {submitting ? 'Einloggen…' : 'Einloggen'}
           </Button>
-        </form>
-      </div>
+        </CardFooter>
+      </Card>
     </div>
   );
 }
@@ -1683,13 +1819,6 @@ function DashboardPanel({
   showFeedback: (msg: string, type: FeedbackType) => void;
 }) {
   const [activeSection, setActiveSection] = useState<SidebarSection>('config');
-  const [animKey, setAnimKey] = useState(0);
-
-  const switchSection = (section: SidebarSection) => {
-    if (section === activeSection) return;
-    setActiveSection(section);
-    setAnimKey((k) => k + 1);
-  };
 
   const sectionIcons: Record<SidebarSection, string> = {
     config: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
@@ -1699,137 +1828,102 @@ function DashboardPanel({
     scanner: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   };
 
+  const currentSection = SECTIONS.find((s) => s.id === activeSection);
+  const isFormSection = activeSection === 'config' || activeSection === 'oidc' || activeSection === 'smtp';
+
   return (
-    <div className="admin-panel-enter flex min-h-screen">
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:fixed lg:inset-y-0 border-r border-border/50 bg-card/50 backdrop-blur-sm">
-        {/* Sidebar header */}
-        <div className="p-5 pb-2">
-          <div className="flex items-center gap-2 mb-1">
-            <Fuel className="h-4 w-4 text-primary" />
-            <span className="text-[11px] font-bold tracking-widest uppercase text-primary">Tanken</span>
-          </div>
-          <h1 className="text-lg font-semibold tracking-tight">Einstellungen</h1>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            {user?.username || user?.displayName || 'Admin'}
-          </p>
-        </div>
-
-        {/* Nav items */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {SECTIONS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => switchSection(id)}
-              className={`admin-sidebar-item ${activeSection === id ? 'admin-sidebar-item--active' : ''}`}
-            >
-              <IconBox className={`admin-icon-box--sm ${sectionIcons[id]}`}>
-                <Icon className="h-3.5 w-3.5" />
-              </IconBox>
-              {label}
-            </button>
-          ))}
-        </nav>
-
-        {/* Sidebar footer */}
-        <div className="p-3 border-t border-border/50">
-          <button
-            type="button"
-            onClick={onLogout}
-            className="admin-sidebar-item text-muted-foreground hover:text-destructive"
-          >
-            <LogOut className="h-4 w-4" />
-            Abmelden
-          </button>
-        </div>
-      </aside>
-
-      {/* Main content */}
-      <main className="flex-1 lg:pl-60">
-        {/* Mobile pill bar */}
-        <div className="lg:hidden sticky top-0 z-10 bg-[--admin-bg]/90 backdrop-blur-md border-b border-border/50 px-4 pt-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Fuel className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold">Einstellungen</span>
+    <SidebarProvider>
+      <Sidebar collapsible="icon">
+        <SidebarHeader>
+          <div className="flex items-center gap-2 px-2 py-1.5">
+            <div className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <Fuel className="size-4" />
             </div>
-            <button
-              type="button"
-              onClick={onLogout}
-              className="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Abmelden
-            </button>
-          </div>
-          <div className="admin-pill-bar">
-            {SECTIONS.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => switchSection(id)}
-                className={`admin-pill ${activeSection === id ? 'admin-pill--active' : ''}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Content area */}
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 lg:py-10">
-          {/* Section header */}
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-xl font-semibold tracking-tight">
-                {SECTIONS.find((s) => s.id === activeSection)?.label}
-              </h2>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {SECTIONS.find((s) => s.id === activeSection)?.description}
-              </p>
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-semibold">Tanken Admin</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {user?.username || user?.displayName || 'Admin'}
+              </span>
             </div>
-            {activeSection !== 'scanner' && activeSection !== 'locations' && (
-              <Button
-                type="button"
-                size="sm"
-                className="admin-btn admin-btn-primary"
-                disabled={submitting}
-                onClick={onSubmit as unknown as () => void}
-              >
-                <Save className="h-4 w-4" />
-                {submitting ? 'Speichert...' : 'Speichern'}
-              </Button>
-            )}
           </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {SECTIONS.map(({ id, label, icon: Icon }) => (
+                  <SidebarMenuItem key={id}>
+                    <SidebarMenuButton
+                      isActive={activeSection === id}
+                      onClick={() => setActiveSection(id)}
+                      tooltip={label}
+                    >
+                      <span className={`flex size-6 items-center justify-center rounded-md ${sectionIcons[id]}`}>
+                        <Icon className="size-3.5" />
+                      </span>
+                      <span>{label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={onLogout} tooltip="Abmelden">
+                <LogOut />
+                <span>Abmelden</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      </Sidebar>
 
-          {/* Section content with animation */}
-          <div key={animKey} className="admin-section-enter">
-            {activeSection === 'config' && (
-              <form onSubmit={onSubmit}>
-                <AppConfigSection config={config} onChange={onChange} onTestApiKey={onTestApiKey} testingApiKey={testingApiKey} />
-              </form>
-            )}
-            {activeSection === 'oidc' && (
-              <form onSubmit={onSubmit}>
-                <OidcSection config={config} onChange={onChange} />
-              </form>
-            )}
-            {activeSection === 'smtp' && (
-              <form onSubmit={onSubmit}>
-                <SmtpSection config={config} onChange={onChange} onTestEmail={onTestEmail} testingEmail={testingEmail} testEmailRecipient={testEmailRecipient} onTestEmailRecipientChange={onTestEmailRecipientChange} />
-              </form>
-            )}
-            {activeSection === 'locations' && (
-              <LocationsPanel showFeedback={showFeedback} />
-            )}
-            {activeSection === 'scanner' && (
-              <ScannerConsole />
-            )}
+      <SidebarInset>
+        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/60 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <div className="flex flex-1 items-center gap-3 min-w-0">
+            <div className="min-w-0">
+              <h1 className="truncate text-sm font-semibold tracking-tight">{currentSection?.label}</h1>
+              <p className="truncate text-xs text-muted-foreground">{currentSection?.description}</p>
+            </div>
           </div>
+          {isFormSection && (
+            <Button type="button" size="sm" disabled={submitting} onClick={onSubmit as unknown as () => void}>
+              {submitting ? <Loader2 className="animate-spin" /> : <Save />}
+              {submitting ? 'Speichert…' : 'Speichern'}
+            </Button>
+          )}
+        </header>
+
+        <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 lg:py-10">
+          {activeSection === 'config' && (
+            <form onSubmit={onSubmit}>
+              <AppConfigSection config={config} onChange={onChange} onTestApiKey={onTestApiKey} testingApiKey={testingApiKey} />
+            </form>
+          )}
+          {activeSection === 'oidc' && (
+            <form onSubmit={onSubmit}>
+              <OidcSection config={config} onChange={onChange} />
+            </form>
+          )}
+          {activeSection === 'smtp' && (
+            <form onSubmit={onSubmit}>
+              <SmtpSection config={config} onChange={onChange} onTestEmail={onTestEmail} testingEmail={testingEmail} testEmailRecipient={testEmailRecipient} onTestEmailRecipientChange={onTestEmailRecipientChange} />
+            </form>
+          )}
+          {activeSection === 'locations' && (
+            <LocationsPanel showFeedback={showFeedback} />
+          )}
+          {activeSection === 'scanner' && (
+            <ScannerConsole />
+          )}
         </div>
-      </main>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 
@@ -1842,17 +1936,16 @@ export default function AdminPage() {
   const [testingEmail, setTestingEmail] = useState(false);
   const [testEmailRecipient, setTestEmailRecipient] = useState('');
   const [testingApiKey, setTestingApiKey] = useState(false);
-  const [feedback, setFeedback] = useState<{ message: string; type: FeedbackType } | null>(null);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [config, setConfig] = useState<AdminConfig>(defaultConfig);
 
   const showFeedback = useCallback((message: string, type: FeedbackType) => {
-    setFeedback({ message, type });
+    if (type === 'success') toast.success(message);
+    else if (type === 'error') toast.error(message);
+    else toast(message);
   }, []);
-
-  const dismissFeedback = useCallback(() => setFeedback(null), []);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -1879,7 +1972,6 @@ export default function AdminPage() {
   const handleBootstrap = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    setFeedback(null);
     try {
       await api('/api/admin/bootstrap', {
         method: 'POST',
@@ -1899,7 +1991,6 @@ export default function AdminPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    setFeedback(null);
     try {
       await api('/api/admin/login', {
         method: 'POST',
@@ -1919,7 +2010,6 @@ export default function AdminPage() {
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    setFeedback(null);
     try {
       const result = await api<{ config: AdminConfig }>('/api/admin/config', {
         method: 'PUT',
@@ -1938,7 +2028,6 @@ export default function AdminPage() {
 
   const handleTestEmail = async () => {
     setTestingEmail(true);
-    setFeedback(null);
     try {
       await api('/api/admin/smtp-test', { method: 'POST', body: JSON.stringify({ to: testEmailRecipient }) });
       showFeedback(`Test-E-Mail an ${testEmailRecipient} gesendet.`, 'success');
@@ -1951,7 +2040,6 @@ export default function AdminPage() {
 
   const handleTestApiKey = async () => {
     setTestingApiKey(true);
-    setFeedback(null);
     try {
       const result = await api<{ ok: boolean; stations?: number }>('/api/admin/apikey-test', {
         method: 'POST',
@@ -1966,7 +2054,6 @@ export default function AdminPage() {
   };
 
   const handleLogout = async () => {
-    setFeedback(null);
     try {
       await api('/api/logout', { method: 'POST' });
       showFeedback('Abgemeldet.', 'success');
@@ -1993,17 +2080,7 @@ export default function AdminPage() {
   const panel = !status?.bootstrapped ? 'setup' : status.authenticated ? 'dashboard' : 'login';
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--admin-bg)' }}>
-      {/* Toast feedback */}
-      {feedback && (
-        <FeedbackToast
-          key={feedback.message}
-          message={feedback.message}
-          type={feedback.type}
-          onDismiss={dismissFeedback}
-        />
-      )}
-
+    <div className="min-h-svh bg-background">
       {/* Setup */}
       {panel === 'setup' && (
         <div className="px-4 py-8 sm:py-12">
