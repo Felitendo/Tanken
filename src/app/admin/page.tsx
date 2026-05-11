@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import {
   Fuel, KeyRound, LogOut, Mail, Radio, Save, Shield, Settings,
   UserPlus, Trash2, MapPin, Clock, Activity, ChevronDown, ChevronRight,
@@ -24,6 +23,10 @@ import {
   SidebarProvider, SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Badge as ShadcnBadge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -252,41 +255,8 @@ function Flag({ country, className }: { country: 'de' | 'at'; className?: string
   );
 }
 
-function IconBox({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`admin-icon-box ${className}`}>
-      {children}
-    </div>
-  );
-}
-
 // Feedback now flows through sonner; see Toaster in admin/layout.tsx and
 // `showFeedback` in the main page component.
-
-// ─── Settings Group (iOS inset grouped) ────────────────────────────
-
-function SettingsGroup({ title, children }: { title?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2">
-      {title && <p className="admin-section-header">{title}</p>}
-      <div className="admin-settings-group">{children}</div>
-    </div>
-  );
-}
-
-function SettingsRow({ label, hint, children, inline }: { label?: string; hint?: React.ReactNode; children: React.ReactNode; inline?: boolean }) {
-  return (
-    <div className={`admin-settings-row ${inline ? 'admin-settings-row--inline' : ''}`}>
-      {label && (
-        <div className={inline ? 'admin-row-label' : ''}>
-          <Label className="text-sm">{label}</Label>
-          {hint && <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p>}
-        </div>
-      )}
-      <div className={inline ? 'admin-row-control' : 'w-full'}>{children}</div>
-    </div>
-  );
-}
 
 // ─── Log type styles ───────────────────────────────────────────────
 
@@ -320,111 +290,105 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
   })();
 
   return (
-    <div className="admin-settings-group p-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="inline-flex items-center w-8 shrink-0">{flag}</span>
-          <div>
-            <p className="text-sm font-semibold">{label}</p>
-            <p className="text-[11px] text-muted-foreground">{apiLabel}</p>
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="inline-flex w-8 shrink-0 items-center">{flag}</span>
+          <div className="min-w-0">
+            <CardTitle className="text-sm">{label}</CardTitle>
+            <CardDescription className="text-[11px]">{apiLabel}</CardDescription>
           </div>
         </div>
         {cs.scanning ? (
           <Badge variant="success">
-            {cs.mode === 'discovery' ? `Grid-Discovery ${cs.progress}` : `Standort-Scan ${cs.progress}`}
+            {cs.mode === 'discovery' ? `Grid ${cs.progress}` : `Scan ${cs.progress}`}
           </Badge>
         ) : cs.lastCompletedAt ? (
           <Badge>{fmtRelative(cs.lastCompletedAt)}</Badge>
         ) : (
           <Badge variant="warning">Warte</Badge>
         )}
-      </div>
-
-      {/* Progress bar */}
-      {cs.scanning && cs.progress && (
-        <div className="space-y-2">
-          <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-            <div
-              className={`h-full admin-progress-bar ${cs.scanning ? 'admin-progress-bar--active' : 'bg-primary'}`}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          {cs.currentLocation && (
-            <div className="flex items-start gap-2 text-xs">
-              <span className="mt-0.5 text-muted-foreground shrink-0">Aktueller Standort:</span>
-              <span className="font-semibold truncate">{cs.currentLocation.name}</span>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {cs.scanning && cs.progress && (
+          <div className="space-y-2">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+              <div
+                className="admin-progress-bar admin-progress-bar--active h-full"
+                style={{ width: `${pct}%` }}
+              />
             </div>
-          )}
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-            {cs.currentPoint && (
-              <span className="flex items-center gap-1 font-mono">
-                <MapPin className="h-3 w-3" />
-                {cs.currentPoint.lat.toFixed(2)}°N, {cs.currentPoint.lng.toFixed(2)}°E
-              </span>
+            {cs.currentLocation && (
+              <div className="flex items-start gap-2 text-xs">
+                <span className="mt-0.5 shrink-0 text-muted-foreground">Aktueller Standort:</span>
+                <span className="truncate font-semibold">{cs.currentLocation.name}</span>
+              </div>
             )}
-            {cs.estimatedEndAt && (
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                {fmtEta(cs.estimatedEndAt)}
-              </span>
-            )}
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              {cs.currentPoint && (
+                <span className="flex items-center gap-1 font-mono">
+                  <MapPin className="size-3" />
+                  {cs.currentPoint.lat.toFixed(2)}°N, {cs.currentPoint.lng.toFixed(2)}°E
+                </span>
+              )}
+              {cs.estimatedEndAt && (
+                <span className="flex items-center gap-1">
+                  <Clock className="size-3" />
+                  {fmtEta(cs.estimatedEndAt)}
+                </span>
+              )}
+            </div>
           </div>
+        )}
+
+        <div className="grid grid-cols-4 gap-4">
+          <StatCell label={cs.mode === 'discovery' ? 'Grid' : 'Standorte'} value={cs.gridPoints ? cs.gridPoints.toLocaleString('de-DE') : '—'} />
+          <StatCell label="Stationen" value={cs.stationsScanned ? cs.stationsScanned.toLocaleString('de-DE') : '—'} />
+          <StatCell label="Dauer" value={cs.lastDurationSec ? fmtDuration(cs.lastDurationSec) : '—'} />
+          <StatCell label="Ø Call" value={cs.avgCallSec ? `${cs.avgCallSec}s` : '—'} />
         </div>
-      )}
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCell label={cs.mode === 'discovery' ? 'Grid' : 'Standorte'} value={cs.gridPoints ? cs.gridPoints.toLocaleString('de-DE') : '—'} />
-        <StatCell label="Stationen" value={cs.stationsScanned ? cs.stationsScanned.toLocaleString('de-DE') : '—'} />
-        <StatCell label="Dauer" value={cs.lastDurationSec ? fmtDuration(cs.lastDurationSec) : '—'} />
-        <StatCell label="Ø Call" value={cs.avgCallSec ? `${cs.avgCallSec}s` : '—'} />
-      </div>
-
-      {/* Log toggle */}
-      {cs.log.length > 0 && (
-        <div>
-          <button
-            type="button"
-            onClick={() => setShowLog(!showLog)}
-            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Activity className="h-3 w-3" />
-            Log ({cs.log.length})
-            <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${showLog ? 'rotate-180' : ''}`} />
-          </button>
-          <div className={`admin-log-expand ${showLog ? 'admin-log-expand--open' : ''}`}>
-            <div>
-              <div className="mt-2 rounded-lg border bg-muted/30 max-h-44 overflow-y-auto">
+        {cs.log.length > 0 && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowLog(!showLog)}
+              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Activity className="size-3" />
+              Log ({cs.log.length})
+              <ChevronDown className={'size-3 transition-transform duration-200 ' + (showLog ? 'rotate-180' : '')} />
+            </button>
+            {showLog && (
+              <div className="mt-2 max-h-44 overflow-y-auto rounded-md border bg-muted/30">
                 {cs.log.slice().reverse().map((entry, i) => (
-                  <div key={i} className="flex items-start gap-2 px-3 py-1.5 border-b border-border/40 last:border-0">
-                    <div className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${logTypeDots[entry.type] || 'bg-muted-foreground'}`} />
-                    <span className="text-[10px] text-muted-foreground font-mono shrink-0 pt-px">
+                  <div key={i} className="flex items-start gap-2 border-b px-3 py-1.5 last:border-0">
+                    <div className={'mt-1.5 size-1.5 shrink-0 rounded-full ' + (logTypeDots[entry.type] || 'bg-muted-foreground')} />
+                    <span className="shrink-0 pt-px font-mono text-[10px] text-muted-foreground">
                       {new Date(entry.time).toLocaleTimeString('de-DE')}
                     </span>
-                    <span className={`text-xs break-all ${logTypeText[entry.type] || ''}`}>
+                    <span className={'break-all text-xs ' + (logTypeText[entry.type] || '')}>
                       {entry.message}
                     </span>
                   </div>
                 ))}
               </div>
-            </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Errors */}
-      {cs.errors.length > 0 && (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 max-h-28 overflow-y-auto">
-          <div className="px-3 py-1.5 border-b border-destructive/10">
-            <p className="text-xs font-medium text-destructive">Fehler ({cs.errors.length})</p>
+        {cs.errors.length > 0 && (
+          <div className="max-h-28 overflow-y-auto rounded-md border border-destructive/20 bg-destructive/5">
+            <div className="border-b border-destructive/10 px-3 py-1.5">
+              <p className="text-xs font-medium text-destructive">Fehler ({cs.errors.length})</p>
+            </div>
+            {cs.errors.slice().reverse().map((err, i) => (
+              <p key={i} className="break-all border-b border-destructive/5 px-3 py-1 font-mono text-[11px] text-muted-foreground last:border-0">{err}</p>
+            ))}
           </div>
-          {cs.errors.slice().reverse().map((err, i) => (
-            <p key={i} className="px-3 py-1 text-[11px] text-muted-foreground font-mono break-all border-b border-destructive/5 last:border-0">{err}</p>
-          ))}
-        </div>
-      )}
-    </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -482,61 +446,67 @@ function LocationEditorModal({
     }
   }
 
-  if (typeof document === 'undefined') return null;
-  return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50" onClick={onClose}>
-      <div className="flex min-h-full items-start justify-center p-4 py-8 sm:items-center sm:py-12">
-        <div className="admin-settings-group w-full max-w-2xl p-5" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">{isEdit ? 'Standort bearbeiten' : 'Neuer Standort'}</h3>
-            <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
-              <X className="h-5 w-5" />
-            </button>
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Standort bearbeiten' : 'Neuer Standort'}</DialogTitle>
+          <DialogDescription>
+            Geo-Koordinaten und Kraftstoff für einen Scan-Standort konfigurieren.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="loc-name">Name</Label>
+            <Input
+              id="loc-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="z.B. Berlin-Mitte"
+              maxLength={80}
+            />
           </div>
-          <div className="space-y-4">
-            <SettingsRow label="Name">
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Berlin-Mitte" maxLength={80} />
-            </SettingsRow>
-            <div className="grid grid-cols-2 gap-3">
-              <SettingsRow label="Land">
-                <Select value={country} onValueChange={(v) => setCountry(v as 'de' | 'at')}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="de">Deutschland</SelectItem>
-                    <SelectItem value="at">Österreich</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingsRow>
-              <SettingsRow label="Kraftstoff">
-                <Select value={fuelType} onValueChange={(v) => setFuelType(v as 'diesel' | 'e5' | 'e10')}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="diesel">Diesel</SelectItem>
-                    <SelectItem value="e5">Super E5</SelectItem>
-                    <SelectItem value="e10">Super E10</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingsRow>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor="loc-country">Land</Label>
+              <Select value={country} onValueChange={(v) => setCountry(v as 'de' | 'at')}>
+                <SelectTrigger id="loc-country" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="de">Deutschland</SelectItem>
+                  <SelectItem value="at">Österreich</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <LocationPicker value={value} onChange={setValue} heightClass="h-72" />
-            <SettingsRow label="Aktiv" inline>
-              <label className="relative inline-flex cursor-pointer items-center">
-                <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="peer sr-only" />
-                <div className="h-6 w-11 rounded-full bg-muted peer-checked:bg-emerald-500 transition-colors after:content-[''] after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:after:translate-x-5" />
-              </label>
-            </SettingsRow>
+            <div className="grid gap-2">
+              <Label htmlFor="loc-fuel">Kraftstoff</Label>
+              <Select value={fuelType} onValueChange={(v) => setFuelType(v as 'diesel' | 'e5' | 'e10')}>
+                <SelectTrigger id="loc-fuel" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="diesel">Diesel</SelectItem>
+                  <SelectItem value="e5">Super E5</SelectItem>
+                  <SelectItem value="e10">Super E10</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="mt-5 flex justify-end gap-2">
-            <Button type="button" variant="outline" size="sm" className="admin-btn" onClick={onClose}>Abbrechen</Button>
-            <Button type="button" size="sm" className="admin-btn admin-btn-primary" onClick={save} disabled={saving}>
-              <Save className="h-3.5 w-3.5" />
-              {saving ? 'Speichert…' : 'Speichern'}
-            </Button>
+          <LocationPicker value={value} onChange={setValue} heightClass="h-72" />
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label htmlFor="loc-enabled" className="font-normal">Aktiv</Label>
+              <p className="text-xs text-muted-foreground">In die Scan-Warteschlange aufnehmen.</p>
+            </div>
+            <Switch id="loc-enabled" checked={enabled} onCheckedChange={setEnabled} />
           </div>
         </div>
-      </div>
-    </div>,
-    document.body
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>Abbrechen</Button>
+          <Button type="button" onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="animate-spin" /> : <Save />}
+            {saving ? 'Speichert…' : 'Speichern'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -573,39 +543,36 @@ function DenyDialog({
   onConfirm: (note: string) => void;
 }) {
   const [note, setNote] = useState('');
-  if (typeof document === 'undefined') return null;
-  return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50" onClick={onClose}>
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="admin-settings-group w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
-          <h3 className="text-lg font-semibold mb-2">„{requestName}" ablehnen</h3>
-          <p className="text-xs text-muted-foreground mb-3">
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>„{requestName}" ablehnen</DialogTitle>
+          <DialogDescription>
             Begründung wird dem Nutzer angezeigt. Pflichtfeld.
-          </p>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            rows={4}
-            maxLength={1000}
-            placeholder="z.B. Zu nah an einem bestehenden Standort."
-          />
-          <div className="mt-4 flex justify-end gap-2">
-            <Button type="button" variant="outline" size="sm" className="admin-btn" onClick={onClose}>Abbrechen</Button>
-            <Button
-              type="button"
-              size="sm"
-              className="admin-btn admin-btn-danger"
-              disabled={!note.trim()}
-              onClick={() => onConfirm(note.trim())}
-            >
-              Ablehnen
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
+          </DialogDescription>
+        </DialogHeader>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+          rows={4}
+          maxLength={1000}
+          placeholder="z.B. Zu nah an einem bestehenden Standort."
+        />
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>Abbrechen</Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={!note.trim()}
+            onClick={() => onConfirm(note.trim())}
+          >
+            Ablehnen
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -648,38 +615,37 @@ function LocationsQueue({
 
   const renderRow = (loc: ScanLocationDto, idx: number | null, status: 'current' | 'upcoming' | 'done' | 'idle') => {
     const isCurrent = status === 'current';
-    const rowClass = [
-      'p-4 flex items-center gap-3 transition-colors',
-      isCurrent ? 'bg-emerald-500/5' : '',
-    ].filter(Boolean).join(' ');
-
     return (
-      <div key={loc.id} className={rowClass}>
+      <div
+        key={loc.id}
+        className={'flex items-center gap-3 p-4 transition-colors ' + (isCurrent ? 'bg-emerald-500/5' : '')}
+      >
         {idx !== null ? (
           <div
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${
-              isCurrent
+            className={
+              'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ' +
+              (isCurrent
                 ? 'bg-emerald-500 text-white'
                 : status === 'done'
                   ? 'bg-muted text-muted-foreground'
-                  : 'bg-secondary text-secondary-foreground'
-            }`}
+                  : 'bg-secondary text-secondary-foreground')
+            }
             aria-label={`Position ${idx} in der Warteschlange`}
           >
-            {isCurrent ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : idx}
+            {isCurrent ? <Loader2 className="size-3.5 animate-spin" /> : idx}
           </div>
         ) : (
-          <div className="h-8 w-8 shrink-0" />
+          <div className="size-8 shrink-0" />
         )}
-        <Flag country={loc.country} className="h-4 w-6 rounded-sm shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold truncate">{loc.name}</p>
+        <Flag country={loc.country} className="h-4 w-6 shrink-0 rounded-sm" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-sm font-semibold">{loc.name}</p>
             {isCurrent && <Badge variant="success">Wird jetzt gescannt</Badge>}
             {!loc.enabled && <Badge variant="warning">Deaktiviert</Badge>}
             {loc.lastScanError && <Badge variant="destructive">Fehler</Badge>}
           </div>
-          <p className="text-[11px] text-muted-foreground font-mono">
+          <p className="font-mono text-[11px] text-muted-foreground">
             {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)} · {loc.fuelType}
           </p>
           <p className="text-[11px] text-muted-foreground">
@@ -688,46 +654,43 @@ function LocationsQueue({
               : 'Noch nicht gescannt'}
           </p>
         </div>
-        <div className="flex gap-1 shrink-0">
+        <div className="flex shrink-0 gap-0.5">
           <Button
-            size="sm"
+            size="icon-sm"
             variant="ghost"
-            className="admin-btn"
             onClick={() => onToggle(loc)}
             disabled={busyId === loc.id}
-            title={loc.enabled ? 'Deaktivieren (aus Warteschlange entfernen)' : 'Aktivieren (zur Warteschlange hinzufügen)'}
+            title={loc.enabled ? 'Deaktivieren' : 'Aktivieren'}
           >
-            {loc.enabled ? <Square className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            {loc.enabled ? <Square /> : <Play />}
           </Button>
           <Button
-            size="sm"
+            size="icon-sm"
             variant="ghost"
-            className="admin-btn"
             onClick={() => onScanNow(loc)}
             disabled={busyId === loc.id}
             title="Einzeln sofort scannen"
           >
-            <Zap className="h-3.5 w-3.5" />
+            <Zap />
           </Button>
           <Button
-            size="sm"
+            size="icon-sm"
             variant="ghost"
-            className="admin-btn"
             onClick={() => onEdit(loc)}
             disabled={busyId === loc.id}
             title="Bearbeiten"
           >
-            <Pencil className="h-3.5 w-3.5" />
+            <Pencil />
           </Button>
           <Button
-            size="sm"
+            size="icon-sm"
             variant="ghost"
-            className="admin-btn admin-btn-danger"
+            className="text-muted-foreground hover:text-destructive"
             onClick={() => onDelete(loc)}
             disabled={busyId === loc.id}
             title="Löschen"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 />
           </Button>
         </div>
       </div>
@@ -737,29 +700,19 @@ function LocationsQueue({
   const currentIdx = currentDeId ? enabledDe.findIndex((l) => l.id === currentDeId) : -1;
 
   return (
-    <div className="space-y-5">
-      {/* Queue header + next-scan banner */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <p className="admin-section-header flex items-center gap-2">
-            <ListOrdered className="h-3.5 w-3.5" />
-            SCAN-WARTESCHLANGE
-          </p>
-          <Button size="sm" className="admin-btn admin-btn-primary" onClick={onCreate}>
-            <Plus className="h-3.5 w-3.5" /> Neuer Standort
-          </Button>
-        </div>
-
-        <div className="admin-settings-group p-4 mb-2 flex flex-wrap items-center gap-3 text-sm">
+    <div className="space-y-6">
+      {/* Next-scan banner */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3 text-sm">
           {deScanning ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <div className="flex-1 min-w-0">
+              <Loader2 className="size-4 shrink-0 animate-spin text-emerald-600 dark:text-emerald-400" />
+              <div className="min-w-0 flex-1">
                 <p className="font-medium">
                   Scan läuft {deProgress ? <span className="font-mono text-muted-foreground">({deProgress})</span> : null}
                 </p>
                 {schedStatus?.de.currentLocation && (
-                  <p className="text-xs text-muted-foreground truncate">
+                  <p className="truncate text-xs text-muted-foreground">
                     Aktuell: <span className="font-semibold text-foreground">{schedStatus.de.currentLocation.name}</span>
                   </p>
                 )}
@@ -767,8 +720,8 @@ function LocationsQueue({
             </>
           ) : (
             <>
-              <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
+              <Clock className="size-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
                 <p className="font-medium">
                   {enabledDe.length === 0
                     ? 'Keine Standorte in der Warteschlange'
@@ -777,62 +730,72 @@ function LocationsQueue({
                 <p className="text-xs text-muted-foreground">
                   {enabledDe.length === 0
                     ? 'Aktiviere mindestens einen Standort, um ihn in die tägliche Warteschlange aufzunehmen.'
-                    : `${enabledDe.length} DE-Standort${enabledDe.length === 1 ? '' : 'e'} werden täglich um 12:01 Uhr nacheinander gescannt (5 Min. Pause je Standort).`}
+                    : `${enabledDe.length} DE-Standort${enabledDe.length === 1 ? '' : 'e'} werden nacheinander gescannt (5 Min. Pause je Standort).`}
                 </p>
               </div>
             </>
           )}
-        </div>
+        </CardContent>
+      </Card>
 
-        <div className="admin-settings-group">
-          {locations === null ? (
-            <div className="p-6 text-center text-sm text-muted-foreground animate-pulse">Lade…</div>
-          ) : enabledDe.length === 0 ? (
-            <div className="p-6 text-center text-sm text-muted-foreground">
-              Keine aktiven DE-Standorte in der Warteschlange. „Neuer Standort" klicken, um zu starten.
-            </div>
-          ) : (
-            <div className="divide-y divide-border/60">
-              {enabledDe.map((loc, i) => {
-                const position = i + 1;
-                let status: 'current' | 'upcoming' | 'done' | 'idle' = 'idle';
-                if (deScanning && currentIdx >= 0) {
-                  if (i === currentIdx) status = 'current';
-                  else if (i < currentIdx) status = 'done';
-                  else status = 'upcoming';
-                }
-                return renderRow(loc, position, status);
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Austria grid-discovery locations (non-queued) */}
-      {enabledAt.length > 0 && (
-        <div>
-          <p className="admin-section-header mb-2">ÖSTERREICH (GRID-DISCOVERY)</p>
-          <div className="admin-settings-group">
-            <p className="px-4 pt-3 text-[11px] text-muted-foreground">
-              AT-Standorte werden nicht einzeln angefragt — der Scanner durchläuft ein festes Grid über das gesamte Land.
-            </p>
-            <div className="divide-y divide-border/60 mt-2">
-              {enabledAt.map((loc) => renderRow(loc, null, 'idle'))}
-            </div>
+      {/* Scan queue */}
+      <Card className="py-0 gap-0">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <ListOrdered className="size-3.5" />
+            Scan-Warteschlange
           </div>
+          <Button size="sm" onClick={onCreate}>
+            <Plus /> Neuer Standort
+          </Button>
         </div>
+        {locations === null ? (
+          <div className="animate-pulse p-6 text-center text-sm text-muted-foreground">Lade…</div>
+        ) : enabledDe.length === 0 ? (
+          <div className="p-6 text-center text-sm text-muted-foreground">
+            Keine aktiven DE-Standorte in der Warteschlange. „Neuer Standort" klicken, um zu starten.
+          </div>
+        ) : (
+          <div className="divide-y">
+            {enabledDe.map((loc, i) => {
+              const position = i + 1;
+              let status: 'current' | 'upcoming' | 'done' | 'idle' = 'idle';
+              if (deScanning && currentIdx >= 0) {
+                if (i === currentIdx) status = 'current';
+                else if (i < currentIdx) status = 'done';
+                else status = 'upcoming';
+              }
+              return renderRow(loc, position, status);
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Austria grid-discovery */}
+      {enabledAt.length > 0 && (
+        <Card className="py-0 gap-0">
+          <div className="border-b px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Österreich (Grid-Discovery)
+          </div>
+          <p className="px-4 pt-3 text-xs text-muted-foreground">
+            AT-Standorte werden nicht einzeln angefragt — der Scanner durchläuft ein festes Grid über das gesamte Land.
+          </p>
+          <div className="mt-2 divide-y">
+            {enabledAt.map((loc) => renderRow(loc, null, 'idle'))}
+          </div>
+        </Card>
       )}
 
-      {/* Disabled (not in queue) */}
+      {/* Disabled */}
       {disabled.length > 0 && (
-        <div>
-          <p className="admin-section-header mb-2">DEAKTIVIERT — NICHT IN DER WARTESCHLANGE</p>
-          <div className="admin-settings-group">
-            <div className="divide-y divide-border/60">
-              {disabled.map((loc) => renderRow(loc, null, 'idle'))}
-            </div>
+        <Card className="py-0 gap-0">
+          <div className="border-b px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Deaktiviert — nicht in der Warteschlange
           </div>
-        </div>
+          <div className="divide-y">
+            {disabled.map((loc) => renderRow(loc, null, 'idle'))}
+          </div>
+        </Card>
       )}
     </div>
   );
@@ -968,19 +931,22 @@ function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: Fe
   }
 
   return (
-    <div className="space-y-5 admin-stagger">
+    <div className="space-y-6">
       {/* Pending requests */}
       {pending && pending.length > 0 && (
-        <SettingsGroup title={`OFFENE ANFRAGEN (${pending.length})`}>
-          <div className="divide-y divide-border/60">
+        <Card className="py-0 gap-0">
+          <div className="border-b px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Offene Anfragen ({pending.length})
+          </div>
+          <div className="divide-y">
             {pending.map((req) => (
-              <div key={req.id} className="p-4 space-y-3">
+              <div key={req.id} className="space-y-3 p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 min-w-0">
+                  <div className="flex min-w-0 items-start gap-3">
                     <RequesterAvatar user={req.user} />
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate">{req.name}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">
+                      <p className="truncate text-sm font-semibold">{req.name}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">
                         <span className="font-medium text-foreground/80">
                           {req.user.displayName || req.user.email || req.userId}
                         </span>
@@ -988,29 +954,29 @@ function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: Fe
                         {' · '}
                         {fmtRelative(req.createdAt)}
                       </p>
-                      <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                      <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
                         {req.lat.toFixed(4)}, {req.lng.toFixed(4)} · Radius {req.radiusKm} km
                       </p>
-                      {req.note && <p className="text-xs mt-1.5 text-foreground/80">„{req.note}"</p>}
+                      {req.note && <p className="mt-1.5 text-xs text-foreground/80">„{req.note}"</p>}
                     </div>
                   </div>
-                  <div className="flex gap-2 shrink-0">
+                  <div className="flex shrink-0 gap-2">
                     <Button
                       size="sm"
-                      className="admin-btn admin-btn-success"
                       onClick={() => approve(req)}
                       disabled={busyId === req.id}
+                      className="bg-emerald-600 text-white hover:bg-emerald-700"
                     >
-                      <Check className="h-3.5 w-3.5" /> Genehmigen
+                      <Check /> Genehmigen
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      className="admin-btn admin-btn-danger"
                       onClick={() => setDenying(req)}
                       disabled={busyId === req.id}
+                      className="text-destructive hover:text-destructive"
                     >
-                      <X className="h-3.5 w-3.5" /> Ablehnen
+                      <X /> Ablehnen
                     </Button>
                   </div>
                 </div>
@@ -1024,14 +990,16 @@ function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: Fe
               </div>
             ))}
           </div>
-        </SettingsGroup>
+        </Card>
       )}
 
       {pending && pending.length === 0 && (
-        <div className="admin-settings-group p-4 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
-          <Inbox className="h-4 w-4" />
-          Keine offenen Anfragen.
-        </div>
+        <Card>
+          <CardContent className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+            <Inbox className="size-4" />
+            Keine offenen Anfragen.
+          </CardContent>
+        </Card>
       )}
 
       {/* Scan queue */}
@@ -1099,90 +1067,97 @@ function ScannerConsole() {
 
   if (!status) {
     return (
-      <div className="admin-settings-group p-12 text-center text-muted-foreground">
-        <div className="animate-pulse text-sm">Scanner-Status wird geladen...</div>
-      </div>
+      <Card>
+        <CardContent className="space-y-3 py-8">
+          <Skeleton className="h-4 w-1/3" />
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-4 w-1/2" />
+        </CardContent>
+      </Card>
     );
   }
 
   const isScanning = status.de.scanning || status.at.scanning;
 
   return (
-    <div className="space-y-5 admin-stagger">
-      {/* Scanner header */}
-      <div className="admin-settings-group p-5">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <IconBox className={status.running ? 'bg-emerald-500/10' : 'bg-muted'}>
-              <Radio className={`h-4 w-4 ${status.running ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
-            </IconBox>
-            <div>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <div
+              className={
+                'flex size-9 shrink-0 items-center justify-center rounded-lg ' +
+                (status.running ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground')
+              }
+            >
+              <Radio className="size-4" />
+            </div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <p className="text-base font-semibold">Scanner</p>
+                <CardTitle>Scanner</CardTitle>
                 <StatusDot active={status.running} />
               </div>
-              <p className="text-xs text-muted-foreground">
+              <CardDescription>
                 {status.running
                   ? isScanning ? 'Scannt DE + AT parallel' : 'Wartet auf nächsten Zyklus'
                   : 'Gestoppt'}
-              </p>
+              </CardDescription>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
             <Button
               size="sm"
-              className={`admin-btn ${status.running ? 'admin-btn-danger' : 'admin-btn-success'}`}
+              variant={status.running ? 'destructive' : 'default'}
               onClick={() => handleAction(status.running ? 'stop' : 'start')}
             >
-              {status.running ? <><Square className="h-3.5 w-3.5" /> Stoppen</> : <><Play className="h-3.5 w-3.5" /> Starten</>}
+              {status.running ? <><Square /> Stoppen</> : <><Play /> Starten</>}
             </Button>
             {status.running && (
               <>
-                <Button variant="outline" size="sm" className="admin-btn" onClick={() => handleAction('restart')}>
-                  <RotateCcw className="h-3.5 w-3.5" />
+                <Button variant="outline" size="icon-sm" onClick={() => handleAction('restart')} title="Neustart">
+                  <RotateCcw />
                 </Button>
                 {!isScanning && (
-                  <Button variant="outline" size="sm" className="admin-btn admin-btn-primary" onClick={() => handleAction('triggerNow')}>
-                    <Zap className="h-3.5 w-3.5" /> Jetzt scannen
+                  <Button variant="outline" size="sm" onClick={() => handleAction('triggerNow')}>
+                    <Zap /> Jetzt scannen
                   </Button>
                 )}
               </>
             )}
           </div>
-        </div>
-
-        {/* Global stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-5">
-          <StatCell label="Grid-Zellen" value={status.cache.gridCells.toLocaleString('de-DE')} />
-          <StatCell label="Tankstellen" value={status.cache.totalStations.toLocaleString('de-DE')} sub="eindeutig" />
-          <StatCell label="Zyklen" value={String(status.cycleCount)} />
-          <StatCell label="Letzter Zyklus" value={status.lastCycleDurationSec ? fmtDuration(status.lastCycleDurationSec) : '—'} sub={status.nextCycleAt ? `Nächster: ${new Date(status.nextCycleAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : undefined} />
-        </div>
-
-        <div className="h-px bg-border/60 mb-5" />
-
-        {/* Cache info */}
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-[11px] text-muted-foreground">
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+            <StatCell label="Grid-Zellen" value={status.cache.gridCells.toLocaleString('de-DE')} />
+            <StatCell label="Tankstellen" value={status.cache.totalStations.toLocaleString('de-DE')} sub="eindeutig" />
+            <StatCell label="Zyklen" value={String(status.cycleCount)} />
+            <StatCell
+              label="Letzter Zyklus"
+              value={status.lastCycleDurationSec ? fmtDuration(status.lastCycleDurationSec) : '—'}
+              sub={status.nextCycleAt ? `Nächster: ${new Date(status.nextCycleAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : undefined}
+            />
+          </div>
+        </CardContent>
+        <CardFooter className="justify-between border-t pt-4 text-[11px] text-muted-foreground">
+          <span>
             {status.cache.oldestScan && status.cache.newestScan
               ? `Cache: ${fmtRelative(status.cache.oldestScan)} — ${fmtRelative(status.cache.newestScan)}`
               : 'Cache leer'}
-          </p>
+          </span>
           <Button
             variant="ghost"
             size="sm"
-            className="admin-btn admin-btn-danger text-xs"
+            className="text-destructive hover:text-destructive"
             onClick={() => { if (confirm('Cache wirklich leeren? Alle gecachten Tankstellen werden gelöscht.')) handleAction('clearCache'); }}
             disabled={clearing}
           >
-            <Trash2 className="h-3 w-3" />
-            {clearing ? 'Löscht...' : 'Cache leeren'}
+            {clearing ? <Loader2 className="animate-spin" /> : <Trash2 />}
+            {clearing ? 'Löscht…' : 'Cache leeren'}
           </Button>
-        </div>
-      </div>
+        </CardFooter>
+      </Card>
 
-      {/* Per-country cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <CountryScannerCard cs={status.de} flag={<Flag country="de" className="h-5 rounded-sm" />} label="Deutschland" api="Tankerkönig list.php (Admin-Standorte)" />
         <CountryScannerCard cs={status.at} flag={<Flag country="at" className="h-5 rounded-sm" />} label="Österreich" api="E-Control (5x parallel)" />
       </div>
@@ -1478,50 +1453,123 @@ function AppConfigSection({
 }
 
 function OidcSection({ config, onChange }: { config: AdminConfig; onChange: (patch: Partial<AdminConfig>) => void }) {
+  const callbackUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/auth/oidc/callback`
+    : '';
   return (
-    <div className="space-y-5 admin-stagger">
-      <SettingsGroup title="Anbieter">
-        <SettingsRow label="Anzeigename" hint="z.B. Google, Authelia, Keycloak">
-          <Input value={config.oidc.name} onChange={(e) => onChange({ oidc: { ...config.oidc, name: e.target.value } })} placeholder="z.B. Felo ID, Google, Authelia" />
-        </SettingsRow>
-        <SettingsRow label="Issuer URL">
-          <Input type="url" value={config.oidc.issuerUrl} onChange={(e) => onChange({ oidc: { ...config.oidc, issuerUrl: e.target.value } })} placeholder="https://auth.example.com" />
-        </SettingsRow>
-      </SettingsGroup>
-
-      <SettingsGroup title="Zugangsdaten">
-        <SettingsRow label="Client ID">
-          <Input value={config.oidc.clientId} onChange={(e) => onChange({ oidc: { ...config.oidc, clientId: e.target.value } })} />
-        </SettingsRow>
-        <SettingsRow label="Client Secret">
-          <Input value={config.oidc.clientSecret} onChange={(e) => onChange({ oidc: { ...config.oidc, clientSecret: e.target.value } })} />
-        </SettingsRow>
-        <SettingsRow label="Callback URL" hint="Als Redirect URI beim OIDC-Anbieter eintragen">
-          <div className="flex items-center gap-2">
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Anbieter</CardTitle>
+          <CardDescription>Identitätsanbieter (Google, Authelia, Keycloak, FeloID …).</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="oidc-name">Anzeigename</Label>
             <Input
-              readOnly
-              value={`${typeof window !== 'undefined' ? window.location.origin : ''}/auth/oidc/callback`}
-              className="font-mono text-xs bg-muted"
-              onClick={(e) => (e.target as HTMLInputElement).select()}
+              id="oidc-name"
+              value={config.oidc.name}
+              onChange={(e) => onChange({ oidc: { ...config.oidc, name: e.target.value } })}
+              placeholder="z.B. FeloID, Google, Authelia"
             />
-            <Button type="button" variant="outline" size="sm" className="admin-btn shrink-0" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/auth/oidc/callback`)}>
-              Kopieren
-            </Button>
           </div>
-        </SettingsRow>
-      </SettingsGroup>
+          <div className="grid gap-2">
+            <Label htmlFor="oidc-issuer">Issuer URL</Label>
+            <Input
+              id="oidc-issuer"
+              type="url"
+              value={config.oidc.issuerUrl}
+              onChange={(e) => onChange({ oidc: { ...config.oidc, issuerUrl: e.target.value } })}
+              placeholder="https://auth.example.com"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-      <SettingsGroup title="Claims">
-        <SettingsRow label="Scope">
-          <Input value={config.oidc.scope} onChange={(e) => onChange({ oidc: { ...config.oidc, scope: e.target.value } })} />
-        </SettingsRow>
-        <SettingsRow label="Username Claim">
-          <Input value={config.oidc.usernameClaim} onChange={(e) => onChange({ oidc: { ...config.oidc, usernameClaim: e.target.value } })} placeholder="preferred_username" />
-        </SettingsRow>
-        <SettingsRow label="Picture Claim">
-          <Input value={config.oidc.pictureClaim} onChange={(e) => onChange({ oidc: { ...config.oidc, pictureClaim: e.target.value } })} placeholder="picture" />
-        </SettingsRow>
-      </SettingsGroup>
+      <Card>
+        <CardHeader>
+          <CardTitle>Zugangsdaten</CardTitle>
+          <CardDescription>Beim OIDC-Anbieter angelegte Client-Credentials.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="oidc-client-id">Client ID</Label>
+            <Input
+              id="oidc-client-id"
+              value={config.oidc.clientId}
+              onChange={(e) => onChange({ oidc: { ...config.oidc, clientId: e.target.value } })}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="oidc-client-secret">Client Secret</Label>
+            <Input
+              id="oidc-client-secret"
+              type="password"
+              value={config.oidc.clientSecret}
+              onChange={(e) => onChange({ oidc: { ...config.oidc, clientSecret: e.target.value } })}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="oidc-callback">Callback URL</Label>
+            <div className="flex gap-2">
+              <Input
+                id="oidc-callback"
+                readOnly
+                value={callbackUrl}
+                className="font-mono text-xs bg-muted"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => {
+                  navigator.clipboard?.writeText(callbackUrl);
+                  toast.success('Callback URL kopiert.');
+                }}
+              >
+                Kopieren
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">Als Redirect URI beim OIDC-Anbieter eintragen.</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Claims</CardTitle>
+          <CardDescription>Welche Felder aus dem ID-Token gelesen werden.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="oidc-scope">Scope</Label>
+            <Input
+              id="oidc-scope"
+              value={config.oidc.scope}
+              onChange={(e) => onChange({ oidc: { ...config.oidc, scope: e.target.value } })}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="oidc-username-claim">Username Claim</Label>
+            <Input
+              id="oidc-username-claim"
+              value={config.oidc.usernameClaim}
+              onChange={(e) => onChange({ oidc: { ...config.oidc, usernameClaim: e.target.value } })}
+              placeholder="preferred_username"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="oidc-picture-claim">Picture Claim</Label>
+            <Input
+              id="oidc-picture-claim"
+              value={config.oidc.pictureClaim}
+              onChange={(e) => onChange({ oidc: { ...config.oidc, pictureClaim: e.target.value } })}
+              placeholder="picture"
+            />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -1542,54 +1590,124 @@ function SmtpSection({
   onTestEmailRecipientChange?: (value: string) => void;
 }) {
   return (
-    <div className="space-y-5 admin-stagger">
-      <SettingsGroup title="Server">
-        <SettingsRow label="Host">
-          <Input value={config.smtp.host} onChange={(e) => onChange({ smtp: { ...config.smtp, host: e.target.value } })} placeholder="smtp.example.com" />
-        </SettingsRow>
-        <SettingsRow label="Port" inline>
-          <Input type="number" min={1} max={65535} value={config.smtp.port} onChange={(e) => onChange({ smtp: { ...config.smtp, port: Number(e.target.value) || 587 } })} className="w-24 text-right" />
-        </SettingsRow>
-        <SettingsRow label="SSL/TLS" inline>
-          <label className="relative inline-flex cursor-pointer items-center">
-            <input
-              type="checkbox"
-              checked={config.smtp.secure}
-              onChange={(e) => onChange({ smtp: { ...config.smtp, secure: e.target.checked } })}
-              className="peer sr-only"
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Server</CardTitle>
+          <CardDescription>SMTP-Verbindungsparameter für ausgehende Mails.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="smtp-host">Host</Label>
+            <Input
+              id="smtp-host"
+              value={config.smtp.host}
+              onChange={(e) => onChange({ smtp: { ...config.smtp, host: e.target.value } })}
+              placeholder="smtp.example.com"
             />
-            <div className="h-6 w-11 rounded-full bg-muted peer-checked:bg-emerald-500 peer-focus-visible:ring-2 peer-focus-visible:ring-ring transition-colors after:content-[''] after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:after:translate-x-5" />
-          </label>
-        </SettingsRow>
-      </SettingsGroup>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="smtp-port" className="font-normal">Port</Label>
+            <Input
+              id="smtp-port"
+              type="number"
+              min={1}
+              max={65535}
+              value={config.smtp.port}
+              onChange={(e) => onChange({ smtp: { ...config.smtp, port: Number(e.target.value) || 587 } })}
+              className="w-24 text-right font-mono tabular-nums"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label htmlFor="smtp-secure" className="font-normal">SSL/TLS</Label>
+              <p className="text-xs text-muted-foreground">Verbindung verschlüsseln (z.B. Port 465).</p>
+            </div>
+            <Switch
+              id="smtp-secure"
+              checked={config.smtp.secure}
+              onCheckedChange={(checked) => onChange({ smtp: { ...config.smtp, secure: checked } })}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-      <SettingsGroup title="Zugangsdaten">
-        <SettingsRow label="Benutzername">
-          <Input value={config.smtp.user} onChange={(e) => onChange({ smtp: { ...config.smtp, user: e.target.value } })} />
-        </SettingsRow>
-        <SettingsRow label="Passwort">
-          <Input type="password" value={config.smtp.pass} onChange={(e) => onChange({ smtp: { ...config.smtp, pass: e.target.value } })} />
-        </SettingsRow>
-      </SettingsGroup>
+      <Card>
+        <CardHeader>
+          <CardTitle>Zugangsdaten</CardTitle>
+          <CardDescription>Login für den SMTP-Server (optional, falls Auth erforderlich).</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="smtp-user">Benutzername</Label>
+            <Input
+              id="smtp-user"
+              value={config.smtp.user}
+              onChange={(e) => onChange({ smtp: { ...config.smtp, user: e.target.value } })}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="smtp-pass">Passwort</Label>
+            <Input
+              id="smtp-pass"
+              type="password"
+              value={config.smtp.pass}
+              onChange={(e) => onChange({ smtp: { ...config.smtp, pass: e.target.value } })}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-      <SettingsGroup title="Absender">
-        <SettingsRow label="Von-Adresse">
-          <Input type="email" value={config.smtp.from} onChange={(e) => onChange({ smtp: { ...config.smtp, from: e.target.value } })} placeholder="tanken@example.com" />
-        </SettingsRow>
-      </SettingsGroup>
+      <Card>
+        <CardHeader>
+          <CardTitle>Absender</CardTitle>
+          <CardDescription>Welche Adresse als „Von" gesetzt wird.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2">
+            <Label htmlFor="smtp-from">Von-Adresse</Label>
+            <Input
+              id="smtp-from"
+              type="email"
+              value={config.smtp.from}
+              onChange={(e) => onChange({ smtp: { ...config.smtp, from: e.target.value } })}
+              placeholder="tanken@example.com"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {onTestEmail && (
-        <SettingsGroup title="Test">
-          <SettingsRow label="Test-E-Mail senden">
-            <div className="flex items-center gap-2">
-              <Input type="email" value={testEmailRecipient ?? ''} onChange={(e) => onTestEmailRecipientChange?.(e.target.value)} placeholder="deine@email.com" />
-              <Button type="button" variant="outline" size="sm" className="admin-btn shrink-0" onClick={onTestEmail} disabled={testingEmail || !config.smtp.host || !config.smtp.from || !testEmailRecipient}>
-                <Mail className="h-3.5 w-3.5" />
-                {testingEmail ? 'Sende...' : 'Senden'}
-              </Button>
+        <Card>
+          <CardHeader>
+            <CardTitle>Test</CardTitle>
+            <CardDescription>Konfiguration mit einer Testmail prüfen.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2">
+              <Label htmlFor="smtp-test-to">Empfänger</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="smtp-test-to"
+                  type="email"
+                  value={testEmailRecipient ?? ''}
+                  onChange={(e) => onTestEmailRecipientChange?.(e.target.value)}
+                  placeholder="deine@email.com"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={onTestEmail}
+                  disabled={testingEmail || !config.smtp.host || !config.smtp.from || !testEmailRecipient}
+                >
+                  {testingEmail ? <Loader2 className="animate-spin" /> : <Mail />}
+                  {testingEmail ? 'Sende…' : 'Senden'}
+                </Button>
+              </div>
             </div>
-          </SettingsRow>
-        </SettingsGroup>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
@@ -2066,12 +2184,15 @@ export default function AdminPage() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--admin-bg)' }}>
-        <div className="text-center admin-panel-enter">
-          <IconBox className="admin-icon-box--lg bg-primary/10 mx-auto mb-4">
-            <Fuel className="h-6 w-6 text-primary" />
-          </IconBox>
-          <div className="animate-pulse text-sm text-muted-foreground">Laden...</div>
+      <div className="flex min-h-svh items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Fuel className="size-5" />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" />
+            Laden…
+          </div>
         </div>
       </div>
     );
