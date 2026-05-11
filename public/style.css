@@ -1013,7 +1013,7 @@ body.logged-in .cloud-sync-hint {
   justify-content: center;
   font-size: 13px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: #fff;
   flex-shrink: 0;
 }
 
@@ -1933,7 +1933,7 @@ body.logged-in .station-fav-sync.synced {
   align-items: center;
   padding: 3px 8px 4px;
   border-radius: 8px;
-  color: #1a1a1a;
+  color: #fff;
   white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0,0,0,0.4);
   text-align: center;

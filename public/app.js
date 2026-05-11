@@ -2424,7 +2424,7 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
       const size = count > 20 ? 56 : count > 5 ? 48 : 40;
       return L.divIcon({
         className: '',
-        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#1a1a1a;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.8)">
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.8)">
           <span style="font-size:${size > 48 ? 14 : 12}px;line-height:1">${count}</span>
           ${pParts ? `<span style="font-size:${size > 48 ? 11 : 10}px;line-height:1;opacity:0.9">~${pParts.main}<sup style="font-size:7px">${pParts.decimal}</sup></span>` : ''}
         </div>`,
@@ -2545,25 +2545,14 @@ async function loadPriceBand() {
   }
 }
 
-// Three-stop iOS-style traffic light: green (52,199,89) → yellow
-// (255,204,0) → red (255,59,48). Yellow at the median keeps the green↔red
-// path out of olive/brown.
+// Original two-stop linear RGB green → red. Passes through olive/brown
+// around t≈0.5 by virtue of straight-line RGB interpolation between
+// (52,199,89) and (255,59,48).
 function priceColor3(t) {
-  const stops = [
-    { t: 0,   r:  52, g: 199, b:  89 },
-    { t: 0.5, r: 255, g: 204, b:   0 },
-    { t: 1,   r: 255, g:  59, b:  48 },
-  ];
   const x = Math.max(0, Math.min(1, t));
-  let lo = stops[0], hi = stops[stops.length - 1];
-  for (let i = 0; i < stops.length - 1; i++) {
-    if (x >= stops[i].t && x <= stops[i + 1].t) { lo = stops[i]; hi = stops[i + 1]; break; }
-  }
-  const span = hi.t - lo.t || 1;
-  const k = (x - lo.t) / span;
-  const r = Math.round(lo.r + (hi.r - lo.r) * k);
-  const g = Math.round(lo.g + (hi.g - lo.g) * k);
-  const b = Math.round(lo.b + (hi.b - lo.b) * k);
+  const r = Math.round(52 + x * 203);
+  const g = Math.round(199 - x * 140);
+  const b = Math.round(89 - x * 41);
   return `rgb(${r},${g},${b})`;
 }
 
@@ -2580,17 +2569,14 @@ function countryFromLocation(locationId, lat, lng) {
   return null;
 }
 
-// Map a price to t∈[0,1] across the band so the median anchors at t=0.5.
-// P10→P50 fills the first half (green→yellow), P50→P90 fills the second
-// (yellow→red). Lines up the actual median price with the yellow midpoint
-// instead of letting a skewed P10/P90 spread offset the gradient.
+// Map a price to t∈[0,1] linearly across the band [P10, P90]. Matches the
+// pre-band session anchor's "ratio across (min, max)" behaviour.
 function bandRatio(price, band) {
-  const { p10, p50, p90 } = band;
-  if (!(p90 > p10) || !(p50 >= p10) || !(p90 >= p50)) return 0.5;
+  const { p10, p90 } = band;
+  if (!(p90 > p10)) return 0.5;
   if (price <= p10) return 0;
   if (price >= p90) return 1;
-  if (price <= p50) return 0.5 * (price - p10) / (p50 - p10);
-  return 0.5 + 0.5 * (price - p50) / (p90 - p50);
+  return (price - p10) / (p90 - p10);
 }
 
 // Color a price against the country-wide 24h band. No band → neutral grey.
