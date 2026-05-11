@@ -2545,13 +2545,26 @@ async function loadPriceBand() {
   }
 }
 
-// Smooth HSL hue rotation from green (140°) through yellow (70°) to red
-// (0°), constant saturation and lightness. Tuned to 45% / 62% so a wall
-// of bubbles reads as a quiet heatmap rather than neon highlights.
+// Three-stop iOS-style traffic light: green (52,199,89) → yellow
+// (255,204,0) → red (255,59,48). Yellow at the median keeps the green↔red
+// path out of olive/brown.
 function priceColor3(t) {
+  const stops = [
+    { t: 0,   r:  52, g: 199, b:  89 },
+    { t: 0.5, r: 255, g: 204, b:   0 },
+    { t: 1,   r: 255, g:  59, b:  48 },
+  ];
   const x = Math.max(0, Math.min(1, t));
-  const hue = 140 - 140 * x;
-  return `hsl(${hue.toFixed(1)}, 45%, 62%)`;
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (x >= stops[i].t && x <= stops[i + 1].t) { lo = stops[i]; hi = stops[i + 1]; break; }
+  }
+  const span = hi.t - lo.t || 1;
+  const k = (x - lo.t) / span;
+  const r = Math.round(lo.r + (hi.r - lo.r) * k);
+  const g = Math.round(lo.g + (hi.g - lo.g) * k);
+  const b = Math.round(lo.b + (hi.b - lo.b) * k);
+  return `rgb(${r},${g},${b})`;
 }
 
 function countryFromLocation(locationId, lat, lng) {
@@ -2567,15 +2580,17 @@ function countryFromLocation(locationId, lat, lng) {
   return null;
 }
 
-// Map a price to t∈[0,1] linearly across the band [P10, P90]. No piecewise
-// kink at the median — a 2-cent step moves the colour by a constant amount
-// regardless of which side of the median you're on.
+// Map a price to t∈[0,1] across the band so the median anchors at t=0.5.
+// P10→P50 fills the first half (green→yellow), P50→P90 fills the second
+// (yellow→red). Lines up the actual median price with the yellow midpoint
+// instead of letting a skewed P10/P90 spread offset the gradient.
 function bandRatio(price, band) {
-  const { p10, p90 } = band;
-  if (!(p90 > p10)) return 0.5;
+  const { p10, p50, p90 } = band;
+  if (!(p90 > p10) || !(p50 >= p10) || !(p90 >= p50)) return 0.5;
   if (price <= p10) return 0;
   if (price >= p90) return 1;
-  return (price - p10) / (p90 - p10);
+  if (price <= p50) return 0.5 * (price - p10) / (p50 - p10);
+  return 0.5 + 0.5 * (price - p50) / (p90 - p50);
 }
 
 // Color a price against the country-wide 24h band. No band → neutral grey.
