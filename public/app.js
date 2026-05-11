@@ -2545,15 +2545,17 @@ async function loadPriceBand() {
   }
 }
 
-// Three-stop HSL gradient anchored at the country's 24h P10 / P50 / P90.
-// t=0 → sattes Grün (well under median), t=0.5 → blasses Pastellgelb
-// (right at median, intentionally neutral so 1,82€ and 1,84€ near a 1,80€
-// median look almost identical), t=1 → sattes Rot.
+// Three-stop gradient anchored at the country's P10 / P50 / P90. Uses iOS
+// system traffic-light colours (green → orange → red) so the bubbles read
+// at a glance and match rankColor's palette in the rest of the app.
+// Near-median prices still cluster around orange instead of one extreme,
+// which was the original complaint — that's now driven by the band itself,
+// not by washing the middle stop out.
 function priceColor3(t) {
   const stops = [
-    { t: 0,   h: 130, s: 55, l: 52 },
-    { t: 0.5, h:  54, s: 70, l: 78 },
-    { t: 1,   h:   3, s: 78, l: 55 },
+    { t: 0,   r:  52, g: 199, b:  89 },
+    { t: 0.5, r: 255, g: 149, b:   0 },
+    { t: 1,   r: 255, g:  59, b:  48 },
   ];
   const x = Math.max(0, Math.min(1, t));
   let lo = stops[0], hi = stops[stops.length - 1];
@@ -2562,10 +2564,10 @@ function priceColor3(t) {
   }
   const span = hi.t - lo.t || 1;
   const k = (x - lo.t) / span;
-  const h = lo.h + (hi.h - lo.h) * k;
-  const s = lo.s + (hi.s - lo.s) * k;
-  const l = lo.l + (hi.l - lo.l) * k;
-  return `hsl(${h.toFixed(1)}, ${s.toFixed(1)}%, ${l.toFixed(1)}%)`;
+  const r = Math.round(lo.r + (hi.r - lo.r) * k);
+  const g = Math.round(lo.g + (hi.g - lo.g) * k);
+  const b = Math.round(lo.b + (hi.b - lo.b) * k);
+  return `rgb(${r},${g},${b})`;
 }
 
 function countryFromLocation(locationId, lat, lng) {
