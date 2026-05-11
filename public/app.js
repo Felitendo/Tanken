@@ -3443,29 +3443,13 @@ async function refreshStationStatus(station) {
       }
     }
 
-    // Update price if it changed
-    const fuelKey = state.fuelType === 'e5' ? 'e5' : state.fuelType === 'e10' ? 'e10' : 'diesel';
-    const freshPrice = typeof detail[fuelKey] === 'number' && detail[fuelKey] > 0 ? detail[fuelKey] : null;
-    if (freshPrice && freshPrice !== station.price) {
-      station.price = freshPrice;
-      const priceEl = document.querySelector('.sheet-station-price');
-      if (priceEl) {
-        const priceParts = formatPriceParts(freshPrice);
-        priceEl.style.color = priceColorStable(freshPrice, station._locationId, station.lat, station.lng);
-        priceEl.innerHTML = `${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''} <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>`;
-      }
-      // Resync the marker on the map and the sidebar entry so the cached
-      // price doesn't keep claiming 1,91 while the sheet shows 2,08. Find
-      // the live entry in state.stations by station id and mutate it; the
-      // station passed into showStationSheet is often the same reference,
-      // but a defensive lookup keeps us correct when it isn't.
-      if (Array.isArray(state.stations) && station.id) {
-        const entry = state.stations.find(s => s && s.id === station.id);
-        if (entry && entry !== station) entry.price = freshPrice;
-        if (state.map) renderStationsOnMap(state.stations, { skipFitBounds: true, skipRadiusFilter: true });
-        renderStationList(state.stations);
-      }
-    }
+    // Deliberately do NOT update station.price from detail.php here.
+    // Tankerkönig's list.php (what the scheduler scans into our cache)
+    // and detail.php drift out of sync — list says 1,93 €, detail says
+    // 2,08 € for the same Aral at the same moment. Refreshing the sheet
+    // price from detail made the bubble and the sheet disagree. Trust
+    // the scan cache; the "Umgebung neu scannen" button is the proper
+    // path when the user actually wants fresh prices.
   } catch {
     // Silently fail — cached data stays as fallback
   }
