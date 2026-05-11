@@ -1,11 +1,9 @@
 import { loadRepoConfig } from '@/config';
-import { fetchAllPricesByIds, fetchStationsEControl, fetchStationsLive, recordPriceHistoryFromStations } from '@/lib/measure';
+import { fetchAllPricesByIds, fetchStationsEControl, fetchStationsLive, persistAtAggregateIfStale, recordPriceHistoryFromStations } from '@/lib/measure';
 import {
   setCachedStations, getAllCachedLocations, countUniqueStations,
   persistPriceSnapshot, clearAllCache,
   getCachedStationsByLocation, getDeStationIds, updateCachedPricesForFuel,
-  getAllUniqueStationsForFuel,
-  type CachedStation,
 } from '@/lib/station-cache';
 import { generateAustriaGrid } from '@/lib/grid';
 import { listScanLocations, recordScanResult, getScanLocation } from '@/lib/location-store';
@@ -423,24 +421,13 @@ class ScanScheduler {
       }
 
       // AT scans via grid cells (not scan_locations), so the per-location
-      // loop above skips Austria entirely. Roll the whole country into one
-      // sentinel-tagged row (`at-country`) so the Verlauf chart has AT data.
-      // Bounds match the AT bounding box used in history-store and station-cache;
-      // see also getAvailableLocations which hides `%-country` from the picker.
+      // loop above skips Austria entirely. Throttled helper rolls the whole
+      // country into one `at-country` row (see persistAtAggregateIfStale).
+      // Throttling matters because boots also call this — we don't want
+      // every redeploy to spam fresh rows.
       try {
-        const atStations: CachedStation[] = [];
-        const seen = new Set<string>();
-        for (const fuel of ['diesel', 'e5', 'e10'] as const) {
-          for (const s of getAllUniqueStationsForFuel(fuel)) {
-            if (!s.isOpen || s.price == null || s.price <= 0) continue;
-            if (s.lat < 46.3 || s.lat > 49.1 || s.lng < 9.4 || s.lng > 17.2) continue;
-            if (seen.has(s.id)) continue;
-            seen.add(s.id);
-            atStations.push(s);
-          }
-        }
-        if (atStations.length > 0 && await recordPriceHistoryFromStations('at-country', atStations)) {
-          this.at.addLog(`AT-Aggregat in price_history gespeichert (${atStations.length} Stationen)`, 'info');
+        if (await persistAtAggregateIfStale()) {
+          this.at.addLog('AT-Aggregat in price_history gespeichert', 'info');
         }
       } catch (err) {
         const eMsg = `AT-Aggregat fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`;

@@ -1,7 +1,7 @@
 import { database } from '@/lib/server-runtime';
 import { fetchJson } from '@/lib/http';
 import { FuelType } from '@/types';
-import { CachedStation } from '@/lib/station-cache';
+import { CachedStation, getAllUniqueStationsForFuel } from '@/lib/station-cache';
 
 export interface MeasureResult {
   timestamp: string;
@@ -198,6 +198,44 @@ export async function recordPriceHistoryFromStations(
     [timestamp, minPrice, avgPrice, maxPrice, cheapest.name || '', open.length, locationId]
   );
   return true;
+}
+
+const AT_AGGREGATE_MIN_INTERVAL_MS = 30 * 60 * 1000;
+
+/**
+ * Roll the currently cached open AT stations into a single `at-country`
+ * row in price_history — but only if the last such row is older than the
+ * throttle. Called from two places: on app boot (after the station cache
+ * is restored from DB) and at the end of every scheduler cycle.
+ *
+ * The throttle matters because deploys restart the process frequently;
+ * without it every restart would spam a fresh row. With it, AT picks up
+ * roughly one row per 30 min while the service is alive, plus the
+ * scheduler's per-cycle write whenever a noon scan actually completes.
+ *
+ * Returns true if a row was written, false if skipped (throttle hit or
+ * empty AT cache).
+ */
+export async function persistAtAggregateIfStale(): Promise<boolean> {
+  const last = await database.query<{ timestamp: Date }>(
+    `SELECT timestamp FROM price_history WHERE location_id = 'at-country' ORDER BY timestamp DESC LIMIT 1`
+  );
+  const lastTs = last.rows[0]?.timestamp ? new Date(last.rows[0].timestamp).getTime() : 0;
+  if (Date.now() - lastTs < AT_AGGREGATE_MIN_INTERVAL_MS) return false;
+
+  const atStations: CachedStation[] = [];
+  const seen = new Set<string>();
+  for (const fuel of ['diesel', 'e5', 'e10'] as const) {
+    for (const s of getAllUniqueStationsForFuel(fuel)) {
+      if (!s.isOpen || s.price == null || s.price <= 0) continue;
+      if (s.lat < 46.3 || s.lat > 49.1 || s.lng < 9.4 || s.lng > 17.2) continue;
+      if (seen.has(s.id)) continue;
+      seen.add(s.id);
+      atStations.push(s);
+    }
+  }
+  if (atStations.length === 0) return false;
+  return recordPriceHistoryFromStations('at-country', atStations);
 }
 
 export async function measureLocation(params: {
