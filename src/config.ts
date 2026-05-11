@@ -9,11 +9,15 @@ const CONFIG_DIR = path.join(ROOT_DIR, 'config');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const EXAMPLE_CONFIG_FILE = path.join(ROOT_DIR, 'config.example.json');
 
+const SCAN_TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DEFAULT_SCAN_TIMES = ['05:00', '11:55', '12:05', '17:00', '20:00', '22:00'];
+
 const DEFAULT_REPO_CONFIG: RepoConfig = {
   api_key: '',
   fuel_type: 'diesel',
   radius_km: 25,
   refresh_interval_minutes: 60,
+  scan_times: DEFAULT_SCAN_TIMES,
   thresholds: {
     good_below_avg_cents: 3,
     okay_below_avg_cents: 1
@@ -78,6 +82,22 @@ function normalizeAuthConfig(value: Partial<RepoAuthConfig> | undefined, fallbac
   };
 }
 
+function normalizeScanTimes(value: unknown, fallback: string[]): string[] {
+  const candidate = Array.isArray(value) ? value : fallback;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of candidate) {
+    if (typeof raw !== 'string') continue;
+    const trimmed = raw.trim();
+    if (!SCAN_TIME_REGEX.test(trimmed)) continue;
+    if (seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  out.sort();
+  return out.length > 0 ? out : [...DEFAULT_SCAN_TIMES];
+}
+
 function normalizeSmtpConfig(value: Partial<RepoSmtpConfig> | undefined, fallback: RepoSmtpConfig): RepoSmtpConfig {
   return {
     host: String(value?.host ?? fallback.host ?? ''),
@@ -99,6 +119,7 @@ export function normalizeRepoConfig(value: Partial<RepoConfig>, fallback: RepoCo
     fuel_type: normalizeFuelType(value.fuel_type ?? fallback.fuel_type ?? DEFAULT_REPO_CONFIG.fuel_type),
     radius_km: 25,
     refresh_interval_minutes: Math.max(1, Math.round(normalizeNumber(value.refresh_interval_minutes, fallback.refresh_interval_minutes ?? DEFAULT_REPO_CONFIG.refresh_interval_minutes))),
+    scan_times: normalizeScanTimes(value.scan_times, fallback.scan_times ?? DEFAULT_SCAN_TIMES),
     thresholds: {
       good_below_avg_cents: Math.round(
         normalizeNumber(value.thresholds?.good_below_avg_cents, fallback.thresholds?.good_below_avg_cents ?? DEFAULT_REPO_CONFIG.thresholds.good_below_avg_cents)

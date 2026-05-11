@@ -3,12 +3,19 @@ import { z } from 'zod';
 import { RepoConfig } from '@/types';
 import { loadRepoConfig, normalizeRepoConfig } from '@/config';
 
+const SCAN_TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 export const adminConfigSchema = z.object({
   apiKey: z.string().default(''),
   orsApiKey: z.string().default(''),
   fuelType: z.enum(['diesel', 'e5', 'e10']).default('diesel'),
   radiusKm: z.coerce.number().min(1).max(25).default(25),
   refreshIntervalMinutes: z.coerce.number().min(1).default(60),
+  scanTimes: z
+    .array(z.string().regex(SCAN_TIME_REGEX, 'Format HH:MM (24h)'))
+    .min(1, 'Mindestens ein Scan-Zeitpunkt erforderlich')
+    .max(12, 'Maximal 12 Scan-Zeitpunkte')
+    .default(['05:00', '11:55', '12:05', '17:00', '20:00', '22:00']),
   sessionSecret: z.string().optional().default(''),
   thresholds: z.object({
     goodBelowAvgCents: z.coerce.number().default(3),
@@ -46,6 +53,7 @@ export function toAdminConfig(config: RepoConfig): AdminConfigInput {
     fuelType: config.fuel_type,
     radiusKm: config.radius_km,
     refreshIntervalMinutes: config.refresh_interval_minutes,
+    scanTimes: [...config.scan_times],
     sessionSecret: config.session_secret || '',
     thresholds: {
       goodBelowAvgCents: config.thresholds.good_below_avg_cents,
@@ -79,6 +87,7 @@ export function fromAdminConfig(input: AdminConfigInput, current: RepoConfig = l
       fuel_type: input.fuelType,
       radius_km: input.radiusKm,
       refresh_interval_minutes: input.refreshIntervalMinutes,
+      scan_times: input.scanTimes,
       session_secret: input.sessionSecret || current.session_secret || createSessionSecret(),
       thresholds: {
         good_below_avg_cents: input.thresholds.goodBelowAvgCents,

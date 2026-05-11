@@ -82,6 +82,13 @@ export interface RepoConfig {
   fuel_type: FuelType;
   radius_km: number;
   refresh_interval_minutes: number;
+  /**
+   * Times of day (24h "HH:MM") at which the scheduler kicks off a scan cycle.
+   * Germany's 12-Uhr-Regel (effective April 2026) allows price raises only at
+   * 12:00 but unlimited drops throughout the day, so multiple scans per day
+   * are needed to capture the afternoon/evening drops.
+   */
+  scan_times: string[];
   thresholds: RepoThresholds;
   auth: RepoAuthConfig;
   smtp?: RepoSmtpConfig;

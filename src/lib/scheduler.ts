@@ -335,13 +335,18 @@ class ScanScheduler {
       firstIteration = false;
 
       if (!runImmediately) {
-        // Wait until 12:01
-        const waitMs = this.msUntilNext1201();
+        // Wait until the next admin-configured scan time. The 12-Uhr-Regel
+        // (DE: April 2026, AT: long-standing) only allows raises once at 12:00
+        // but unlimited drops throughout the day, so we run multiple scans to
+        // catch the afternoon/evening drops.
+        const next = this.nextScanTime();
+        const waitMs = Math.max(5 * 60_000, next.at.getTime() - Date.now());
         const waitH = Math.round(waitMs / 3_600_000 * 10) / 10;
         this._nextCycleAt = new Date(Date.now() + waitMs);
-        this.de.addLog(`Nächster Scan um 12:01 Uhr (in ${waitH} Std.)`, 'info');
-        this.at.addLog(`Nächster Scan um 12:01 Uhr (in ${waitH} Std.)`, 'info');
-        console.log(`[Scheduler] Next scan in ${waitH}h at 12:01`);
+        const logMsg = `Nächster Scan um ${next.hhmm} Uhr (in ${waitH} Std.)`;
+        this.de.addLog(logMsg, 'info');
+        this.at.addLog(logMsg, 'info');
+        console.log(`[Scheduler] Next scan in ${waitH}h at ${next.hhmm}`);
         const { promise, cancel } = cancellableSleep(waitMs);
         this._waitingCancel = cancel;
         await promise;
@@ -438,15 +443,40 @@ class ScanScheduler {
 
   // ─── Helpers ────────────────────────────────────────────────────
 
-  /** Calculate ms until next 12:01 (today or tomorrow). */
-  private msUntilNext1201(): number {
+  /**
+   * Pick the next configured scan time (today or tomorrow). Falls back to a
+   * single 12:01 entry if the admin config is missing or malformed.
+   */
+  private nextScanTime(): { at: Date; hhmm: string } {
+    const config = loadRepoConfig();
+    const times = (config.scan_times && config.scan_times.length > 0)
+      ? config.scan_times
+      : ['12:01'];
     const now = new Date();
-    const target = new Date(now);
-    target.setHours(12, 1, 0, 0);
-    if (now >= target) {
-      target.setDate(target.getDate() + 1);
+    let best: { at: Date; hhmm: string } | null = null;
+    for (const hhmm of times) {
+      const [hStr, mStr] = hhmm.split(':');
+      const h = Number.parseInt(hStr, 10);
+      const m = Number.parseInt(mStr, 10);
+      if (!Number.isFinite(h) || !Number.isFinite(m)) continue;
+      const candidate = new Date(now);
+      candidate.setHours(h, m, 0, 0);
+      // Treat anything within the next 60s as "already past" so a slow
+      // cycle doesn't immediately re-fire on its own configured time.
+      if (candidate.getTime() <= now.getTime() + 60_000) {
+        candidate.setDate(candidate.getDate() + 1);
+      }
+      if (!best || candidate.getTime() < best.at.getTime()) {
+        best = { at: candidate, hhmm };
+      }
     }
-    return Math.max(5 * 60_000, target.getTime() - now.getTime());
+    if (!best) {
+      const fallback = new Date(now);
+      fallback.setHours(12, 1, 0, 0);
+      if (fallback.getTime() <= now.getTime()) fallback.setDate(fallback.getDate() + 1);
+      best = { at: fallback, hhmm: '12:01' };
+    }
+    return best;
   }
 
   // ─── Germany: Decide between list.php discovery and prices.php refresh ─

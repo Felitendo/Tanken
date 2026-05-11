@@ -23,6 +23,7 @@ interface AdminConfig {
   fuelType: string;
   radiusKm: number;
   refreshIntervalMinutes: number;
+  scanTimes: string[];
   sessionSecret: string;
   thresholds: { goodBelowAvgCents: number; okayBelowAvgCents: number };
   oidc: {
@@ -135,11 +136,14 @@ const defaultConfig: AdminConfig = {
   fuelType: 'diesel',
   radiusKm: 25,
   refreshIntervalMinutes: 60,
+  scanTimes: ['05:00', '11:55', '12:05', '17:00', '20:00', '22:00'],
   sessionSecret: '',
   thresholds: { goodBelowAvgCents: 3, okayBelowAvgCents: 1 },
   oidc: { issuerUrl: '', clientId: '', clientSecret: '', scope: 'openid profile email', usernameClaim: 'preferred_username', pictureClaim: 'picture', name: '' },
   smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
 };
+
+const SCAN_TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 // ─── API helper ────────────────────────────────────────────────────
 
@@ -1214,6 +1218,74 @@ function ScannerConsole() {
   );
 }
 
+// ─── Scan Times (12-Uhr-Regel awareness) ───────────────────────────
+
+function ScanTimesGroup({ config, onChange }: { config: AdminConfig; onChange: (patch: Partial<AdminConfig>) => void }) {
+  const times = config.scanTimes ?? [];
+  const updateAt = (idx: number, value: string) => {
+    const next = [...times];
+    next[idx] = value;
+    onChange({ scanTimes: next });
+  };
+  const addRow = () => {
+    if (times.length >= 12) return;
+    onChange({ scanTimes: [...times, '12:00'] });
+  };
+  const removeRow = (idx: number) => {
+    if (times.length <= 1) return;
+    onChange({ scanTimes: times.filter((_, i) => i !== idx) });
+  };
+
+  return (
+    <SettingsGroup title="Scan-Zeiten">
+      <div className="admin-settings-row" style={{ display: 'block' }}>
+        <p className="text-[11px] text-muted-foreground" style={{ marginBottom: '8px' }}>
+          Seit April 2026 dürfen DE-Tankstellen Preise nur 1×/Tag um 12:00 erhöhen, Senkungen sind jederzeit erlaubt (AT analog). Mehrere Scan-Zeitpunkte erfassen die Senkungen am Nachmittag/Abend.
+        </p>
+        <div className="space-y-2">
+          {times.map((time, idx) => {
+            const valid = SCAN_TIME_REGEX.test(time);
+            return (
+              <div key={idx} className="flex items-center gap-2">
+                <Input
+                  type="time"
+                  value={time}
+                  onChange={(e) => updateAt(idx, e.target.value)}
+                  className={`w-32 font-mono ${valid ? '' : 'border-red-500'}`}
+                  placeholder="HH:MM"
+                />
+                {!valid && <span className="text-[11px] text-red-500">HH:MM</span>}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="admin-btn shrink-0"
+                  onClick={() => removeRow(idx)}
+                  disabled={times.length <= 1}
+                  aria-label="Scan-Zeit entfernen"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            );
+          })}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="admin-btn"
+            onClick={addRow}
+            disabled={times.length >= 12}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Scan-Zeit hinzufügen
+          </Button>
+        </div>
+      </div>
+    </SettingsGroup>
+  );
+}
+
 // ─── Config Section Components ─────────────────────────────────────
 
 function AppConfigSection({
@@ -1283,6 +1355,8 @@ function AppConfigSection({
           </div>
         </SettingsRow>
       </SettingsGroup>
+
+      <ScanTimesGroup config={config} onChange={onChange} />
 
       <SettingsGroup title="Schwellenwerte">
         <SettingsRow label="Gut unter Durchschnitt" inline>
