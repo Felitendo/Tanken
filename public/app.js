@@ -3500,21 +3500,20 @@ async function isLocationAlreadyCovered(lat, lng) {
   return false;
 }
 
-// Render the empty state for the per-station price chart. In Austria we just
-// say "data is accumulating"; in Germany we point users to the request flow
-// because the station isn't covered by the scanner.
-function renderSheetChartEmptyState(loadingEl, station) {
+// Render the empty state for the per-station price chart.
+// - notCovered=true (DE only): no admin scan location covers this station,
+//   so we'll never have history — surface the "request a scan location" CTA.
+// - notCovered=false: station IS covered (or AT) but we just don't have
+//   enough rows yet; show the neutral "data is accumulating" hint.
+function renderSheetChartEmptyState(loadingEl, station, notCovered = false) {
   if (!loadingEl) return;
-  const inAustria = station && Number.isFinite(station.lat) && Number.isFinite(station.lng)
-    ? isInAustria(station.lat, station.lng)
-    : false;
 
-  if (inAustria) {
+  if (!notCovered) {
     loadingEl.innerHTML = `<span style="opacity:0.75">${t('historyAccumulating')}</span>`;
     return;
   }
 
-  // Germany: explain why and offer the location request flow.
+  // Germany, station not covered: explain why and offer the location request flow.
   loadingEl.innerHTML = `
     <div class="sheet-chart-empty-msg">
       <div class="sheet-chart-empty-title">${t('stationNotScanned')}</div>
@@ -3574,7 +3573,7 @@ async function loadSheetChart(stationName, days = 1, stationId) {
       const scanLocs = await ensureScanLocations();
       if (!isStationCovered(station, scanLocs)) {
         updateSheetToggleAvailability({ has24h: false, has7d: false });
-        renderSheetChartEmptyState(loading, station);
+        renderSheetChartEmptyState(loading, station, true);
         return;
       }
     }
@@ -3586,7 +3585,7 @@ async function loadSheetChart(stationName, days = 1, stationId) {
     const hasSeries = Array.isArray(data) && data.length >= 2;
     if (!hasSeries) {
       updateSheetToggleAvailability({ has24h: false, has7d: false });
-      renderSheetChartEmptyState(loading, station);
+      renderSheetChartEmptyState(loading, station, false);
       return;
     }
 
