@@ -1643,6 +1643,15 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     // until the debounced loader fired. Instead we fire the loader
     // immediately on zoom so list + markers refresh together.
     const MIN_ZOOM_FOR_STATIONS = 10;
+    // Cancel any pending viewport refresh the moment a new zoom starts.
+    // Without this, a previous zoomend's deferred timer can fire mid-way
+    // through the next zoom's animation — renderStationsOnMap then tears
+    // down state.clusterGroup and the merge/split animation gets cut off.
+    // Rapid zoom in/out is the worst case: each zoomend sets a timer, and
+    // if a new zoomstart lands within that window the timer must die.
+    state.map.on('zoomstart', () => {
+      if (_viewportTimer) { clearTimeout(_viewportTimer); _viewportTimer = null; }
+    });
     state.map.on('zoomend', () => {
       if (!state.map) return;
       // Route mode pins the list to the corridor result — don't let zoom
