@@ -1658,14 +1658,19 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
         state.markers.forEach(m => state.map.removeLayer(m));
         state.markers = [];
       }
-      // Always refresh on zoom — the visible viewport (and therefore the
-      // bounds query / scan-location selection) changes drastically, and
-      // skipping would leave the user with stale markers / a clipped list.
-      // Pan refresh is still gated by the move-distance threshold below.
+      // Refresh on zoom — the visible viewport (and therefore the bounds
+      // query / scan-location selection) changes drastically, and skipping
+      // would leave the user with stale markers / a clipped list. Deferred
+      // ~400 ms so MarkerCluster's own merge/split animation can play out
+      // before renderStationsOnMap tears down state.clusterGroup. A fast
+      // double-zoom resets the timer via _viewportTimer instead of stacking.
       if (state.map.getZoom() >= VIEWPORT_MIN_ZOOM) {
-        if (_viewportTimer) { clearTimeout(_viewportTimer); _viewportTimer = null; }
-        syncManualScansFromServer({ rerender: false });
-        loadStationsAroundCenter({ silent: true });
+        if (_viewportTimer) clearTimeout(_viewportTimer);
+        _viewportTimer = setTimeout(() => {
+          _viewportTimer = null;
+          syncManualScansFromServer({ rerender: false });
+          loadStationsAroundCenter({ silent: true });
+        }, 400);
       }
     });
     state.map.on('moveend', () => {
@@ -2463,11 +2468,13 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
     showCoverageOnHover: false,
     iconCreateFunction: function(clusterObj) {
       const count = clusterObj.getChildCount();
-      // Average each child's bandRatio so a cluster gets the same gradient
-      // as its individual pins — including the viewport-band fallback, so a
-      // cluster of stations all at the local cheap end stays green instead
-      // of going country-band-red. Children without any band contribute to
-      // the average price but not the color.
+      // Average each child's pre-computed bandRatio (cached on the marker
+      // at creation time as _stationRatio) so a cluster gets the same
+      // gradient as its individual pins. Doing this from a cache instead
+      // of recomputing per child keeps the merge/split animation smooth —
+      // the polygon point-in-country test inside stationBandRatio would
+      // otherwise run for every child on every intermediate cluster.
+      // Children without any band ratio contribute to price but not color.
       const childMarkers = clusterObj.getAllChildMarkers();
       let totalPrice = 0, priceCount = 0;
       let totalRatio = 0, ratioCount = 0;
@@ -2475,7 +2482,7 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
         if (!m._stationPrice) return;
         totalPrice += m._stationPrice;
         priceCount++;
-        const r = stationBandRatio(m._stationPrice, m._stationLocationId, m._stationLat, m._stationLng);
+        const r = m._stationRatio;
         if (r != null) {
           totalRatio += r;
           ratioCount++;
@@ -2501,7 +2508,11 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
 
   filtered.forEach((s) => {
     if (!s.price || !s.isOpen) return;
-    const color = priceColorStable(s.price, s._locationId, s.lat, s.lng);
+    // Compute the band ratio once and reuse it for both the pin's color
+    // and the cluster's average — the polygon point-in-country test inside
+    // stationBandRatio is the hot path during cluster merge animations.
+    const ratio = stationBandRatio(s.price, s._locationId, s.lat, s.lng);
+    const color = ratio == null ? PRICE_COLOR_NEUTRAL : priceColor3(ratio);
     const brand = fixEnc(s.brand || s.name).substring(0, 6);
     const pParts = formatPriceParts(s.price);
     const icon = L.divIcon({
@@ -2525,10 +2536,14 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
         showStationSheet(s);
       });
 
+    // Set the marker caches BEFORE addLayer — MarkerCluster may call
+    // iconCreateFunction synchronously if the marker lands in an
+    // already-existing cluster at the current zoom.
     marker._stationPrice = s.price;
     marker._stationLocationId = s._locationId;
     marker._stationLat = s.lat;
     marker._stationLng = s.lng;
+    marker._stationRatio = ratio;
 
     if (cluster) {
       cluster.addLayer(marker);
