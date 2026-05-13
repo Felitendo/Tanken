@@ -385,12 +385,6 @@ body.logged-in .cloud-sync-hint {
   transition: width 0.3s, height 0.3s, opacity 0.3s;
 }
 
-.section-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 /* === Chips === */
 .chip-row {
   display: flex;
@@ -421,12 +415,6 @@ body.logged-in .cloud-sync-hint {
 .chip.active {
   background: var(--color-accent);
   color: var(--color-accent-text);
-}
-
-.chip.measure-chip {
-  font-size: 11px;
-  padding: 4px 10px;
-  gap: 4px;
 }
 
 .country-chip-row {

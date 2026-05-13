@@ -133,10 +133,6 @@ const i18n = {
     noHistory: 'Kein Verlauf verfügbar',
     sheet24h: '24h',
     sheet7d: '7 Tage',
-    measureNow: 'Jetzt messen',
-    measuring: 'Messe...',
-    measureSuccess: 'Messung gespeichert',
-    measureError: 'Messung fehlgeschlagen',
     // Station sort
     sortPrice: 'Preis',
     sortDistance: 'Entfernung',
@@ -344,10 +340,6 @@ const i18n = {
     noHistory: 'No history available',
     sheet24h: '24h',
     sheet7d: '7 Days',
-    measureNow: 'Measure now',
-    measuring: 'Measuring...',
-    measureSuccess: 'Measurement saved',
-    measureError: 'Measurement failed',
     sortPrice: 'Price',
     sortDistance: 'Distance',
     stationsFound: 'Stations',
@@ -3956,36 +3948,6 @@ async function loadHistoryTab() {
     });
   });
 
-  // Show measure button for admin users
-  const measureBtn = document.getElementById('btn-measure');
-  if (measureBtn && state.user?.roles?.includes('admin')) {
-    measureBtn.style.display = '';
-    measureBtn.addEventListener('click', async () => {
-      if (measureBtn.disabled) return;
-      measureBtn.disabled = true;
-      measureBtn.textContent = t('measuring');
-      haptic('light');
-      try {
-        const body = {};
-        if (state.userLat && state.userLng) {
-          body.lat = state.userLat;
-          body.lng = state.userLng;
-        }
-        await api('/api/admin/measure', { method: 'POST', body: JSON.stringify(body) });
-        showToast(t('measureSuccess'));
-        haptic('success');
-        // Reload history data
-        state.history = await fetchHistoryData();
-        renderChart(state.history);
-      } catch (err) {
-        showToast(t('measureError'));
-        haptic('error');
-      } finally {
-        measureBtn.disabled = false;
-        measureBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg> ${t('measureNow')}`;
-      }
-    });
-  }
 }
 
 function renderChart(data) {
