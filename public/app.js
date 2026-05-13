@@ -3721,7 +3721,8 @@ async function loadSheetChart(stationName, days = 1, stationId) {
     }
 
     const idParam = stationId ? `&id=${encodeURIComponent(stationId)}` : '';
-    const data = await api(`/api/history?station=${encodeURIComponent(stationName)}${idParam}`);
+    const fuelParam = state.fuelType ? `&fuel=${encodeURIComponent(state.fuelType)}` : '';
+    const data = await api(`/api/history?station=${encodeURIComponent(stationName)}${idParam}${fuelParam}`);
     // Backend returns an array of station entries when ≥ 2 rows exist; an
     // object {entries, extremes} otherwise. Treat both "no rows" cases the same.
     const hasSeries = Array.isArray(data) && data.length >= 2;
