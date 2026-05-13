@@ -2847,7 +2847,7 @@ function toggleSheetExpanded(content) {
     if (state.sheetStationName) {
       const activeRange = document.querySelector('.sheet-toggle-btn.active');
       const days = activeRange ? parseInt(activeRange.dataset.range, 10) : 1;
-      loadSheetChart(state.sheetStationName, days);
+      loadSheetChart(state.sheetStationName, days, state.sheetStation?.id);
     } else if (state.sheetChart) {
       state.sheetChart.resize();
     }
@@ -4496,6 +4496,13 @@ function setupSettings() {
       loadPriceBand();
       persistStateSettings({ fuelType: state.fuelType });
       if (state.currentTab === 'map') loadMapTab();
+      // If the station sheet is open, reload its chart so it tracks the
+      // new fuel type instead of showing a stale series.
+      if (state.sheetStationName) {
+        const activeRange = document.querySelector('.sheet-toggle-btn.active');
+        const days = activeRange ? parseInt(activeRange.dataset.range, 10) : (state.historyDefaultDays || 1);
+        loadSheetChart(state.sheetStationName, days, state.sheetStation?.id);
+      }
       refreshAlertUi();
     });
   });
