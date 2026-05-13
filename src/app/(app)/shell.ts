@@ -84,8 +84,8 @@ export const APP_SHELL = `
   <div class="tab-view" id="view-history">
     <div class="section">
       <div class="chip-row country-chip-row" id="history-country-chips" role="tablist" aria-label="Land">
-        <button type="button" class="chip" data-country="de"><span class="country-flag">🇩🇪</span><span data-i18n="countryDE">Deutschland</span></button>
-        <button type="button" class="chip" data-country="at"><span class="country-flag">🇦🇹</span><span data-i18n="countryAT">Österreich</span></button>
+        <button type="button" class="chip" data-country="de"><svg class="country-flag" viewBox="0 0 5 3" width="18" height="11" aria-hidden="true"><rect width="5" height="1" fill="#000"/><rect width="5" height="1" y="1" fill="#dd0000"/><rect width="5" height="1" y="2" fill="#ffce00"/></svg><span data-i18n="countryDE">Deutschland</span></button>
+        <button type="button" class="chip" data-country="at"><svg class="country-flag" viewBox="0 0 9 6" width="16" height="11" aria-hidden="true"><rect width="9" height="6" fill="#ed2939"/><rect width="9" height="2" y="2" fill="#fff"/></svg><span data-i18n="countryAT">Österreich</span></button>
       </div>
       <select id="history-location-picker" class="location-picker" aria-label="Standort filtern" style="display:none;margin-bottom:8px">
         <option value="">Alle Standorte</option>
@@ -122,8 +122,8 @@ export const APP_SHELL = `
   <div class="tab-view" id="view-stats">
     <div class="section" style="padding-bottom:0">
       <div class="chip-row country-chip-row" id="stats-country-chips" role="tablist" aria-label="Land">
-        <button type="button" class="chip" data-country="de"><span class="country-flag">🇩🇪</span><span data-i18n="countryDE">Deutschland</span></button>
-        <button type="button" class="chip" data-country="at"><span class="country-flag">🇦🇹</span><span data-i18n="countryAT">Österreich</span></button>
+        <button type="button" class="chip" data-country="de"><svg class="country-flag" viewBox="0 0 5 3" width="18" height="11" aria-hidden="true"><rect width="5" height="1" fill="#000"/><rect width="5" height="1" y="1" fill="#dd0000"/><rect width="5" height="1" y="2" fill="#ffce00"/></svg><span data-i18n="countryDE">Deutschland</span></button>
+        <button type="button" class="chip" data-country="at"><svg class="country-flag" viewBox="0 0 9 6" width="16" height="11" aria-hidden="true"><rect width="9" height="6" fill="#ed2939"/><rect width="9" height="2" y="2" fill="#fff"/></svg><span data-i18n="countryAT">Österreich</span></button>
       </div>
       <select id="stats-location-picker" class="location-picker" aria-label="Standort filtern" style="display:none">
         <option value="">Alle Standorte</option>

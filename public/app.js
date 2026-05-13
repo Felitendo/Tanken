@@ -1042,7 +1042,13 @@ function setupUserRequests() {
   }
 }
 
-const COUNTRY_FLAGS = { de: '🇩🇪', at: '🇦🇹' };
+// Inline SVG flags rather than unicode flag emojis: Windows desktop renders
+// the regional-indicator pairs as plain "DE"/"AT" badges, so the flag
+// disappears on most desktop browsers. SVG renders consistently everywhere.
+const COUNTRY_FLAGS = {
+  de: '<svg class="country-flag" viewBox="0 0 5 3" width="18" height="11" aria-hidden="true"><rect width="5" height="1" fill="#000"/><rect width="5" height="1" y="1" fill="#dd0000"/><rect width="5" height="1" y="2" fill="#ffce00"/></svg>',
+  at: '<svg class="country-flag" viewBox="0 0 9 6" width="16" height="11" aria-hidden="true"><rect width="9" height="6" fill="#ed2939"/><rect width="9" height="2" y="2" fill="#fff"/></svg>',
+};
 
 async function renderHistoryLocations() {
   const list = document.getElementById('history-locations-list');
@@ -1071,7 +1077,7 @@ async function renderHistoryLocations() {
     const coords = `${Number(loc.lat).toFixed(3)}, ${Number(loc.lng).toFixed(3)}`;
     return `
       <div class="card-row" style="padding:12px 16px;gap:10px;border-bottom:1px solid var(--color-separator)">
-        <span aria-hidden="true" style="font-size:18px;line-height:1;flex-shrink:0">${flag}</span>
+        <span aria-hidden="true" style="display:inline-flex;align-items:center;line-height:1;flex-shrink:0">${flag}</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:15px;font-weight:500;color:var(--color-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(loc.name || '')}</div>
           <div style="font-size:11px;color:var(--color-hint);margin-top:2px;font-variant-numeric:tabular-nums">${coords}</div>
