@@ -3486,6 +3486,23 @@ html[data-theme="dark"] .pwa-popup-icon img,
     padding: var(--sp-3) var(--sp-6) var(--sp-7);
   }
 
+  /* On desktop the view already provides side padding, so sections shed
+     their inner 16 px gutter and let the centred max-width column do the
+     work. Cards/headers align flush to that column. */
+  #view-history > .section,
+  #view-stats > .section,
+  #view-settings > .section {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* Stat-row's own 16 px gutter is now redundant for the same reason. */
+  #view-history .stat-row,
+  #view-stats .stat-row {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
   #view-history.active,
   #view-stats.active,
   #view-settings.active {
