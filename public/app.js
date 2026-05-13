@@ -127,6 +127,13 @@ const i18n = {
     pwaWin1: 'Klicke auf das <strong>Installations-Symbol</strong> in der Adressleiste',
     pwaWin2: 'Bestätige mit <strong>„Installieren"</strong>',
     pwaWin3: 'Optional: <strong>An Taskleiste anheften</strong> für schnellen Zugriff',
+    // Page headers
+    historyTitle: 'Preisverlauf',
+    historyDescription: 'Durchschnittspreise und Tiefstwerte über die letzten Tage.',
+    statsTitle: 'Statistiken',
+    statsDescription: 'Wo, wann und wie viel — die beste Zeit zum Tanken.',
+    settingsTitle: 'Einstellungen',
+    settingsDescription: 'Personalisiere die App und verwalte dein Felo-ID-Konto.',
     // Station history
     priceHistory: 'PREISVERLAUF',
     areaHistory: 'Gebietspreisverlauf',
@@ -335,6 +342,12 @@ const i18n = {
     pwaWin1: 'Click the <strong>Install icon</strong> in the address bar',
     pwaWin2: 'Confirm with <strong>"Install"</strong>',
     pwaWin3: 'Optional: <strong>Pin to taskbar</strong> for quick access',
+    historyTitle: 'Price history',
+    historyDescription: 'Average and lowest prices over the past few days.',
+    statsTitle: 'Statistics',
+    statsDescription: 'Where, when, and how much — the best time to fill up.',
+    settingsTitle: 'Settings',
+    settingsDescription: 'Personalise the app and manage your Felo ID account.',
     priceHistory: 'PRICE HISTORY',
     areaHistory: 'Area price trend',
     noHistory: 'No history available',
@@ -3964,19 +3977,17 @@ function renderChart(data) {
     if (statsEl) { statsEl.style.display = 'none'; statsEl.innerHTML = ''; }
     const summary = document.getElementById('history-summary');
     summary.innerHTML = `
-      <div style="text-align:center;padding:1.5rem 0 0.5rem;opacity:0.45;font-size:13px">${t('noHistory')}</div>
+      <div class="empty-state-inline">${t('noHistory')}</div>
       <div class="section-header">${t('summary')}</div>
-      <div class="card">
-        <div class="card-row" style="padding:4px 0">
-          <div class="card-row-left"><div><div class="card-title">${t('lowestPrice')}</div><div class="card-subtitle">–</div></div></div>
-          <div class="card-value" style="opacity:0.3">–</div>
-        </div>
+      <div class="extreme-card is-empty">
+        <div class="extreme-label">${t('lowestPrice')}</div>
+        <div class="extreme-value">–</div>
+        <div class="extreme-station">–</div>
       </div>
-      <div class="card">
-        <div class="card-row" style="padding:4px 0">
-          <div class="card-row-left"><div><div class="card-title">${t('highestPrice')}</div><div class="card-subtitle">–</div></div></div>
-          <div class="card-value" style="opacity:0.3">–</div>
-        </div>
+      <div class="extreme-card is-empty">
+        <div class="extreme-label">${t('highestPrice')}</div>
+        <div class="extreme-value">–</div>
+        <div class="extreme-station">–</div>
       </div>`;
     return;
   }
@@ -4147,17 +4158,15 @@ function renderChart(data) {
   const highestPrice = expensivePrice != null ? expensivePrice : maxEntry.max_price;
   summary.innerHTML = `
     <div class="section-header">${t('summary')}</div>
-    <div class="card">
-      <div class="card-row" style="padding:4px 0">
-        <div class="card-row-left"><div><div class="card-title">${t('lowestPrice')}</div><div class="card-subtitle">${fixEnc(lowestStation)}</div></div></div>
-        <div class="card-value good">${formatPrice(lowestPrice)}</div>
-      </div>
+    <div class="extreme-card">
+      <div class="extreme-label">${t('lowestPrice')}</div>
+      <div class="extreme-value good">${formatPrice(lowestPrice)}</div>
+      <div class="extreme-station">${fixEnc(lowestStation)}</div>
     </div>
-    <div class="card">
-      <div class="card-row" style="padding:4px 0">
-        <div class="card-row-left"><div><div class="card-title">${t('highestPrice')}</div><div class="card-subtitle">${fixEnc(highestStation)}</div></div></div>
-        <div class="card-value bad">${formatPrice(highestPrice)}</div>
-      </div>
+    <div class="extreme-card">
+      <div class="extreme-label">${t('highestPrice')}</div>
+      <div class="extreme-value bad">${formatPrice(highestPrice)}</div>
+      <div class="extreme-station">${fixEnc(highestStation)}</div>
     </div>`;
 }
 
@@ -4192,20 +4201,25 @@ function renderHistoryStats(data) {
   const prevMonth = avgInRange(30, 60);
   const deltaMonth = (month != null && prevMonth != null) ? month - prevMonth : null;
 
+  const trendClass = (d) => d == null ? 'flat' : d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
+  const trendArrow = (d) => d == null ? '·' : d > 0 ? '▲' : d < 0 ? '▼' : '·';
+
   el.style.display = '';
   el.innerHTML = `
-    <div class="stat-row">
-      <div class="stat-card">
-        <div class="stat-card-value">${currentAvg != null ? formatPrice(currentAvg) : '–'}</div>
-        <div class="stat-card-label">${t('currentAvg')}</div>
+    <div class="metric-row">
+      <div class="metric-card">
+        <div class="metric-label">${t('currentAvg')}</div>
+        <div class="metric-value">${currentAvg != null ? formatPrice(currentAvg) : '–'}</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-card-value" style="color:${deltaColor(deltaWeek)}">${formatDelta(deltaWeek)}</div>
-        <div class="stat-card-label">${t('vsLastWeek')}</div>
+      <div class="metric-card">
+        <div class="metric-label">${t('vsLastWeek')}</div>
+        <div class="metric-value" style="color:${deltaColor(deltaWeek)}">${formatDelta(deltaWeek)}</div>
+        <div class="metric-trend ${trendClass(deltaWeek)}">${trendArrow(deltaWeek)} ${week != null ? formatPrice(week) : '–'}</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-card-value" style="color:${deltaColor(deltaMonth)}">${formatDelta(deltaMonth)}</div>
-        <div class="stat-card-label">${t('vsLastMonth')}</div>
+      <div class="metric-card">
+        <div class="metric-label">${t('vsLastMonth')}</div>
+        <div class="metric-value" style="color:${deltaColor(deltaMonth)}">${formatDelta(deltaMonth)}</div>
+        <div class="metric-trend ${trendClass(deltaMonth)}">${trendArrow(deltaMonth)} ${month != null ? formatPrice(month) : '–'}</div>
       </div>
     </div>`;
 }
@@ -4366,19 +4380,38 @@ function renderStats(stats) {
   const bestHour = stats.hourAvgs[0];
   const hourLabel = bestHour ? (t('oclock') ? `${bestHour.hour}:00 ${t('oclock')}` : `${bestHour.hour}:00`) : '-';
   let html = `
-    <div class="stat-big">
-      <div class="stat-big-value">${formatPrice(stats.overall.avg)}</div>
-      <div class="stat-big-label">${t('avgPrice')}</div>
+    <div class="stats-hero">
+      <div class="stats-hero-label">${t('avgPrice')}</div>
+      <div class="stats-hero-value">${formatPrice(stats.overall.avg)}</div>
     </div>
-    <div class="stat-row">
-      <div class="stat-card"><div class="stat-card-value" style="color:var(--color-good)">${formatPrice(stats.overall.lowest_ever)}</div><div class="stat-card-label">${t('lowest')}</div></div>
-      <div class="stat-card"><div class="stat-card-value" style="color:var(--color-bad)">${formatPrice(stats.overall.highest_ever)}</div><div class="stat-card-label">${t('highest')}</div></div>
-      <div class="stat-card"><div class="stat-card-value" style="color:var(--color-accent)">${stats.overall.entries}</div><div class="stat-card-label">${t('measurements')}</div></div>
+    <div class="metric-row">
+      <div class="metric-card">
+        <div class="metric-label">${t('lowest')}</div>
+        <div class="metric-value" style="color:var(--color-good)">${formatPrice(stats.overall.lowest_ever)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">${t('highest')}</div>
+        <div class="metric-value" style="color:var(--color-bad)">${formatPrice(stats.overall.highest_ever)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">${t('measurements')}</div>
+        <div class="metric-value" style="color:var(--color-accent)">${stats.overall.entries}</div>
+      </div>
     </div>
-    <div class="section" style="margin-top:8px">
+    <div class="section">
       <div class="section-header">${t('bestTimes')}</div>
-      <div class="card"><div class="card-row" style="padding:4px 0"><div class="card-row-left"><div><div class="card-title">${bestDay ? (t('dayNames')[bestDay.day] || bestDay.name) : '-'}</div><div class="card-subtitle">${t('cheapestDay')}</div></div></div><div class="card-value good">${bestDay ? formatPrice(bestDay.avg) : '-'}</div></div></div>
-      <div class="card"><div class="card-row" style="padding:4px 0"><div class="card-row-left"><div><div class="card-title">${hourLabel}</div><div class="card-subtitle">${t('cheapestHour')}</div></div></div><div class="card-value good">${bestHour ? formatPrice(bestHour.avg) : '-'}</div></div></div>
+      <div class="best-time-grid">
+        <div class="best-time-card">
+          <div class="best-time-label">${t('cheapestDay')}</div>
+          <div class="best-time-value">${bestDay ? (t('dayNames')[bestDay.day] || bestDay.name) : '–'}</div>
+          <div class="best-time-price good">${bestDay ? formatPrice(bestDay.avg) : '–'}</div>
+        </div>
+        <div class="best-time-card">
+          <div class="best-time-label">${t('cheapestHour')}</div>
+          <div class="best-time-value">${hourLabel}</div>
+          <div class="best-time-price good">${bestHour ? formatPrice(bestHour.avg) : '–'}</div>
+        </div>
+      </div>
     </div>`;
 
   if (stats.dayAvgs.length) {
@@ -4422,18 +4455,18 @@ function renderStats(stats) {
 
   // Defer animations to next frame so DOM write doesn't block tab bar
   requestAnimationFrame(() => {
-    const bigVal = el.querySelector('.stat-big-value');
+    const bigVal = el.querySelector('.stats-hero-value');
     if (bigVal && stats.overall.avg) {
       countUp(bigVal, stats.overall.avg, 800, v => formatPrice(v));
     }
-    el.querySelectorAll('.stat-card-value').forEach(cv => {
+    el.querySelectorAll('.metric-value').forEach(cv => {
       const num = parseFloat(cv.textContent.replace(',', '.'));
       if (!isNaN(num) && num > 0) {
         const isPrice = cv.textContent.includes(',');
         countUp(cv, num, 600, isPrice ? (v => formatPrice(v)) : (v => Math.round(v).toString()));
       }
     });
-    el.querySelectorAll('.stat-card').forEach((card, i) => {
+    el.querySelectorAll('.metric-card, .best-time-card').forEach((card, i) => {
       card.style.animationDelay = `${Math.min(i * 60, 200)}ms`;
       card.classList.add('anim-in');
     });
@@ -5734,7 +5767,7 @@ function formatDelta(n) {
 }
 function deltaColor(n) {
   if (n == null || !isFinite(n) || Math.abs(n) < 0.005) return 'var(--color-hint)';
-  return n < 0 ? '#34c759' : '#ff3b30';
+  return n < 0 ? 'var(--color-good)' : 'var(--color-bad)';
 }
 
 function formatDataAge(isoTimestamp) {

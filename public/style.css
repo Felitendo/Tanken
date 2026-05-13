@@ -283,9 +283,10 @@ body.logged-in .cloud-sync-hint {
   display: none;
 }
 
-/* === Cards === */
+/* === Cards (shadcn-style: 1 px border + subtle background) === */
 .card {
   background: var(--color-bg-secondary);
+  border: 1px solid var(--color-separator);
   border-radius: var(--r-md);
   padding: var(--sp-3) var(--sp-4);
   margin-bottom: var(--sp-2);
@@ -293,6 +294,7 @@ body.logged-in .cloud-sync-hint {
 
 .card-list {
   background: var(--color-bg-secondary);
+  border: 1px solid var(--color-separator);
   border-radius: var(--r-md);
   overflow: hidden;
   margin-bottom: var(--sp-2);
@@ -301,6 +303,223 @@ body.logged-in .cloud-sync-hint {
 .card-list .card-row {
   padding: var(--sp-3) var(--sp-4);
   border-bottom: 0.5px solid var(--color-separator);
+}
+
+/* Inline card header (used inside a .card to act as a section title for the
+   card's contents). Title is bigger and more emphatic than .section-header,
+   the description sits muted right beneath. */
+.card-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--color-separator);
+}
+.card-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.card-title-lg {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.card-description {
+  font-size: 13px;
+  color: var(--color-hint);
+  line-height: 1.45;
+}
+
+/* === Page header (sits at the top of each non-map tab) === */
+.page-header {
+  padding: var(--sp-5) var(--sp-4) var(--sp-4);
+  border-bottom: 1px solid var(--color-separator);
+  margin-bottom: var(--sp-4);
+}
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  line-height: 1.15;
+}
+.page-description {
+  font-size: 14px;
+  color: var(--color-hint);
+  margin-top: var(--sp-1);
+  line-height: 1.45;
+}
+
+/* === Metric (KPI) card — used for the 3-up dashboard tiles in history
+       and stats. Tighter than .card, more visual weight on the value. */
+.metric-card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.metric-label {
+  font-size: 12px;
+  color: var(--color-hint);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.metric-trend {
+  font-size: 12px;
+  color: var(--color-hint);
+  margin-top: var(--sp-1);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.metric-trend.up   { color: var(--color-bad); }
+.metric-trend.down { color: var(--color-good); }
+.metric-trend.flat { color: var(--color-hint); }
+
+.metric-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+@media (max-width: 600px) {
+  .metric-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* === Extreme cards (lowest / highest price in history summary) === */
+.extreme-card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.extreme-label {
+  font-size: 12px;
+  color: var(--color-hint);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+.extreme-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.extreme-value.good { color: var(--color-good); }
+.extreme-value.bad  { color: var(--color-bad); }
+.extreme-card.is-empty .extreme-value { color: var(--color-hint); opacity: 0.6; }
+.extreme-station {
+  font-size: 13px;
+  color: var(--color-hint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.empty-state-inline {
+  text-align: center;
+  padding: var(--sp-5) 0 var(--sp-2);
+  opacity: 0.5;
+  font-size: 13px;
+  color: var(--color-hint);
+}
+
+/* === Stats hero (overall avg headline) === */
+.stats-hero {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--r-md);
+  padding: var(--sp-5) var(--sp-5);
+  margin-bottom: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+}
+.stats-hero-label {
+  font-size: 12px;
+  color: var(--color-hint);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+.stats-hero-value {
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+/* === Best times (cheapest day / hour) === */
+.best-time-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+}
+.best-time-card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.best-time-label {
+  font-size: 12px;
+  color: var(--color-hint);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+.best-time-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+.best-time-price {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: var(--sp-1);
+  font-variant-numeric: tabular-nums;
+}
+.best-time-price.good { color: var(--color-good); }
+.best-time-price.bad  { color: var(--color-bad); }
+
+@media (max-width: 480px) {
+  .best-time-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .card-list .card-row:last-child {
@@ -939,7 +1158,9 @@ body.logged-in .cloud-sync-hint {
 
 .station-item.anim-in,
 .ranking-item.anim-in,
-.stat-card.anim-in {
+.stat-card.anim-in,
+.metric-card.anim-in,
+.best-time-card.anim-in {
   animation: slide-in-up 0.3s cubic-bezier(0.2, 0, 0, 1) both;
 }
 
@@ -1315,6 +1536,7 @@ body.logged-in .station-fav-sync.synced {
 /* === Chart === */
 .chart-container {
   background: var(--color-bg-secondary);
+  border: 1px solid var(--color-separator);
   border-radius: var(--r-md);
   padding: var(--sp-4) var(--sp-2) var(--sp-2);
   height: 280px;
@@ -1902,6 +2124,7 @@ body.logged-in .station-fav-sync.synced {
 .stat-card {
   flex: 1;
   background: var(--color-bg-secondary);
+  border: 1px solid var(--color-separator);
   border-radius: var(--r-md);
   padding: var(--sp-3) var(--sp-3);
   text-align: center;
@@ -3483,7 +3706,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: var(--sp-3) var(--sp-6) var(--sp-7);
+    padding: 0 var(--sp-6) var(--sp-7);
   }
 
   /* On desktop the view already provides side padding, so sections shed
@@ -3501,6 +3724,19 @@ html[data-theme="dark"] .pwa-popup-icon img,
   #view-stats .stat-row {
     padding-left: 0;
     padding-right: 0;
+  }
+
+  /* Page header sits flush with the content column and gets a more
+     generous vertical rhythm on desktop. */
+  .page-header {
+    padding: var(--sp-7) 0 var(--sp-5);
+  }
+  .page-title {
+    font-size: 32px;
+  }
+  .page-description {
+    font-size: 15px;
+    margin-top: var(--sp-2);
   }
 
   #view-history.active,
@@ -3545,35 +3781,61 @@ html[data-theme="dark"] .pwa-popup-icon img,
     row-gap: var(--sp-2);
     align-items: start;
   }
-  /* Any non-card child (section-header, empty-state message) spans the
-     full width of the summary grid. */
-  #history-summary > *:not(.card) {
+  /* Any non-extreme-card child (section-header, empty-state message) spans
+     the full width of the summary grid. */
+  #history-summary > *:not(.extreme-card) {
     grid-column: 1 / -1;
   }
+  #history-summary > .extreme-card {
+    padding: var(--sp-5) var(--sp-5);
+  }
+  #history-summary > .extreme-card .extreme-value {
+    font-size: 32px;
+  }
 
-  /* Desktop card refinements — gain a tiny lift so the secondary surface
-     reads as a real surface, not just a recoloured background. */
+  /* Desktop card refinements — border + a hint of shadow. The border does
+     the visual heavy lifting (shadcn-style), shadow just adds depth on hover. */
   .card {
     border-radius: var(--r-lg);
     padding: var(--sp-4) var(--sp-5);
     transition: box-shadow 0.25s var(--dt-ease),
-                transform 0.25s var(--dt-ease);
-    box-shadow: var(--shadow-1);
+                border-color 0.25s var(--dt-ease);
   }
 
   .card:hover {
-    box-shadow: var(--shadow-2);
+    box-shadow: var(--shadow-1);
   }
 
   .card-list {
     border-radius: var(--r-lg);
-    box-shadow: var(--shadow-1);
     transition: box-shadow 0.25s var(--dt-ease);
   }
 
   .card-list:hover {
-    box-shadow: var(--shadow-2);
+    box-shadow: var(--shadow-1);
   }
+
+  .metric-card,
+  .best-time-card,
+  .extreme-card,
+  .stats-hero {
+    border-radius: var(--r-lg);
+    transition: box-shadow 0.25s var(--dt-ease);
+  }
+  .metric-card { padding: var(--sp-4) var(--sp-5); }
+  .best-time-card { padding: var(--sp-5) var(--sp-5); }
+  .extreme-card { padding: var(--sp-5) var(--sp-5); }
+  .stats-hero { padding: var(--sp-6) var(--sp-6); }
+
+  .metric-card:hover,
+  .best-time-card:hover,
+  .extreme-card:hover,
+  .stats-hero:hover {
+    box-shadow: var(--shadow-1);
+  }
+
+  .metric-value { font-size: 28px; }
+  .stats-hero-value { font-size: 48px; }
 
   /* Desktop chip refinements */
   .chip {
@@ -3591,17 +3853,17 @@ html[data-theme="dark"] .pwa-popup-icon img,
     box-shadow: none;
   }
 
-  /* Desktop chart container — matches card radius/shadow so the chart
-     reads as a hero card in the same family. */
+  /* Desktop chart container — matches card radius so the chart reads as a
+     hero card in the same family. Border carries the surface; shadow only
+     appears on hover for affordance. */
   .chart-container {
     border-radius: var(--r-lg);
     padding: var(--sp-5) var(--sp-3) var(--sp-3);
-    box-shadow: var(--shadow-1);
     transition: box-shadow 0.3s var(--dt-ease);
   }
 
   .chart-container:hover {
-    box-shadow: var(--shadow-2);
+    box-shadow: var(--shadow-1);
   }
 
   /* Stats card hover */
@@ -3609,11 +3871,10 @@ html[data-theme="dark"] .pwa-popup-icon img,
     border-radius: var(--r-lg);
     padding: var(--sp-4) var(--sp-3);
     transition: box-shadow 0.25s var(--dt-ease);
-    box-shadow: var(--shadow-1);
   }
 
   .stat-card:hover {
-    box-shadow: var(--shadow-2);
+    box-shadow: var(--shadow-1);
   }
 
   /* Stat row gets a touch more breathing room between cards on desktop. */

@@ -86,6 +86,10 @@ export const APP_SHELL = `
   </div>
 
   <div class="tab-view" id="view-history">
+    <header class="page-header">
+      <h1 class="page-title" data-i18n="historyTitle">Preisverlauf</h1>
+      <p class="page-description" data-i18n="historyDescription">Durchschnittspreise und Tiefstwerte über die letzten Tage.</p>
+    </header>
     <div class="section">
       <div class="chip-row country-chip-row" id="history-country-chips" role="tablist" aria-label="Land">
         <button type="button" class="chip" data-country="de"><svg class="country-flag" viewBox="0 0 5 3" width="18" height="11" aria-hidden="true"><rect width="5" height="1" fill="#000"/><rect width="5" height="1" y="1" fill="#dd0000"/><rect width="5" height="1" y="2" fill="#ffce00"/></svg><span data-i18n="countryDE">Deutschland</span></button>
@@ -118,6 +122,10 @@ export const APP_SHELL = `
   </div>
 
   <div class="tab-view" id="view-stats">
+    <header class="page-header">
+      <h1 class="page-title" data-i18n="statsTitle">Statistiken</h1>
+      <p class="page-description" data-i18n="statsDescription">Wo, wann und wie viel — die beste Zeit zum Tanken.</p>
+    </header>
     <div class="section" style="padding-bottom:0">
       <div class="chip-row country-chip-row" id="stats-country-chips" role="tablist" aria-label="Land">
         <button type="button" class="chip" data-country="de"><svg class="country-flag" viewBox="0 0 5 3" width="18" height="11" aria-hidden="true"><rect width="5" height="1" fill="#000"/><rect width="5" height="1" y="1" fill="#dd0000"/><rect width="5" height="1" y="2" fill="#ffce00"/></svg><span data-i18n="countryDE">Deutschland</span></button>
@@ -131,6 +139,10 @@ export const APP_SHELL = `
   </div>
 
   <div class="tab-view" id="view-settings">
+    <header class="page-header">
+      <h1 class="page-title" data-i18n="settingsTitle">Einstellungen</h1>
+      <p class="page-description" data-i18n="settingsDescription">Personalisiere die App und verwalte dein Felo-ID-Konto.</p>
+    </header>
     <div class="section">
       <div class="section-header">FELO ID</div>
       <div class="card" id="account-card">
