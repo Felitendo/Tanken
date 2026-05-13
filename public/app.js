@@ -4371,9 +4371,9 @@ function renderStats(stats) {
       <div class="stat-big-label">${t('avgPrice')}</div>
     </div>
     <div class="stat-row">
-      <div class="stat-card"><div class="stat-card-value" style="color:#34c759">${formatPrice(stats.overall.lowest_ever)}</div><div class="stat-card-label">${t('lowest')}</div></div>
-      <div class="stat-card"><div class="stat-card-value" style="color:#ff3b30">${formatPrice(stats.overall.highest_ever)}</div><div class="stat-card-label">${t('highest')}</div></div>
-      <div class="stat-card"><div class="stat-card-value" style="color:#007aff">${stats.overall.entries}</div><div class="stat-card-label">${t('measurements')}</div></div>
+      <div class="stat-card"><div class="stat-card-value" style="color:var(--color-good)">${formatPrice(stats.overall.lowest_ever)}</div><div class="stat-card-label">${t('lowest')}</div></div>
+      <div class="stat-card"><div class="stat-card-value" style="color:var(--color-bad)">${formatPrice(stats.overall.highest_ever)}</div><div class="stat-card-label">${t('highest')}</div></div>
+      <div class="stat-card"><div class="stat-card-value" style="color:var(--color-accent)">${stats.overall.entries}</div><div class="stat-card-label">${t('measurements')}</div></div>
     </div>
     <div class="section" style="margin-top:8px">
       <div class="section-header">${t('bestTimes')}</div>
