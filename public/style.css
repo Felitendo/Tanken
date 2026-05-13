@@ -497,6 +497,13 @@ body.logged-in .cloud-sync-hint {
   left: 12px;
   right: 12px;
   z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  pointer-events: none;
+}
+#map-search-wrapper > * {
+  pointer-events: auto;
 }
 
 #map-search-box {
@@ -2152,15 +2159,27 @@ body.logged-in .station-fav-sync.synced {
 }
 .map-fab:active { opacity: 0.7; transform: scale(0.92); }
 
-/* "Search here" pill — appears after panning.
-   On mobile the route chip sits below the search box (inside #map-search-wrapper),
-   so the centered pill must clear that row to avoid overlapping it. */
+/* Row that holds the "Search here" pill (and, in scan-picker mode, a round
+   cancel button to its left). Lives inside #map-search-wrapper after the
+   route chip, so it naturally flows beneath whatever rows are visible
+   (search box, optional route chip, optional expanded route panel). */
+.map-search-here-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  pointer-events: none;
+}
+.map-search-here-row > * {
+  pointer-events: auto;
+}
+.map-search-here-row:empty,
+.map-search-here-row:has(> .map-search-here.hidden:only-child) {
+  display: none;
+}
+
 .map-search-here {
-  position: absolute;
-  top: 104px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1000;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2173,13 +2192,12 @@ body.logged-in .station-fav-sync.synced {
   font-weight: 600;
   box-shadow: 0 4px 14px rgba(0,0,0,0.2);
   cursor: pointer;
-  pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   animation: searchHerePopIn 0.22s ease-out;
   white-space: nowrap;
 }
-.map-search-here:active { opacity: 0.85; transform: translateX(-50%) scale(0.96); }
+.map-search-here:active { opacity: 0.85; transform: scale(0.96); }
 .map-search-here.hidden { display: none; }
 .map-search-here[disabled] {
   background: var(--color-hint);
@@ -2188,11 +2206,11 @@ body.logged-in .station-fav-sync.synced {
   cursor: not-allowed;
   box-shadow: 0 2px 6px rgba(0,0,0,0.12);
 }
-.map-search-here[disabled]:active { transform: translateX(-50%); opacity: 0.75; }
+.map-search-here[disabled]:active { transform: none; opacity: 0.75; }
 
 @keyframes searchHerePopIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* "Confirm" state of the search-here pill (during scan-picker mode) */
@@ -2202,14 +2220,10 @@ body.logged-in .station-fav-sync.synced {
   box-shadow: 0 6px 18px rgba(0, 122, 255, 0.35);
 }
 
-/* Round cancel pill placed left of the confirm button while picking */
+/* Round cancel pill placed left of the confirm button while picking.
+   JS inserts it as a sibling of the search-here pill inside
+   .map-search-here-row, so flex centering handles the side-by-side layout. */
 .map-scan-cancel {
-  position: absolute;
-  top: 104px;
-  left: 50%;
-  /* Sits just to the left of the confirm pill (which is centered) */
-  transform: translateX(calc(-50% - 96px));
-  z-index: 1000;
   width: 38px;
   height: 38px;
   border-radius: 50%;
@@ -2221,12 +2235,12 @@ body.logged-in .station-fav-sync.synced {
   justify-content: center;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
   cursor: pointer;
-  pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   animation: searchHerePopIn 0.22s ease-out;
+  flex-shrink: 0;
 }
-.map-scan-cancel:active { opacity: 0.85; transform: translateX(calc(-50% - 96px)) scale(0.94); }
+.map-scan-cancel:active { opacity: 0.85; transform: scale(0.94); }
 
 /* Draggable pin shown in the centre of the scan-radius picker circle */
 .scan-pin {
@@ -3283,7 +3297,8 @@ html[data-theme="dark"] .pwa-popup-icon img,
     --sidebar-w: 88px;
     --panel-w: 360px;
     --sheet-w: 440px;
-    --content-max: 660px;
+    --content-max: 920px;
+    --content-max-narrow: 660px;
     --dt-ease: cubic-bezier(0.22, 1, 0.36, 1);
     --dt-ease-bounce: cubic-bezier(0.34, 1.4, 0.64, 1);
     --dt-duration: 0.4s;
@@ -3413,10 +3428,37 @@ html[data-theme="dark"] .pwa-popup-icon img,
   }
 
   #view-history > *,
-  #view-stats > *,
-  #view-settings > * {
+  #view-stats > * {
     width: 100%;
     max-width: var(--content-max);
+  }
+
+  /* Settings is a forms-y list; keep it readable and not overstretched. */
+  #view-settings > * {
+    width: 100%;
+    max-width: var(--content-max-narrow);
+  }
+
+  /* Bigger chart on desktop — the extra horizontal space deserves a
+     taller graph instead of a 280px squish. */
+  #view-history .chart-container,
+  #view-stats .chart-container {
+    height: 400px;
+  }
+
+  /* Pair the two summary cards side-by-side when there's room. The
+     section-header above spans both columns. */
+  #history-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 12px;
+    row-gap: 8px;
+    align-items: start;
+  }
+  /* Any non-card child (section-header, empty-state message) spans the
+     full width of the summary grid. */
+  #history-summary > *:not(.card) {
+    grid-column: 1 / -1;
   }
 
   /* Desktop card refinements */
@@ -3533,11 +3575,10 @@ html[data-theme="dark"] .pwa-popup-icon img,
     max-width: 400px;
   }
 
-  /* Desktop: search bar sits on the left side, so the centred "Hier suchen"
-     pill can hug the top edge of the map instead of waiting below it. */
-  .map-search-here,
-  .map-scan-cancel {
-    top: 16px;
+  /* Desktop: tighter top spacing for the search-here row (pill + optional
+     cancel) since the search wrapper sits up at top: 16px. */
+  .map-search-here-row {
+    margin-top: 10px;
   }
 
   #map-search-box {
