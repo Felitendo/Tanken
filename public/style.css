@@ -7,12 +7,44 @@
 
   /* Light mode (default) */
   --color-text: #000;
+  --color-text-2: #3c3c43;
   --color-bg: #fff;
   --color-bg-secondary: #f2f2f7;
-  --color-hint: #999;
-  --color-separator: rgba(0,0,0,0.12);
+  --color-bg-elevated: #ffffff;
+  --color-hint: #8e8e93;
+  --color-separator: rgba(60,60,67,0.12);
   --color-accent: #007aff;
   --color-accent-text: #fff;
+  --color-favorite: #ffb800;
+  --color-good: #34c759;
+  --color-okay: #ff9500;
+  --color-bad: #ff3b30;
+
+  /* Spacing scale — every padding/margin/gap should snap to this. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 40px;
+
+  /* Border-radius scale. r-md is the workhorse for cards/inputs;
+     r-pill is for chips and the round status pills. */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  /* Elevation — light mode keeps shadows soft so the secondary surface
+     stays the primary visual anchor on cards. */
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.05);
+  --shadow-2: 0 2px 8px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-3: 0 6px 18px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06);
+  --shadow-4: 0 16px 48px rgba(0,0,0,0.16), 0 4px 12px rgba(0,0,0,0.08);
 
   color-scheme: light dark;
 }
@@ -20,23 +52,39 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --color-text: #ffffff;
+    --color-text-2: #ebebf5;
     --color-bg: #000000;
     --color-bg-secondary: #1c1c1e;
+    --color-bg-elevated: #2c2c2e;
     --color-hint: #98989e;
-    --color-separator: rgba(255,255,255,0.08);
-    --color-accent: #007aff;
+    --color-separator: rgba(255,255,255,0.1);
+    --color-accent: #0a84ff;
     --color-accent-text: #fff;
+    --color-favorite: #ffb800;
+
+    --shadow-1: 0 1px 2px rgba(0,0,0,0.4);
+    --shadow-2: 0 2px 8px rgba(0,0,0,0.35);
+    --shadow-3: 0 6px 18px rgba(0,0,0,0.45);
+    --shadow-4: 0 16px 48px rgba(0,0,0,0.55);
   }
 }
 
 html[data-theme="dark"] {
   --color-text: #ffffff;
+  --color-text-2: #ebebf5;
   --color-bg: #000000;
   --color-bg-secondary: #1c1c1e;
+  --color-bg-elevated: #2c2c2e;
   --color-hint: #98989e;
-  --color-separator: rgba(255,255,255,0.08);
-  --color-accent: #007aff;
+  --color-separator: rgba(255,255,255,0.1);
+  --color-accent: #0a84ff;
   --color-accent-text: #fff;
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-2: 0 2px 8px rgba(0,0,0,0.35);
+  --shadow-3: 0 6px 18px rgba(0,0,0,0.45);
+  --shadow-4: 0 16px 48px rgba(0,0,0,0.55);
+
   color-scheme: dark;
 }
 
@@ -126,20 +174,20 @@ html, body {
 
 /* === Sections (iOS Settings Style) === */
 .section {
-  padding: 0 16px;
-  margin-bottom: 8px;
+  padding: 0 var(--sp-4);
+  margin-bottom: var(--sp-3);
 }
 
 .section-header {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-hint);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 16px 0 8px 4px;
+  letter-spacing: 0.6px;
+  padding: var(--sp-5) var(--sp-1) var(--sp-2);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-2);
 }
 
 .section-sub-header {
@@ -147,12 +195,12 @@ html, body {
   font-weight: 600;
   color: var(--color-hint);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 20px 0 8px 4px;
+  letter-spacing: 0.6px;
+  padding: var(--sp-5) var(--sp-1) var(--sp-2);
 }
 
 .section-hint {
-  margin: 0 4px 10px;
+  margin: 0 var(--sp-1) var(--sp-3);
   font-size: 12px;
   line-height: 1.5;
   color: var(--color-hint);
@@ -218,10 +266,10 @@ body.logged-in .sync-badge {
 .cloud-sync-hint {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 12px 16px 4px;
-  padding: 10px 14px;
-  border-radius: 10px;
+  gap: var(--sp-2);
+  margin: var(--sp-3) var(--sp-4) var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
   background: var(--color-bg-secondary);
   font-size: 12px;
   color: var(--color-hint);
@@ -238,20 +286,20 @@ body.logged-in .cloud-sync-hint {
 /* === Cards === */
 .card {
   background: var(--color-bg-secondary);
-  border-radius: 12px;
-  padding: 12px 16px;
-  margin-bottom: 8px;
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-2);
 }
 
 .card-list {
   background: var(--color-bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-2);
 }
 
 .card-list .card-row {
-  padding: 12px 16px;
+  padding: var(--sp-3) var(--sp-4);
   border-bottom: 0.5px solid var(--color-separator);
 }
 
@@ -263,7 +311,7 @@ body.logged-in .cloud-sync-hint {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--sp-3);
   position: relative;
   cursor: pointer;
   -webkit-user-select: none;
@@ -273,7 +321,7 @@ body.logged-in .cloud-sync-hint {
 .card-row-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-3);
   flex: 1;
   min-width: 0;
 }
@@ -338,22 +386,23 @@ body.logged-in .cloud-sync-hint {
   flex-shrink: 0;
 }
 
-.card-value.good { color: #34c759; }
-.card-value.okay { color: #ff9500; }
-.card-value.bad { color: #ff3b30; }
+.card-value.good { color: var(--color-good); }
+.card-value.okay { color: var(--color-okay); }
+.card-value.bad { color: var(--color-bad); }
 
 .card-action {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border: none;
-  border-radius: 8px;
-  padding: 6px 14px;
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-4);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   flex-shrink: 0;
-  transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1);
+  transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
 }
+.card-action:hover { opacity: 0.92; }
 
 .card-action:active {
   transform: scale(0.95);
@@ -388,21 +437,21 @@ body.logged-in .cloud-sync-hint {
 /* === Chips === */
 .chip-row {
   display: flex;
-  gap: 8px;
+  gap: var(--sp-2);
   flex-wrap: wrap;
-  padding-bottom: 4px;
+  padding-bottom: var(--sp-1);
 }
 
 .chip {
   background: var(--color-bg-secondary);
   color: var(--color-text);
   border: none;
-  border-radius: 20px;
-  padding: 8px 16px;
+  border-radius: var(--r-pill);
+  padding: var(--sp-2) var(--sp-4);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, transform 0.1s;
+  transition: background 0.15s, color 0.15s, transform 0.1s, box-shadow 0.15s;
   -webkit-user-select: none;
   user-select: none;
   white-space: nowrap;
@@ -415,16 +464,17 @@ body.logged-in .cloud-sync-hint {
 .chip.active {
   background: var(--color-accent);
   color: var(--color-accent-text);
+  box-shadow: var(--shadow-1);
 }
 
 .country-chip-row {
-  margin-bottom: 10px;
+  margin-bottom: var(--sp-3);
 }
 
 .country-chip-row .chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-2);
 }
 
 .country-flag {
@@ -1022,18 +1072,18 @@ body.logged-in .cloud-sync-hint {
 
 /* === Station List (below map) === */
 .station-list {
-  padding: 8px 0;
-  margin: 0 16px;
+  padding: var(--sp-2) 0;
+  margin: 0 var(--sp-4);
   background: var(--color-bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   overflow: hidden;
 }
 
 .station-item {
   display: flex;
   align-items: center;
-  padding: 14px 16px;
-  gap: 12px;
+  padding: var(--sp-3) var(--sp-4);
+  gap: var(--sp-3);
   -webkit-tap-highlight-color: transparent;
   transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1);
   position: relative;
@@ -1130,8 +1180,8 @@ body.logged-in .cloud-sync-hint {
 }
 
 .fav-btn.active svg path {
-  fill: #f5a623;
-  stroke: #f5a623;
+  fill: var(--color-favorite);
+  stroke: var(--color-favorite);
 }
 
 /* Sparkle particles container */
@@ -1156,9 +1206,9 @@ body.logged-in .cloud-sync-hint {
   animation: fav-sparkle-star 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.fav-btn.anim-pop .fav-sparkle:nth-child(1) { animation: fav-spark-out 0.55s 0.05s ease-out forwards; --spark-x: -14px; --spark-y: -12px; background: #f5a623; }
+.fav-btn.anim-pop .fav-sparkle:nth-child(1) { animation: fav-spark-out 0.55s 0.05s ease-out forwards; --spark-x: -14px; --spark-y: -12px; background: var(--color-favorite); }
 .fav-btn.anim-pop .fav-sparkle:nth-child(2) { animation: fav-spark-out 0.5s 0.08s ease-out forwards;  --spark-x: 12px;  --spark-y: -14px; background: #ffcc4d; }
-.fav-btn.anim-pop .fav-sparkle:nth-child(3) { animation: fav-spark-out 0.6s 0.03s ease-out forwards;  --spark-x: 15px;  --spark-y: 4px;   background: #f5a623; }
+.fav-btn.anim-pop .fav-sparkle:nth-child(3) { animation: fav-spark-out 0.6s 0.03s ease-out forwards;  --spark-x: 15px;  --spark-y: 4px;   background: var(--color-favorite); }
 .fav-btn.anim-pop .fav-sparkle:nth-child(4) { animation: fav-spark-out 0.5s 0.1s ease-out forwards;   --spark-x: -12px; --spark-y: 10px;  background: #ffcc4d; }
 .fav-btn.anim-pop .fav-sparkle:nth-child(5) { animation: fav-spark-out 0.55s 0.06s ease-out forwards; --spark-x: 4px;   --spark-y: 15px;  background: #ffd983; }
 .fav-btn.anim-pop .fav-sparkle:nth-child(6) { animation: fav-spark-out 0.5s 0.12s ease-out forwards;  --spark-x: -16px; --spark-y: -2px;  background: #ffd983; }
@@ -1174,7 +1224,7 @@ body.logged-in .cloud-sync-hint {
   width: 0;
   height: 0;
   border-radius: 50%;
-  border: 2px solid #f5a623;
+  border: 2px solid var(--color-favorite);
   transform: translate(-50%, -50%);
   opacity: 0;
   pointer-events: none;
@@ -1265,8 +1315,8 @@ body.logged-in .station-fav-sync.synced {
 /* === Chart === */
 .chart-container {
   background: var(--color-bg-secondary);
-  border-radius: 12px;
-  padding: 16px 8px 8px;
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-2) var(--sp-2);
   height: 280px;
   position: relative;
 }
@@ -1826,33 +1876,34 @@ body.logged-in .station-fav-sync.synced {
 /* === Stats === */
 .stat-big {
   text-align: center;
-  padding: 20px 16px 12px;
+  padding: var(--sp-5) var(--sp-4) var(--sp-3);
 }
 
 .stat-big-value {
   font-size: 42px;
   font-weight: 800;
   color: var(--color-text);
+  letter-spacing: -0.02em;
 }
 
 .stat-big-label {
   font-size: 14px;
   color: var(--color-hint);
-  margin-top: 4px;
+  margin-top: var(--sp-1);
 }
 
 .stat-row {
   display: flex;
-  gap: 8px;
-  padding: 0 16px;
-  margin-bottom: 8px;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-4);
+  margin-bottom: var(--sp-2);
 }
 
 .stat-card {
   flex: 1;
   background: var(--color-bg-secondary);
-  border-radius: 12px;
-  padding: 14px 12px;
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-3);
   text-align: center;
 }
 
@@ -1860,21 +1911,26 @@ body.logged-in .station-fav-sync.synced {
   font-size: 20px;
   font-weight: 700;
   color: var(--color-text);
+  letter-spacing: -0.01em;
 }
 
 .stat-card-label {
   font-size: 12px;
   color: var(--color-hint);
-  margin-top: 4px;
+  margin-top: var(--sp-1);
 }
 
 .ranking-item {
   display: flex;
   align-items: center;
-  padding: 10px 16px;
-  gap: 12px;
+  padding: var(--sp-3) var(--sp-4);
+  gap: var(--sp-3);
   border-bottom: 0.5px solid var(--color-separator);
-  transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1);
+  transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1), background 0.15s ease;
+}
+
+.ranking-item:hover {
+  background: var(--color-separator);
 }
 
 .ranking-item:active {
@@ -1882,11 +1938,12 @@ body.logged-in .station-fav-sync.synced {
 }
 
 .ranking-pos {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--color-hint);
   width: 24px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .ranking-name {
@@ -1902,6 +1959,7 @@ body.logged-in .station-fav-sync.synced {
   font-size: 15px;
   font-weight: 600;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 /* === Tab Bar === */
@@ -1939,7 +1997,7 @@ body.logged-in .station-fav-sync.synced {
 
 .tab-item.active {
   color: var(--color-accent);
-  background: rgba(0, 122, 255, 0.1);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
 @keyframes tab-bounce {
@@ -2118,11 +2176,11 @@ body.logged-in .station-fav-sync.synced {
 }
 
 .login-hint-pill {
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: rgba(255,149,0,0.12);
-  color: #ff9500;
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--color-okay) 15%, transparent);
+  color: var(--color-okay);
   font-size: 13px;
   text-align: center;
 }
@@ -2136,19 +2194,21 @@ body.logged-in .station-fav-sync.synced {
   font-size: 15px;
 }
 
-/* Map floating action button */
+/* Map floating action button — sits above the bottom sheet's resting peek
+   on mobile by leaving a generous bottom inset. On desktop the sheet is a
+   side panel, so the FAB returns to a tighter offset (overridden below). */
 .map-fab {
   position: absolute;
-  bottom: 16px;
+  bottom: 20px;
   right: 16px;
   z-index: 1000;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--r-md);
   border: none;
   background: var(--color-bg);
   color: var(--color-accent);
-  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  box-shadow: var(--shadow-3);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2156,6 +2216,7 @@ body.logged-in .station-fav-sync.synced {
   pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
 }
 .map-fab:active { opacity: 0.7; transform: scale(0.92); }
 
@@ -2349,13 +2410,13 @@ body.logged-in .station-fav-sync.synced {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  gap: 12px;
+  padding: var(--sp-3) var(--sp-4);
+  gap: var(--sp-3);
 }
 .settings-row-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-3);
   min-width: 0;
 }
 .settings-row-left span {
@@ -2625,19 +2686,23 @@ body.logged-in .station-fav-sync.synced {
 /* === Location picker select === */
 .location-picker {
   width: 100%;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--color-hint);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--color-separator);
   background: var(--color-bg-secondary);
   color: var(--color-text);
   font-size: 14px;
   font-family: inherit;
   box-sizing: border-box;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.location-picker:hover {
+  border-color: var(--color-hint);
 }
 .location-picker:focus-visible {
   border-color: var(--color-accent);
   outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 
 .request-location-btn {
@@ -3418,7 +3483,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 8px 24px 24px;
+    padding: var(--sp-3) var(--sp-6) var(--sp-7);
   }
 
   #view-history.active,
@@ -3440,10 +3505,18 @@ html[data-theme="dark"] .pwa-popup-icon img,
   }
 
   /* Bigger chart on desktop — the extra horizontal space deserves a
-     taller graph instead of a 280px squish. */
+     taller graph instead of a 280px squish. Step it up at the tablet
+     breakpoint so 13" laptops don't get a 400px chart that dominates
+     the viewport. */
   #view-history .chart-container,
   #view-stats .chart-container {
-    height: 400px;
+    height: 340px;
+  }
+  @media (min-width: 1200px) {
+    #view-history .chart-container,
+    #view-stats .chart-container {
+      height: 400px;
+    }
   }
 
   /* Pair the two summary cards side-by-side when there's room. The
@@ -3451,8 +3524,8 @@ html[data-theme="dark"] .pwa-popup-icon img,
   #history-summary {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    column-gap: 12px;
-    row-gap: 8px;
+    column-gap: var(--sp-3);
+    row-gap: var(--sp-2);
     align-items: start;
   }
   /* Any non-card child (section-header, empty-state message) spans the
@@ -3461,26 +3534,28 @@ html[data-theme="dark"] .pwa-popup-icon img,
     grid-column: 1 / -1;
   }
 
-  /* Desktop card refinements */
+  /* Desktop card refinements — gain a tiny lift so the secondary surface
+     reads as a real surface, not just a recoloured background. */
   .card {
-    border-radius: 14px;
+    border-radius: var(--r-lg);
+    padding: var(--sp-4) var(--sp-5);
     transition: box-shadow 0.25s var(--dt-ease),
                 transform 0.25s var(--dt-ease);
-    box-shadow: var(--dt-shadow-sm);
+    box-shadow: var(--shadow-1);
   }
 
   .card:hover {
-    box-shadow: var(--dt-shadow-md);
+    box-shadow: var(--shadow-2);
   }
 
   .card-list {
-    border-radius: 14px;
-    box-shadow: var(--dt-shadow-sm);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-1);
     transition: box-shadow 0.25s var(--dt-ease);
   }
 
   .card-list:hover {
-    box-shadow: var(--dt-shadow-md);
+    box-shadow: var(--shadow-2);
   }
 
   /* Desktop chip refinements */
@@ -3499,26 +3574,52 @@ html[data-theme="dark"] .pwa-popup-icon img,
     box-shadow: none;
   }
 
-  /* Desktop chart container */
+  /* Desktop chart container — matches card radius/shadow so the chart
+     reads as a hero card in the same family. */
   .chart-container {
-    border-radius: 14px;
-    box-shadow: var(--dt-shadow-sm);
+    border-radius: var(--r-lg);
+    padding: var(--sp-5) var(--sp-3) var(--sp-3);
+    box-shadow: var(--shadow-1);
     transition: box-shadow 0.3s var(--dt-ease);
   }
 
   .chart-container:hover {
-    box-shadow: var(--dt-shadow-md);
+    box-shadow: var(--shadow-2);
   }
 
   /* Stats card hover */
   .stat-card {
-    border-radius: 14px;
+    border-radius: var(--r-lg);
+    padding: var(--sp-4) var(--sp-3);
     transition: box-shadow 0.25s var(--dt-ease);
-    box-shadow: var(--dt-shadow-sm);
+    box-shadow: var(--shadow-1);
   }
 
   .stat-card:hover {
-    box-shadow: var(--dt-shadow-md);
+    box-shadow: var(--shadow-2);
+  }
+
+  /* Stat row gets a touch more breathing room between cards on desktop. */
+  .stat-row {
+    gap: var(--sp-3);
+  }
+
+  /* Section header reads a little louder on desktop so the hierarchy
+     between header → cards is unmistakable. */
+  .section-header {
+    font-size: 12px;
+    padding: var(--sp-6) var(--sp-1) var(--sp-2);
+    letter-spacing: 0.7px;
+  }
+  .section-header:first-child,
+  .section > .section-header:first-child {
+    padding-top: var(--sp-3);
+  }
+
+  /* Section header sync-badge sits slightly higher to align with the
+     bolder header text. */
+  .section-header .sync-badge {
+    transform: translateY(-1px);
   }
 
   /* Ranking item hover */
@@ -3543,7 +3644,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
   }
 
   .settings-row:hover {
-    background: rgba(127, 127, 127, 0.06);
+    background: color-mix(in srgb, var(--color-text) 5%, transparent);
   }
 
   /* --- Map view: full width with side panel (panel on right) --- */
