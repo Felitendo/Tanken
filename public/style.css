@@ -938,10 +938,18 @@ body.logged-in .cloud-sync-hint {
 
 /* === Station Sort === */
 .station-sort-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   padding: 12px 16px 4px;
+  gap: 8px;
+}
+
+.station-sort-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
 }
 
 .station-sort-label {
@@ -954,6 +962,8 @@ body.logged-in .cloud-sync-hint {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  justify-self: center;
+  text-align: center;
 }
 
 .station-sort-label.is-route {
@@ -991,6 +1001,7 @@ body.logged-in .cloud-sync-hint {
   white-space: nowrap;
   transition: opacity 0.15s, transform 0.15s cubic-bezier(0.2, 0, 0, 1);
   flex-shrink: 0;
+  justify-self: end;
 }
 
 .station-sort-btn:active {
@@ -1197,31 +1208,43 @@ body.logged-in .cloud-sync-hint {
   text-align: right;
 }
 
-/* Star toggle in the station list's sort bar — click to filter the list
-   down to favourites only. */
+/* Toolbar toggles (favourites pin + group-by-price) sit in the sort bar
+   and match the sort button's chip-style theming so the row reads as a
+   cohesive control strip. Inactive sits on the secondary surface, active
+   fills with the accent and flips the icon to accent-text. */
 .station-fav-btn {
-  background: transparent;
+  background: var(--color-bg-secondary);
   border: none;
-  padding: 4px 6px;
-  margin-right: 4px;
+  padding: 7px;
   cursor: pointer;
   color: var(--color-hint);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  transition: color 0.15s, background 0.15s;
+  border-radius: 8px;
+  transition: color 0.15s, background 0.15s, transform 0.15s cubic-bezier(0.2, 0, 0, 1);
   -webkit-tap-highlight-color: transparent;
 }
-.station-fav-btn:hover { background: var(--color-bg-secondary); }
-.station-fav-btn.active { color: var(--color-accent); }
+.station-fav-btn:hover {
+  background: var(--color-separator);
+  color: var(--color-text);
+}
+.station-fav-btn:active { transform: scale(0.94); }
+.station-fav-btn.active {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+.station-fav-btn.active:hover {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  filter: brightness(1.05);
+}
 
-/* Cloud-sync indicator sits right beside the star toggle. Only visible
+/* Cloud-sync indicator sits right beside the toolbar toggles. Only visible
    during the syncing → synced burst, then fades back out — idle has no
    point taking permanent visual space. */
 body.logged-in .station-fav-sync {
   display: inline-flex;
-  margin-right: 6px;
   opacity: 0;
   transition: opacity 0.25s ease;
   pointer-events: none;

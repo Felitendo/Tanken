@@ -3880,19 +3880,24 @@ async function loadLocationPickers() {
     const nameById = new Map(scanLocs.map(l => [l.id, l.name]));
     state.availableLocations = locations;
 
+    // Drop IDs that no longer match any admin scan location. They're
+    // legacy/orphan rows in price_history (renames, deletions) — exposing
+    // them as "Unbekannter Standort" entries just clutters the dropdown.
+    const knownLocations = locations.filter(locId => nameById.has(locId));
+
     ['history-location-picker', 'stats-location-picker'].forEach(id => {
       const picker = document.getElementById(id);
       if (!picker) return;
       // Keep the first "Alle Standorte" option
       while (picker.options.length > 1) picker.remove(1);
-      locations.forEach(locId => {
+      knownLocations.forEach(locId => {
         const opt = document.createElement('option');
         opt.value = locId;
-        opt.textContent = nameById.get(locId) || t('unknownLocation');
+        opt.textContent = nameById.get(locId);
         picker.appendChild(opt);
       });
       picker.value = state.selectedLocation;
-      picker.style.display = locations.length > 0 ? '' : 'none';
+      picker.style.display = knownLocations.length > 0 ? '' : 'none';
     });
   } catch { /* ignore */ }
 }
