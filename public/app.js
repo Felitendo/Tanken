@@ -604,7 +604,7 @@ const state = {
   })(),
   manualScans: [],
   favouritesOnTop: false,
-  groupByPrice: false,
+  groupByPrice: true,
   loaded: { map: false, history: false, stats: false, settings: false },
   toastTimer: null,
   me: null,
@@ -5496,10 +5496,10 @@ function setupGroupByPriceToggle() {
   applyGroupByPriceToggleUi();
   btn.addEventListener('click', () => {
     haptic('light');
-    state.groupByPrice = !state.groupByPrice;
-    applyGroupByPriceToggleUi();
-    saveSettingsLocal();
-    if (state.stations.length) renderStationList(state.stations);
+    // persistStateSettings calls applySettingsToState (which refreshes the
+    // toggle UI and re-renders the list) and syncs the flag to Felo ID when
+    // the user is logged in.
+    persistStateSettings({ groupByPrice: !state.groupByPrice });
   });
 }
 
@@ -5704,6 +5704,7 @@ async function saveSettingsRemote() {
     contributorsOpen: state.contributorsOpen,
     historyDefaultDays: state.historyDefaultDays,
     favouritesOnTop: !!state.favouritesOnTop,
+    groupByPrice: !!state.groupByPrice,
   };
   try { await api('/api/settings', { method: 'POST', body: JSON.stringify(next) }); } catch {}
 }

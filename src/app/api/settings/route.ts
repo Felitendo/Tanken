@@ -17,7 +17,8 @@ const settingsSchema = z
     lang: z.string().min(1).max(10).optional(),
     contributorsOpen: z.boolean().optional(),
     historyDefaultDays: historyDaysSchema.optional(),
-    favouritesOnTop: z.boolean().optional()
+    favouritesOnTop: z.boolean().optional(),
+    groupByPrice: z.boolean().optional()
   })
   .partial();
 
@@ -71,6 +72,10 @@ export async function POST(request: NextRequest) {
 
   if (typeof updates.favouritesOnTop === 'boolean') {
     nextSettings.favouritesOnTop = updates.favouritesOnTop;
+  }
+
+  if (typeof updates.groupByPrice === 'boolean') {
+    nextSettings.groupByPrice = updates.groupByPrice;
   }
 
   await stores.userStore.updateUser(user.id, (currentUser) => {

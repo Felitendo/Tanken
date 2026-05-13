@@ -137,6 +137,8 @@ export interface UserSettings {
   historyDefaultDays?: 1 | 7;
   /** Pin favourites to the top of the station list. */
   favouritesOnTop?: boolean;
+  /** Collapse the station list to one row per distinct price (closest wins). */
+  groupByPrice?: boolean;
 }
 
 export interface PriceAlert {
