@@ -1228,8 +1228,7 @@ body.logged-in .cloud-sync-hint {
 /* Cloud-sync indicator sits right beside the star toggle. Only visible
    during the syncing → synced burst, then fades back out — idle has no
    point taking permanent visual space. */
-body.logged-in .station-fav-sync,
-body.logged-in .station-group-sync {
+body.logged-in .station-fav-sync {
   display: inline-flex;
   margin-right: 6px;
   opacity: 0;
@@ -1237,9 +1236,7 @@ body.logged-in .station-group-sync {
   pointer-events: none;
 }
 body.logged-in .station-fav-sync.syncing,
-body.logged-in .station-fav-sync.synced,
-body.logged-in .station-group-sync.syncing,
-body.logged-in .station-group-sync.synced {
+body.logged-in .station-fav-sync.synced {
   opacity: 1;
   pointer-events: auto;
 }

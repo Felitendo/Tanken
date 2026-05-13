@@ -5688,9 +5688,12 @@ async function persistStateSettings(nextSettings = {}) {
 function setSyncBadgeState(s, keys) {
   // s = 'idle' | 'syncing' | 'synced'
   // keys = array of setting keys to target, e.g. ['fuelType']
+  // ~= matches space-separated tokens, so a single badge can cover multiple
+  // sync keys (e.g. data-sync-key="favouritesOnTop groupByPrice") without
+  // duplicating the icon in the toolbar.
   const badges = keys && keys.length
-    ? keys.map(k => document.querySelector(`.sync-badge[data-sync-key="${k}"]`)).filter(Boolean)
-    : document.querySelectorAll('.sync-badge');
+    ? Array.from(new Set(keys.flatMap(k => Array.from(document.querySelectorAll(`.sync-badge[data-sync-key~="${k}"]`)))))
+    : Array.from(document.querySelectorAll('.sync-badge'));
   badges.forEach(el => {
     el.classList.remove('syncing', 'synced');
     if (s !== 'idle') el.classList.add(s);
