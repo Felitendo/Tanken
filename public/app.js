@@ -5674,7 +5674,10 @@ async function persistStateSettings(nextSettings = {}) {
   saveSettingsLocal();
   if (state.user) {
     setSyncBadgeState('syncing', changedKeys);
-    const minDelay = new Promise(r => setTimeout(r, 1000));
+    // Hold the syncing state just long enough for the pulse to register —
+    // the actual POST often returns in ~50ms which would otherwise look
+    // like nothing happened.
+    const minDelay = new Promise(r => setTimeout(r, 350));
     try {
       await Promise.all([saveSettingsRemote(), minDelay]);
       setSyncBadgeState('synced', changedKeys);
@@ -5702,7 +5705,7 @@ function setSyncBadgeState(s, keys) {
     const timerKey = keys ? keys.join(',') : '_all';
     state._syncTimers = state._syncTimers || {};
     clearTimeout(state._syncTimers[timerKey]);
-    state._syncTimers[timerKey] = setTimeout(() => setSyncBadgeState('idle', keys), 2500);
+    state._syncTimers[timerKey] = setTimeout(() => setSyncBadgeState('idle', keys), 1000);
   }
 }
 
