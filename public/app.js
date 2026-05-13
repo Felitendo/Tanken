@@ -203,6 +203,7 @@ const i18n = {
     historyDefault7d: '7 Tage',
     alreadyCovered: 'Bereits durch einen Scan-Standort abgedeckt – nicht nötig.',
     favouritesToggleTitle: 'Favoriten oben anzeigen',
+    groupByPriceTitle: 'Pro Preis nur die nächste Tankstelle',
     favouritesEmpty: 'Noch keine Favoriten – Tippe auf den Stern bei einer Tankstelle.',
     favouritesLoginRequired: 'Bitte einloggen, um Favoriten zu sehen.',
     routePlan: 'Entlang der Route suchen',
@@ -412,6 +413,7 @@ const i18n = {
     historyDefault7d: '7 days',
     alreadyCovered: 'Already covered by a scan location – no scan needed.',
     favouritesToggleTitle: 'Pin favourites to top',
+    groupByPriceTitle: 'One station per price (closest)',
     favouritesEmpty: 'No favourites yet – tap the star on a station.',
     favouritesLoginRequired: 'Please log in to see your favourites.',
     routePlan: 'Search along route',
@@ -602,6 +604,7 @@ const state = {
   })(),
   manualScans: [],
   favouritesOnTop: false,
+  groupByPrice: false,
   loaded: { map: false, history: false, stats: false, settings: false },
   toastTimer: null,
   me: null,
@@ -690,6 +693,7 @@ async function init() {
   setupHistoryDefaultPicker();
   setupMyLocationBtn();
   setupFavouritesToggle();
+  setupGroupByPriceToggle();
   setupAccountUi();
   setupStationSort();
   setupPullToRefresh();
@@ -2723,7 +2727,23 @@ function renderStationList(stations) {
   stations = withDistanceFromUser(stations);
   const list = document.getElementById('station-list');
   const countLabel = document.getElementById('station-count');
-  const open = stations.filter(s => s.isOpen && s.price);
+  let open = stations.filter(s => s.isOpen && s.price);
+
+  // Group-by-price toggle: dedupe so each distinct price appears once,
+  // keeping the closest station. Walk price-then-distance order and pick
+  // the first of each price bucket.
+  if (state.groupByPrice) {
+    const byPrice = [...open].sort((a, b) => (a.price - b.price) || ((a.dist || 999) - (b.dist || 999)));
+    const seen = new Set();
+    const deduped = [];
+    for (const s of byPrice) {
+      const key = s.price.toFixed(3);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(s);
+    }
+    open = deduped;
+  }
 
   if (countLabel) {
     if (state.routeMode) {
@@ -2759,7 +2779,7 @@ function renderStationList(stations) {
     });
   }
 
-  list.innerHTML = open.slice(0, 15).map((s, i) => {
+  list.innerHTML = open.slice(0, 50).map((s, i) => {
     const color = priceColorStable(s.price, s._locationId, s.lat, s.lng);
     const dist = s.dist ? `${s.distApprox ? '~' : ''}${s.dist.toFixed(1)} km` : '';
     const priceParts = formatPriceParts(s.price);
@@ -5469,6 +5489,28 @@ function applyFavouritesToggleUi() {
   btn.setAttribute('aria-pressed', active ? 'true' : 'false');
 }
 
+function setupGroupByPriceToggle() {
+  const btn = document.getElementById('station-group-toggle');
+  if (!btn || btn._setup) return;
+  btn._setup = true;
+  applyGroupByPriceToggleUi();
+  btn.addEventListener('click', () => {
+    haptic('light');
+    state.groupByPrice = !state.groupByPrice;
+    applyGroupByPriceToggleUi();
+    saveSettingsLocal();
+    if (state.stations.length) renderStationList(state.stations);
+  });
+}
+
+function applyGroupByPriceToggleUi() {
+  const btn = document.getElementById('station-group-toggle');
+  if (!btn) return;
+  const active = !!state.groupByPrice;
+  btn.classList.toggle('active', active);
+  btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+}
+
 function setupMapZoomGesture() {
   const mapEl = document.getElementById('map');
   if (!mapEl || mapEl._zoomGestureSetup) return;
@@ -5598,6 +5640,9 @@ function applySettingsToState(settings = {}) {
   if (typeof settings.favouritesOnTop === 'boolean') {
     state.favouritesOnTop = settings.favouritesOnTop;
   }
+  if (typeof settings.groupByPrice === 'boolean') {
+    state.groupByPrice = settings.groupByPrice;
+  }
 
   state.radiusKm = 25;
 
@@ -5608,6 +5653,7 @@ function applySettingsToState(settings = {}) {
   if (histSelect) histSelect.value = String(state.historyDefaultDays);
   // Reflect the toggle's pressed state — the bar may already be in the DOM.
   if (typeof applyFavouritesToggleUi === 'function') applyFavouritesToggleUi();
+  if (typeof applyGroupByPriceToggleUi === 'function') applyGroupByPriceToggleUi();
   // Re-render the station list so the new pinning takes effect immediately
   // (e.g. when the value arrives from the cloud-sync after an account login).
   if (state.stations?.length) renderStationList(state.stations);
@@ -5672,6 +5718,7 @@ function saveSettingsLocal() {
       contributorsOpen: state.contributorsOpen,
       historyDefaultDays: state.historyDefaultDays,
       favouritesOnTop: !!state.favouritesOnTop,
+      groupByPrice: !!state.groupByPrice,
     }));
   } catch {}
 }
