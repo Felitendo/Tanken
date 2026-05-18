@@ -4481,51 +4481,73 @@ function renderStats(stats) {
       </div>
     </div>`;
 
-  const sparkbarHtml = (values, value, color) => {
-    const minV = Math.min(...values);
-    const maxV = Math.max(...values);
-    const range = Math.max(maxV - minV, 0.0001);
-    const cheapPct = Math.max(6, Math.round(((maxV - value) / range) * 100));
-    return `<div class="ranking-bar" aria-hidden="true"><div class="ranking-bar-fill" style="width:${cheapPct}%;background:${color}"></div></div>`;
-  };
-
+  // Weekdays: chronological 7-tile heatmap (Mon..Sun), colour-tinted by rank.
   if (stats.dayAvgs.length) {
-    html += `<div class="section"><div class="section-header">${t('weekdays')}</div><div class="card-list">`;
-    const dayLen = stats.dayAvgs.length;
-    const dayValues = stats.dayAvgs.map(d => d.avg);
-    stats.dayAvgs.forEach((d, i) => {
-      const ratio = dayLen > 1 ? i / (dayLen - 1) : 0;
+    const dayCount = stats.dayAvgs.length;
+    const dayRankMap = new Map();
+    stats.dayAvgs.forEach((d, idx) => dayRankMap.set(d.day, idx));
+    const dayDisplayOrder = [1, 2, 3, 4, 5, 6, 0];
+    const dayAbbrev = t('dayAbbr') || [];
+    let dayTiles = '';
+    for (const dayNum of dayDisplayOrder) {
+      const abbr = dayAbbrev[dayNum] || '';
+      const data = stats.dayAvgs.find(d => d.day === dayNum);
+      if (!data) {
+        dayTiles += `<div class="stats-tile is-empty"><div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">–</div></div>`;
+        continue;
+      }
+      const rank = dayRankMap.get(dayNum);
+      const ratio = dayCount > 1 ? rank / (dayCount - 1) : 0;
       const color = rankColor(ratio);
-      html += `<div class="ranking-item">${sparkbarHtml(dayValues, d.avg, color)}<div class="ranking-pos">${i + 1}</div><div class="ranking-name">${t('dayNames')[d.day] || d.name}</div><div class="ranking-price" style="color:${color}">${formatPrice(d.avg)}</div></div>`;
-    });
-    html += '</div></div>';
+      const isBest = rank === 0;
+      const crown = isBest ? '<span class="stats-tile-crown" aria-hidden="true">★</span>' : '';
+      dayTiles += `<div class="stats-tile${isBest ? ' is-best' : ''}" style="--tile-color:${color}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">${formatPrice(data.avg).replace('€', '')}</div></div>`;
+    }
+    html += `<div class="section"><div class="section-header">${t('weekdays')}</div><div class="stats-tile-grid stats-tile-grid-7">${dayTiles}</div></div>`;
   }
 
+  // Hours: 24-cell heatmap strip — each cell = 1 hour, coloured by rank,
+  // empty (no data) hours dimmed. Axis labels below.
   if (stats.hourAvgs.length) {
-    const topHours = stats.hourAvgs.slice(0, 6);
-    html += `<div class="section"><div class="section-header">${t('hourRanking')}</div><div class="card-list">`;
-    const hourLen = topHours.length;
-    const hourValues = topHours.map(h => h.avg);
-    topHours.forEach((h, i) => {
-      const ratio = hourLen > 1 ? i / (hourLen - 1) : 0;
+    const hourCount = stats.hourAvgs.length;
+    const hourMap = new Map();
+    stats.hourAvgs.forEach((h, idx) => hourMap.set(h.hour, { ...h, rank: idx }));
+    let hourCells = '';
+    for (let hour = 0; hour < 24; hour++) {
+      const data = hourMap.get(hour);
+      if (!data) {
+        hourCells += `<div class="stats-hour-cell" title="${hour}:00 — ${t('noStats') || 'no data'}"></div>`;
+        continue;
+      }
+      const ratio = hourCount > 1 ? data.rank / (hourCount - 1) : 0;
       const color = rankColor(ratio);
-      const label = t('oclock') ? `${h.hour}:00 ${t('oclock')}` : `${h.hour}:00`;
-      html += `<div class="ranking-item">${sparkbarHtml(hourValues, h.avg, color)}<div class="ranking-pos">${i + 1}</div><div class="ranking-name">${label}</div><div class="ranking-price" style="color:${color}">${formatPrice(h.avg)}</div></div>`;
-    });
-    html += '</div></div>';
+      const isBest = data.rank === 0;
+      const suffix = t('oclock') ? ` ${t('oclock')}` : '';
+      hourCells += `<div class="stats-hour-cell has-data${isBest ? ' is-best' : ''}" style="--cell-color:${color}" title="${hour}:00${suffix} — ${formatPrice(data.avg)}"></div>`;
+    }
+    html += `
+      <div class="section">
+        <div class="section-header">${t('hourRanking')}</div>
+        <div class="stats-hour-heatmap" role="img" aria-label="Hourly price heatmap">${hourCells}</div>
+        <div class="stats-hour-axis" aria-hidden="true">
+          <span>0</span><span>6</span><span>12</span><span>18</span><span>23</span>
+        </div>
+      </div>`;
   }
 
+  // Stations: compact ranked list with a colour-tinted left accent stripe
+  // per row. Drop the sparkbar background — the medals + coloured price
+  // already carry the rank signal.
   if (stats.stationRanking.length) {
-    html += `<div class="section"><div class="section-header">${t('stationRanking')}</div><div class="card-list">`;
+    html += `<div class="section"><div class="section-header">${t('stationRanking')}</div><div class="card-list stats-station-list">`;
     const stations = stats.stationRanking.slice(0, 10);
     const stLen = stations.length;
-    const stValues = stations.map(s => s.avg);
     stations.forEach((s, i) => {
       const ratio = stLen > 1 ? i / (stLen - 1) : 0;
       const color = rankColor(ratio);
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1;
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
       const isMedal = i < 3;
-      html += `<div class="ranking-item station-ranking-item${isMedal ? ' ranking-medal' : ''}" data-station-name="${fixEnc(s.station)}" style="cursor:pointer">${sparkbarHtml(stValues, s.avg, color)}<div class="ranking-pos">${medal}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price" style="color:${color}">${formatPrice(s.avg)}</div></div>`;
+      html += `<div class="ranking-item station-ranking-item${isMedal ? ' ranking-medal' : ''}" data-station-name="${fixEnc(s.station)}" style="--rank-color:${color}"><div class="ranking-pos">${medal}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price" style="color:${color}">${formatPrice(s.avg)}</div></div>`;
     });
     html += '</div></div>';
   }
@@ -4546,8 +4568,16 @@ function renderStats(stats) {
       card.style.animationDelay = `${Math.min(i * 50, 240)}ms`;
       card.classList.add('anim-in');
     });
+    el.querySelectorAll('.stats-tile').forEach((tile, i) => {
+      tile.style.animationDelay = `${Math.min(i * 35, 240)}ms`;
+      tile.classList.add('anim-in');
+    });
+    el.querySelectorAll('.stats-hour-cell').forEach((cell, i) => {
+      cell.style.animationDelay = `${Math.min(i * 12, 240)}ms`;
+      cell.classList.add('anim-in');
+    });
     el.querySelectorAll('.ranking-item').forEach((item, i) => {
-      item.style.animationDelay = `${Math.min(i * 20, 300)}ms`;
+      item.style.animationDelay = `${Math.min(i * 25, 240)}ms`;
       item.classList.add('anim-in');
     });
     // Slide the spread marker into place after layout settles

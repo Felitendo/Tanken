@@ -741,32 +741,138 @@ body.logged-in .cloud-sync-hint {
   width: fit-content;
 }
 
-/* Ranking sparkbar — subtle horizontal fill behind each row showing
-   how cheap this entry is relative to the others in the list. */
-.ranking-item {
-  position: relative;
-  overflow: hidden;
-}
-.ranking-bar {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-}
-.ranking-bar-fill {
-  height: 100%;
-  opacity: 0.12;
-  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.ranking-item > .ranking-pos,
-.ranking-item > .ranking-name,
-.ranking-item > .ranking-price {
-  position: relative;
-  z-index: 1;
-}
 .ranking-medal .ranking-pos {
   font-size: 17px;
   line-height: 1;
+}
+
+/* === Weekday heatmap tiles — 7-tile chronological strip === */
+.stats-tile-grid {
+  display: grid;
+  gap: 6px;
+}
+.stats-tile-grid-7 {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.stats-tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  padding: 10px 2px 8px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-separator);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 58px;
+  min-width: 0;
+  transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1);
+}
+.stats-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--tile-color, transparent);
+  opacity: 0.14;
+  pointer-events: none;
+}
+.stats-tile.is-empty::before { display: none; }
+.stats-tile.is-empty .stats-tile-name,
+.stats-tile.is-empty .stats-tile-value { opacity: 0.4; }
+.stats-tile.is-best {
+  border-color: color-mix(in srgb, var(--tile-color) 55%, transparent);
+}
+.stats-tile.is-best::before { opacity: 0.22; }
+.stats-tile-name {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-hint);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.stats-tile-value {
+  position: relative;
+  z-index: 1;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+.stats-tile-crown {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  font-size: 10px;
+  color: var(--tile-color);
+  z-index: 2;
+  line-height: 1;
+}
+
+/* === Hour heatmap — 24-cell strip === */
+.stats-hour-heatmap {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.stats-hour-cell {
+  position: relative;
+  height: 36px;
+  border-radius: 4px;
+  background: var(--color-separator);
+  opacity: 0.5;
+  transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+.stats-hour-cell.has-data {
+  background: var(--cell-color);
+  opacity: 1;
+}
+.stats-hour-cell.is-best::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 6px;
+  border: 1.5px solid var(--cell-color);
+  pointer-events: none;
+}
+.stats-hour-cell:hover {
+  transform: scaleY(1.12);
+}
+.stats-hour-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--color-hint);
+  font-variant-numeric: tabular-nums;
+  padding: 0 2px;
+}
+
+/* === Station ranking — coloured left accent stripe === */
+.stats-station-list .station-ranking-item {
+  position: relative;
+  padding-left: calc(var(--sp-4) + 6px);
+}
+.stats-station-list .station-ranking-item::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  border-radius: 2px;
+  background: var(--rank-color, var(--color-separator));
+}
+.stats-station-list .station-ranking-item.ranking-medal::before {
+  height: 70%;
+  width: 4px;
 }
 
 @media (max-width: 360px) {
@@ -1415,8 +1521,18 @@ body.logged-in .cloud-sync-hint {
 .metric-card.anim-in,
 .best-time-card.anim-in,
 .stats-hero-card.anim-in,
-.stats-fact-card.anim-in {
+.stats-fact-card.anim-in,
+.stats-tile.anim-in {
   animation: slide-in-up 0.3s cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@keyframes hour-cell-pop {
+  from { transform: scaleY(0.2); }
+  to   { transform: scaleY(1); }
+}
+.stats-hour-cell.anim-in {
+  transform-origin: bottom;
+  animation: hour-cell-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* === Skeleton Loading === */
@@ -4118,6 +4234,33 @@ html[data-theme="dark"] .pwa-popup-icon img,
   }
   .stats-hero-card:hover {
     box-shadow: var(--dt-shadow-md);
+  }
+
+  /* Desktop: roomier heatmap tiles & cells */
+  .stats-tile-grid { gap: 8px; }
+  .stats-tile {
+    min-height: 72px;
+    padding: 12px 4px 10px;
+    border-radius: 12px;
+    transition: transform 0.18s var(--dt-ease), box-shadow 0.2s var(--dt-ease), border-color 0.2s var(--dt-ease);
+  }
+  .stats-tile:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-1);
+  }
+  .stats-tile-name { font-size: 12px; }
+  .stats-tile-value { font-size: 15px; }
+
+  .stats-hour-heatmap { gap: 3px; }
+  .stats-hour-cell { height: 44px; border-radius: 5px; }
+  .stats-hour-axis { font-size: 11px; }
+
+  .stats-station-list .station-ranking-item {
+    padding-left: calc(var(--sp-4) + 10px);
+  }
+  .stats-station-list .station-ranking-item::before {
+    left: 8px;
+    width: 4px;
   }
 
   .metric-value { font-size: 28px; }
