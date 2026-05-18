@@ -3958,8 +3958,8 @@ html[data-theme="dark"] .pwa-popup-icon img,
      cancel) since the search wrapper sits up at top: 16px. */
   .map-search-here-row {
     position: fixed;
-    top: 104px;
-    left: calc(var(--sidebar-w) + ((100vw - var(--sidebar-w) - var(--panel-w)) / 2));
+    top: 88px;
+    left: calc((100vw - var(--sidebar-w) - var(--panel-w)) / 2);
     width: max-content;
     transform: translateX(-50%);
     margin-top: 0;

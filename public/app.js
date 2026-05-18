@@ -3748,7 +3748,7 @@ async function loadSheetChart(stationName, days = 1, stationId) {
       c.setDate(c.getDate() - d);
       return data.filter(x => new Date(x.timestamp) >= c).length;
     };
-    const has24h = countWithin(1) >= 2;
+    const has24h = countWithin(1) >= 1;
     const has7d = countWithin(7) >= 2;
     updateSheetToggleAvailability({ has24h, has7d });
 
@@ -3760,7 +3760,7 @@ async function loadSheetChart(stationName, days = 1, stationId) {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
     const filtered = data.filter(d => new Date(d.timestamp) >= cutoff);
-    if (filtered.length < 2) {
+    if (filtered.length < 1) {
       loading.style.display = '';
       canvas.style.display = 'none';
       const msg = days <= 1 ? t('noRecent24h') : t('noRecent7d');
@@ -3826,7 +3826,7 @@ async function loadSheetChart(stationName, days = 1, stationId) {
             borderWidth: 2,
             fill: true,
             tension: 0.35,
-            pointRadius: days === 7 ? 3 : 0,
+            pointRadius: points.length < 2 || days === 7 ? 3 : 0,
             pointBackgroundColor: '#34c759',
           }
         ]
