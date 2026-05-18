@@ -3957,7 +3957,12 @@ html[data-theme="dark"] .pwa-popup-icon img,
   /* Desktop: tighter top spacing for the search-here row (pill + optional
      cancel) since the search wrapper sits up at top: 16px. */
   .map-search-here-row {
-    margin-top: 10px;
+    position: fixed;
+    top: 104px;
+    left: calc(var(--sidebar-w) + ((100vw - var(--sidebar-w) - var(--panel-w)) / 2));
+    width: max-content;
+    transform: translateX(-50%);
+    margin-top: 0;
   }
 
   #map-search-box {

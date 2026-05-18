@@ -6,6 +6,7 @@ import { fetchStationsLive, fetchStationsEControl } from '@/lib/measure';
 import { canMakeLiveCall, recordLiveCall } from '@/lib/rate-limit';
 import { getScheduler } from '@/lib/scheduler';
 import { enrichWithDrivingDistances } from '@/lib/ors';
+import { getScanLocation } from '@/lib/location-store';
 
 export const runtime = 'nodejs';
 
@@ -23,8 +24,8 @@ const fuelTypeSchema = z.enum(['diesel', 'e5', 'e10']);
 export async function GET(request: NextRequest) {
   const rawLat = Number.parseFloat(request.nextUrl.searchParams.get('lat') ?? '');
   const rawLng = Number.parseFloat(request.nextUrl.searchParams.get('lng') ?? '');
-  const lat = Number.isFinite(rawLat) && rawLat >= -90 && rawLat <= 90 ? rawLat : 51.1657;
-  const lng = Number.isFinite(rawLng) && rawLng >= -180 && rawLng <= 180 ? rawLng : 10.4515;
+  let lat = Number.isFinite(rawLat) && rawLat >= -90 && rawLat <= 90 ? rawLat : 51.1657;
+  let lng = Number.isFinite(rawLng) && rawLng >= -180 && rawLng <= 180 ? rawLng : 10.4515;
   const fuelCandidate = request.nextUrl.searchParams.get('fuel');
   const fuel = fuelTypeSchema.safeParse(fuelCandidate).success ? fuelCandidate! : runtimeConfig.repoConfig.fuel_type;
   const rad = 25;
@@ -40,7 +41,12 @@ export async function GET(request: NextRequest) {
     if (cached) {
       return NextResponse.json(cached.stations, { headers: { 'X-Cache': 'hit' } });
     }
-    return NextResponse.json([], { headers: { 'X-Cache': 'miss' } });
+    const loc = await getScanLocation(locationId);
+    if (!loc) {
+      return NextResponse.json([], { headers: { 'X-Cache': 'miss' } });
+    }
+    lat = loc.lat;
+    lng = loc.lng;
   }
 
   // If bounds are provided, return all cached stations within the viewport
@@ -82,7 +88,8 @@ export async function GET(request: NextRequest) {
   // the box and fall through to Tankerkönig if it returns nothing.
   const maybeAustria = lat >= 46.3 && lat <= 49.1 && lng >= 9.4 && lng <= 17.2;
   if (maybeAustria) {
-    const stations = await fetchStationsEControl({ lat, lng, fuelType: fuel });
+    const stations = (await fetchStationsEControl({ lat, lng, fuelType: fuel }))
+      .filter((s) => !Number.isFinite(s.dist) || s.dist <= rad);
     if (stations.length > 0) {
       const cacheId = `at-live-${lat.toFixed(2)}-${lng.toFixed(2)}`;
       setCachedStations(cacheId, { stations, lat, lng, radiusKm: rad, fuelType: fuel });
