@@ -4827,10 +4827,16 @@ function renderStats(stats) {
 
 }
 
-// Hour-of-day price line chart for the Stats tab. 24 slots on the x-axis;
-// each measured hour is a point coloured by its rank (cheap → expensive
-// via the standard green→red gradient). The cheapest hour gets an extra
-// large point so the eye lands on it.
+// Helper: convert an "rgb(r, g, b)" string to "rgba(r, g, b, a)".
+function rgbWithAlpha(rgbString, alpha) {
+  const m = rgbString.match(/\d+/g);
+  if (!m || m.length < 3) return rgbString;
+  return `rgba(${m[0]},${m[1]},${m[2]},${alpha})`;
+}
+
+// Hour-of-day price chart — line with a warm gradient stroke (yellow →
+// orange → red) sampled from each measured hour's rank, a vertical
+// gradient area fill, and a custom hover crosshair + glow halo.
 function renderStatsHourChart(stats) {
   const canvas = document.getElementById('stats-hour-chart');
   if (!canvas || !stats.hourAvgs.length) return;
@@ -4841,8 +4847,7 @@ function renderStatsHourChart(stats) {
 
   const labels = [];
   const data = [];
-  const pointBg = [];
-  const pointBorder = [];
+  const pointBg = [];       // colour per hour, null = no data
   const pointRadii = [];
   const pointHoverRadii = [];
   for (let hour = 0; hour < 24; hour++) {
@@ -4850,30 +4855,57 @@ function renderStatsHourChart(stats) {
     const d = hourMap.get(hour);
     if (!d) {
       data.push(null);
-      pointBg.push('rgba(0,0,0,0)');
-      pointBorder.push('rgba(0,0,0,0)');
+      pointBg.push(null);
       pointRadii.push(0);
       pointHoverRadii.push(0);
       continue;
     }
     const ratio = hourCount > 1 ? d.rank / (hourCount - 1) : 0;
-    const color = rankColor(ratio);
+    pointBg.push(rankColor(ratio));
     data.push(d.avg);
-    pointBg.push(color);
-    pointBorder.push(color);
-    const r = d.rank === 0 ? 6 : 3.5;
+    const r = d.rank === 0 ? 7 : 4;
     pointRadii.push(r);
-    pointHoverRadii.push(r + 2);
+    pointHoverRadii.push(r + 3);
   }
 
   const styles = getComputedStyle(document.body);
-  const textColor = styles.getPropertyValue('--color-text').trim() || '#000';
   const hintColor = styles.getPropertyValue('--color-hint').trim() || '#999';
   const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
-  const accentColor = styles.getPropertyValue('--color-accent').trim() || '#007aff';
+  const bgColor = styles.getPropertyValue('--color-bg-secondary').trim() || '#fff';
 
   const isUpdate = !!state.statsHourChart;
   if (state.statsHourChart) state.statsHourChart.destroy();
+
+  // Horizontal gradient stroke: one CanvasGradient spanning the chart
+  // width with a colour stop at each measured hour's x position. The
+  // line itself smoothly transitions through yellow / orange / red.
+  const buildLineGradient = (chartCtx) => {
+    const chart = chartCtx.chart;
+    const { ctx: canvasCtx, chartArea } = chart;
+    if (!chartArea) return '#ff9500';
+    const g = canvasCtx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+    const stops = [];
+    for (let i = 0; i < 24; i++) {
+      if (pointBg[i]) stops.push({ pos: i / 23, color: pointBg[i] });
+    }
+    if (!stops.length) return '#ff9500';
+    if (stops.length === 1) return stops[0].color;
+    stops.forEach(s => g.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
+    return g;
+  };
+
+  // Vertical area gradient — red-tinted at the top (high price = bad),
+  // fading through orange to a faint yellow at the bottom.
+  const buildFillGradient = (chartCtx) => {
+    const chart = chartCtx.chart;
+    const { ctx: canvasCtx, chartArea } = chart;
+    if (!chartArea) return 'rgba(255,149,0,0.15)';
+    const g = canvasCtx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+    g.addColorStop(0,   'rgba(255, 59, 48, 0.34)');
+    g.addColorStop(0.5, 'rgba(255, 149, 0, 0.18)');
+    g.addColorStop(1,   'rgba(255, 204, 0, 0.04)');
+    return g;
+  };
 
   state.statsHourChart = new Chart(canvas, {
     type: 'line',
@@ -4882,32 +4914,44 @@ function renderStatsHourChart(stats) {
       datasets: [{
         label: t('avgPrice') || 'Avg',
         data,
-        borderColor: accentColor,
-        backgroundColor: 'rgba(0,122,255,0.07)',
-        borderWidth: 2.5,
-        tension: 0.35,
+        borderColor: buildLineGradient,
+        backgroundColor: buildFillGradient,
+        borderWidth: 3,
+        borderCapStyle: 'round',
+        borderJoinStyle: 'round',
+        tension: 0.4,
         spanGaps: true,
         fill: true,
-        pointBackgroundColor: pointBg,
-        pointBorderColor: pointBorder,
-        pointBorderWidth: 2,
+        pointBackgroundColor: pointBg.map(c => c || 'rgba(0,0,0,0)'),
+        pointBorderColor: bgColor,
+        pointBorderWidth: 2.5,
         pointRadius: pointRadii,
         pointHoverRadius: pointHoverRadii,
+        pointHoverBorderWidth: 3,
+        pointHoverBorderColor: bgColor,
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: isUpdate ? false : { duration: 600 },
+      animation: isUpdate ? false : {
+        duration: 1300,
+        easing: 'easeOutQuart',
+      },
       interaction: { intersect: false, mode: 'index' },
+      hover: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: 'rgba(0,0,0,0.85)',
-          titleFont: { size: 13 },
-          bodyFont: { size: 13 },
-          padding: 10,
+          backgroundColor: 'rgba(20, 20, 20, 0.94)',
+          titleColor: 'rgba(255, 255, 255, 0.6)',
+          bodyColor: '#fff',
+          titleFont: { size: 11, weight: '600', family: '-apple-system, BlinkMacSystemFont, Roboto, sans-serif' },
+          bodyFont: { size: 16, weight: '700', family: '-apple-system, BlinkMacSystemFont, Roboto, sans-serif' },
+          padding: 12,
+          cornerRadius: 12,
           displayColors: false,
+          caretSize: 6,
           callbacks: {
             title: (items) => {
               if (!items.length) return '';
@@ -4936,7 +4980,45 @@ function renderStatsHourChart(stats) {
           beginAtZero: false,
         }
       }
-    }
+    },
+    plugins: [{
+      // Custom hover decoration: vertical dashed crosshair tinted by the
+      // hovered hour's rank colour, plus two soft halos around the point
+      // for an at-a-glance "this is what you're hovering" cue.
+      id: 'statsHourCrosshair',
+      afterDatasetsDraw(chart) {
+        const active = chart.getActiveElements();
+        if (!active.length) return;
+        const el = active[0].element;
+        if (!el || el.skip) return;
+        const idx = active[0].index;
+        const color = pointBg[idx];
+        if (!color) return;
+        const { ctx, chartArea } = chart;
+        const x = el.x;
+        const y = el.y;
+        ctx.save();
+        // Dashed vertical crosshair
+        ctx.strokeStyle = rgbWithAlpha(color, 0.45);
+        ctx.lineWidth = 1.25;
+        ctx.setLineDash([4, 5]);
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Two-ring halo around the point
+        ctx.beginPath();
+        ctx.arc(x, y, 16, 0, Math.PI * 2);
+        ctx.fillStyle = rgbWithAlpha(color, 0.12);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.fillStyle = rgbWithAlpha(color, 0.22);
+        ctx.fill();
+        ctx.restore();
+      }
+    }]
   });
 }
 
