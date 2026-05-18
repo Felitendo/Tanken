@@ -51,6 +51,8 @@ const i18n = {
     weekdays: 'WOCHENTAGE',
     hourRanking: 'UHRZEITEN',
     stationRanking: 'TANKSTELLEN RANKING',
+    priceSpread: 'PREISSPANNE',
+    vsWorst: 'gespart',
     oclock: 'Uhr',
     dayNames: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'],
     // Settings
@@ -271,6 +273,8 @@ const i18n = {
     weekdays: 'WEEKDAYS',
     hourRanking: 'HOURS',
     stationRanking: 'STATION RANKING',
+    priceSpread: 'PRICE SPREAD',
+    vsWorst: 'saved',
     oclock: '',
     dayNames: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     fuelType: 'FUEL TYPE',
@@ -4376,51 +4380,123 @@ function renderStats(stats) {
     el.innerHTML = `<div class="empty-state"><div class="empty-state-text">${t('noStats')}</div></div>`;
     return;
   }
+
   const bestDay = stats.dayAvgs[0];
+  const worstDay = stats.dayAvgs[stats.dayAvgs.length - 1];
   const bestHour = stats.hourAvgs[0];
-  const hourLabel = bestHour ? (t('oclock') ? `${bestHour.hour}:00 ${t('oclock')}` : `${bestHour.hour}:00`) : '-';
+  const worstHour = stats.hourAvgs[stats.hourAvgs.length - 1];
+  const hourLabel = bestHour ? (t('oclock') ? `${bestHour.hour}:00 ${t('oclock')}` : `${bestHour.hour}:00`) : '–';
+
+  const dayDelta = (bestDay && worstDay && worstDay.avg > bestDay.avg) ? (worstDay.avg - bestDay.avg) : 0;
+  const hourDelta = (bestHour && worstHour && worstHour.avg > bestHour.avg) ? (worstHour.avg - bestHour.avg) : 0;
+
+  const lo = stats.overall.lowest_ever;
+  const hi = stats.overall.highest_ever;
+  const avg = stats.overall.avg;
+  const spreadRange = Math.max(hi - lo, 0.0001);
+  const avgPct = Math.max(0, Math.min(100, ((avg - lo) / spreadRange) * 100));
+
+  const fmtDeltaShort = (n) => '−' + Number(n).toFixed(2).replace('.', ',') + '€';
+
   let html = `
-    <div class="metric-row stats-overview-row">
-      <div class="metric-card">
-        <div class="metric-label">${t('avgPrice')}</div>
-        <div class="metric-value">${formatPrice(stats.overall.avg)}</div>
+    <div class="section stats-hero-section">
+      <div class="stats-hero-card">
+        <div class="stats-hero-top">
+          <div class="stats-hero-headline">
+            <div class="stats-hero-label">${t('avgPrice')}</div>
+            <div class="stats-hero-value metric-value">${formatPrice(avg)}</div>
+          </div>
+          <div class="stats-hero-glyph" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
+          </div>
+        </div>
+        ${hi > lo ? `
+        <div class="stats-spread">
+          <div class="stats-spread-track">
+            <div class="stats-spread-fill"></div>
+            <div class="stats-spread-marker" style="left:${avgPct}%" title="${formatPrice(avg)}"></div>
+          </div>
+          <div class="stats-spread-labels">
+            <span class="stats-spread-low">${formatPrice(lo)}</span>
+            <span class="stats-spread-caption">${t('priceSpread')}</span>
+            <span class="stats-spread-high">${formatPrice(hi)}</span>
+          </div>
+        </div>` : ''}
       </div>
-      <div class="metric-card">
-        <div class="metric-label">${t('lowest')}</div>
-        <div class="metric-value" style="color:var(--color-good)">${formatPrice(stats.overall.lowest_ever)}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">${t('highest')}</div>
-        <div class="metric-value" style="color:var(--color-bad)">${formatPrice(stats.overall.highest_ever)}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">${t('measurements')}</div>
-        <div class="metric-value" style="color:var(--color-accent)">${stats.overall.entries}</div>
+      <div class="stats-facts-row">
+        <div class="stats-fact-card">
+          <div class="stats-fact-icon stats-fact-icon-good">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 18l2.29-2.29-4.88-4.88-4 4L2 7.41 3.41 6l6 6 4-4 6.3 6.29L22 12v6z"/></svg>
+          </div>
+          <div class="stats-fact-body">
+            <div class="stats-fact-label">${t('lowest')}</div>
+            <div class="stats-fact-value metric-value" style="color:var(--color-good)">${formatPrice(lo)}</div>
+          </div>
+        </div>
+        <div class="stats-fact-card">
+          <div class="stats-fact-icon stats-fact-icon-bad">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+          </div>
+          <div class="stats-fact-body">
+            <div class="stats-fact-label">${t('highest')}</div>
+            <div class="stats-fact-value metric-value" style="color:var(--color-bad)">${formatPrice(hi)}</div>
+          </div>
+        </div>
+        <div class="stats-fact-card">
+          <div class="stats-fact-icon stats-fact-icon-accent">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+          </div>
+          <div class="stats-fact-body">
+            <div class="stats-fact-label">${t('measurements')}</div>
+            <div class="stats-fact-value metric-value" style="color:var(--color-accent)">${stats.overall.entries}</div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="section">
       <div class="section-header">${t('bestTimes')}</div>
       <div class="best-time-grid">
         <div class="best-time-card">
-          <div class="best-time-label">${t('cheapestDay')}</div>
+          <div class="best-time-head">
+            <div class="best-time-icon-wrap">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h5v5H7z"/></svg>
+            </div>
+            <div class="best-time-label">${t('cheapestDay')}</div>
+          </div>
           <div class="best-time-value">${bestDay ? (t('dayNames')[bestDay.day] || bestDay.name) : '–'}</div>
           <div class="best-time-price good">${bestDay ? formatPrice(bestDay.avg) : '–'}</div>
+          ${dayDelta > 0.005 ? `<div class="best-time-savings"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3z"/></svg>${fmtDeltaShort(dayDelta)} ${t('vsWorst')}</div>` : ''}
         </div>
         <div class="best-time-card">
-          <div class="best-time-label">${t('cheapestHour')}</div>
+          <div class="best-time-head">
+            <div class="best-time-icon-wrap">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+            </div>
+            <div class="best-time-label">${t('cheapestHour')}</div>
+          </div>
           <div class="best-time-value">${hourLabel}</div>
           <div class="best-time-price good">${bestHour ? formatPrice(bestHour.avg) : '–'}</div>
+          ${hourDelta > 0.005 ? `<div class="best-time-savings"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3z"/></svg>${fmtDeltaShort(hourDelta)} ${t('vsWorst')}</div>` : ''}
         </div>
       </div>
     </div>`;
 
+  const sparkbarHtml = (values, value, color) => {
+    const minV = Math.min(...values);
+    const maxV = Math.max(...values);
+    const range = Math.max(maxV - minV, 0.0001);
+    const cheapPct = Math.max(6, Math.round(((maxV - value) / range) * 100));
+    return `<div class="ranking-bar" aria-hidden="true"><div class="ranking-bar-fill" style="width:${cheapPct}%;background:${color}"></div></div>`;
+  };
+
   if (stats.dayAvgs.length) {
     html += `<div class="section"><div class="section-header">${t('weekdays')}</div><div class="card-list">`;
     const dayLen = stats.dayAvgs.length;
+    const dayValues = stats.dayAvgs.map(d => d.avg);
     stats.dayAvgs.forEach((d, i) => {
       const ratio = dayLen > 1 ? i / (dayLen - 1) : 0;
       const color = rankColor(ratio);
-      html += `<div class="ranking-item"><div class="ranking-pos">${i + 1}</div><div class="ranking-name">${t('dayNames')[d.day] || d.name}</div><div class="ranking-price" style="color:${color}">${formatPrice(d.avg)}</div></div>`;
+      html += `<div class="ranking-item">${sparkbarHtml(dayValues, d.avg, color)}<div class="ranking-pos">${i + 1}</div><div class="ranking-name">${t('dayNames')[d.day] || d.name}</div><div class="ranking-price" style="color:${color}">${formatPrice(d.avg)}</div></div>`;
     });
     html += '</div></div>';
   }
@@ -4429,11 +4505,12 @@ function renderStats(stats) {
     const topHours = stats.hourAvgs.slice(0, 6);
     html += `<div class="section"><div class="section-header">${t('hourRanking')}</div><div class="card-list">`;
     const hourLen = topHours.length;
+    const hourValues = topHours.map(h => h.avg);
     topHours.forEach((h, i) => {
       const ratio = hourLen > 1 ? i / (hourLen - 1) : 0;
       const color = rankColor(ratio);
       const label = t('oclock') ? `${h.hour}:00 ${t('oclock')}` : `${h.hour}:00`;
-      html += `<div class="ranking-item"><div class="ranking-pos">${i + 1}</div><div class="ranking-name">${label}</div><div class="ranking-price" style="color:${color}">${formatPrice(h.avg)}</div></div>`;
+      html += `<div class="ranking-item">${sparkbarHtml(hourValues, h.avg, color)}<div class="ranking-pos">${i + 1}</div><div class="ranking-name">${label}</div><div class="ranking-price" style="color:${color}">${formatPrice(h.avg)}</div></div>`;
     });
     html += '</div></div>';
   }
@@ -4442,10 +4519,13 @@ function renderStats(stats) {
     html += `<div class="section"><div class="section-header">${t('stationRanking')}</div><div class="card-list">`;
     const stations = stats.stationRanking.slice(0, 10);
     const stLen = stations.length;
+    const stValues = stations.map(s => s.avg);
     stations.forEach((s, i) => {
       const ratio = stLen > 1 ? i / (stLen - 1) : 0;
       const color = rankColor(ratio);
-      html += `<div class="ranking-item station-ranking-item" data-station-name="${fixEnc(s.station)}" style="cursor:pointer"><div class="ranking-pos">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price" style="color:${color}">${formatPrice(s.avg)}</div></div>`;
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1;
+      const isMedal = i < 3;
+      html += `<div class="ranking-item station-ranking-item${isMedal ? ' ranking-medal' : ''}" data-station-name="${fixEnc(s.station)}" style="cursor:pointer">${sparkbarHtml(stValues, s.avg, color)}<div class="ranking-pos">${medal}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price" style="color:${color}">${formatPrice(s.avg)}</div></div>`;
     });
     html += '</div></div>';
   }
@@ -4462,14 +4542,21 @@ function renderStats(stats) {
         countUp(cv, num, 600, isPrice ? (v => formatPrice(v)) : (v => Math.round(v).toString()));
       }
     });
-    el.querySelectorAll('.metric-card, .best-time-card').forEach((card, i) => {
-      card.style.animationDelay = `${Math.min(i * 60, 200)}ms`;
+    el.querySelectorAll('.stats-hero-card, .stats-fact-card, .best-time-card').forEach((card, i) => {
+      card.style.animationDelay = `${Math.min(i * 50, 240)}ms`;
       card.classList.add('anim-in');
     });
     el.querySelectorAll('.ranking-item').forEach((item, i) => {
       item.style.animationDelay = `${Math.min(i * 20, 300)}ms`;
       item.classList.add('anim-in');
     });
+    // Slide the spread marker into place after layout settles
+    const marker = el.querySelector('.stats-spread-marker');
+    if (marker) {
+      const targetLeft = marker.style.left;
+      marker.style.left = '0%';
+      requestAnimationFrame(() => { marker.style.left = targetLeft; });
+    }
   });
 
   el.querySelectorAll('.station-ranking-item').forEach(item => {
