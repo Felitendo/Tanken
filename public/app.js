@@ -4693,40 +4693,15 @@ function renderStats(stats) {
     html += `<div class="section"><div class="section-header">${t('weekdays')}</div><div class="stats-tile-grid stats-tile-grid-7">${dayTiles}</div></div>`;
   }
 
-  // Hours: 24-bar mini chart. Each hour is a vertical bar anchored at
-  // the bottom; bar height tracks cheapness (cheap = tall) and bar
-  // colour tracks the rank. Empty hours show a flat baseline so the
-  // strip still reads as a single continuous chart.
+  // Hours: line chart spanning 0..23 on the x-axis. Each measured hour
+  // is a point coloured by its rank (cheap = green, expensive = red);
+  // unmeasured hours are skipped and the line bridges across them.
   if (stats.hourAvgs.length) {
-    const hourCount = stats.hourAvgs.length;
-    const hourMap = new Map();
-    stats.hourAvgs.forEach((h, idx) => hourMap.set(h.hour, { ...h, rank: idx }));
-    const hourValuesArr = stats.hourAvgs.map(h => h.avg);
-    const hourMaxV = Math.max(...hourValuesArr);
-    const hourMinV = Math.min(...hourValuesArr);
-    const hourRangeV = Math.max(hourMaxV - hourMinV, 0.0001);
-    let hourCells = '';
-    for (let hour = 0; hour < 24; hour++) {
-      const data = hourMap.get(hour);
-      if (!data) {
-        hourCells += `<div class="stats-hour-cell" title="${hour}:00"><span class="stats-hour-cell-fill"></span></div>`;
-        continue;
-      }
-      const ratio = hourCount > 1 ? data.rank / (hourCount - 1) : 0;
-      const color = rankColor(ratio);
-      const isBest = data.rank === 0;
-      const suffix = t('oclock') ? ` ${t('oclock')}` : '';
-      const label = `${hour}:00${suffix} · ${formatPrice(data.avg)}`;
-      const cheapness = hourCount > 1 ? (hourMaxV - data.avg) / hourRangeV : 1;
-      const barHeight = 30 + Math.round(cheapness * 70);
-      hourCells += `<div class="stats-hour-cell has-data${isBest ? ' is-best' : ''}" style="--cell-color:${color};--bar-height:${barHeight}%" title="${label}" data-cell-label="${label}" data-cell-color="${color}"><span class="stats-hour-cell-fill"></span></div>`;
-    }
     html += `
       <div class="section">
         <div class="section-header">${t('hourRanking')}</div>
-        <div class="stats-hour-heatmap" role="img" aria-label="Hourly price chart">${hourCells}</div>
-        <div class="stats-hour-axis" aria-hidden="true">
-          <span>0</span><span>6</span><span>12</span><span>18</span><span>23</span>
+        <div class="stats-hour-chart-wrap">
+          <canvas id="stats-hour-chart"></canvas>
         </div>
       </div>`;
   }
@@ -4768,20 +4743,7 @@ function renderStats(stats) {
       tile.style.animationDelay = `${Math.min(i * 35, 240)}ms`;
       tile.classList.add('anim-in');
     });
-    // Hour bars grow in left-to-right: stash the target height, drop to
-    // 0, stagger the transition-delay on each inner fill, then restore
-    // the target on the next frame.
-    el.querySelectorAll('.stats-hour-cell').forEach((cell, i) => {
-      const target = cell.style.getPropertyValue('--bar-height');
-      const fill = cell.querySelector('.stats-hour-cell-fill');
-      if (target && fill) {
-        cell.style.setProperty('--bar-height', '0%');
-        fill.style.transitionDelay = `${Math.min(i * 18, 320)}ms`;
-        requestAnimationFrame(() => {
-          cell.style.setProperty('--bar-height', target);
-        });
-      }
-    });
+    renderStatsHourChart(stats);
     el.querySelectorAll('.stats-tile-bar-fill').forEach((fill, i) => {
       const target = fill.style.width;
       if (target) {
@@ -4839,19 +4801,117 @@ function renderStats(stats) {
     });
   });
 
-  // Hour heatmap cells: each populated cell becomes a tap target. Bursts
-  // a small confetti in the cell's rank colour and floats a chip with the
-  // exact hour and price — solves the "tooltip on touch" gap.
-  el.querySelectorAll('.stats-hour-cell.has-data').forEach(cell => {
-    const color = cell.dataset.cellColor;
-    const label = cell.dataset.cellLabel || '';
-    attachConfetti(cell, ICON_PATHS.clock, { fixedColor: color, count: 7, size: 12 });
-    cell.addEventListener('click', () => {
-      const r = cell.getBoundingClientRect();
-      if (label) showFloatingValue(r.left + r.width / 2, r.top, label, color);
-    });
-  });
+}
 
+// Hour-of-day price line chart for the Stats tab. 24 slots on the x-axis;
+// each measured hour is a point coloured by its rank (cheap → expensive
+// via the standard green→red gradient). The cheapest hour gets an extra
+// large point so the eye lands on it.
+function renderStatsHourChart(stats) {
+  const canvas = document.getElementById('stats-hour-chart');
+  if (!canvas || !stats.hourAvgs.length) return;
+
+  const hourMap = new Map();
+  stats.hourAvgs.forEach((h, idx) => hourMap.set(h.hour, { ...h, rank: idx }));
+  const hourCount = stats.hourAvgs.length;
+
+  const labels = [];
+  const data = [];
+  const pointBg = [];
+  const pointBorder = [];
+  const pointRadii = [];
+  const pointHoverRadii = [];
+  for (let hour = 0; hour < 24; hour++) {
+    labels.push(`${hour}:00`);
+    const d = hourMap.get(hour);
+    if (!d) {
+      data.push(null);
+      pointBg.push('rgba(0,0,0,0)');
+      pointBorder.push('rgba(0,0,0,0)');
+      pointRadii.push(0);
+      pointHoverRadii.push(0);
+      continue;
+    }
+    const ratio = hourCount > 1 ? d.rank / (hourCount - 1) : 0;
+    const color = rankColor(ratio);
+    data.push(d.avg);
+    pointBg.push(color);
+    pointBorder.push(color);
+    const r = d.rank === 0 ? 6 : 3.5;
+    pointRadii.push(r);
+    pointHoverRadii.push(r + 2);
+  }
+
+  const styles = getComputedStyle(document.body);
+  const textColor = styles.getPropertyValue('--color-text').trim() || '#000';
+  const hintColor = styles.getPropertyValue('--color-hint').trim() || '#999';
+  const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
+  const accentColor = styles.getPropertyValue('--color-accent').trim() || '#007aff';
+
+  if (state.statsHourChart) state.statsHourChart.destroy();
+
+  state.statsHourChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: t('avgPrice') || 'Avg',
+        data,
+        borderColor: accentColor,
+        backgroundColor: 'rgba(0,122,255,0.07)',
+        borderWidth: 2.5,
+        tension: 0.35,
+        spanGaps: true,
+        fill: true,
+        pointBackgroundColor: pointBg,
+        pointBorderColor: pointBorder,
+        pointBorderWidth: 2,
+        pointRadius: pointRadii,
+        pointHoverRadius: pointHoverRadii,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          titleFont: { size: 13 },
+          bodyFont: { size: 13 },
+          padding: 10,
+          displayColors: false,
+          callbacks: {
+            title: (items) => {
+              if (!items.length) return '';
+              const hour = items[0].dataIndex;
+              const suffix = t('oclock');
+              return suffix ? `${hour}:00 ${suffix}` : `${hour}:00`;
+            },
+            label: (c) => c.parsed.y == null ? '' : formatPrice(c.parsed.y),
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: hintColor,
+            font: { size: 11, family: '-apple-system, BlinkMacSystemFont, Roboto, sans-serif' },
+            autoSkip: false,
+            maxRotation: 0,
+            callback: (_value, index) => (index % 6 === 0 ? `${index}:00` : ''),
+          },
+          grid: { color: sepColor, drawTicks: false, lineWidth: 0.5 },
+          border: { display: false },
+        },
+        y: {
+          display: false,
+          beginAtZero: false,
+        }
+      }
+    }
+  });
 }
 
 function setupSettings() {
