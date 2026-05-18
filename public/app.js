@@ -4684,8 +4684,11 @@ function renderStats(stats) {
       const ratio = dayCount > 1 ? rank / (dayCount - 1) : 0;
       const color = rankColor(ratio);
       const isBest = rank === 0;
-      const cheapness = dayCount > 1 ? (dayMaxV - data.avg) / dayRangeV : 1;
-      const barWidth = Math.max(14, Math.round(cheapness * 100));
+      // Bar width tracks how *expensive* the day is — empty for the
+      // cheapest, full for the priciest. Reads naturally: less is
+      // better, since you want to spend less.
+      const expensiveness = dayCount > 1 ? (data.avg - dayMinV) / dayRangeV : 0;
+      const barWidth = Math.round(expensiveness * 100);
       const crown = isBest ? '<span class="stats-tile-crown" aria-hidden="true">★</span>' : '';
       const fullDayName = (t('dayNames') || [])[dayNum] || data.name || abbr;
       dayTiles += `<div class="stats-tile${isBest ? ' is-best' : ''}" style="--tile-color:${color}" data-tile-label="${fullDayName} · ${formatPrice(data.avg)}" data-tile-color="${color}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">${formatPrice(data.avg).replace('€', '')}</div><div class="stats-tile-bar"><div class="stats-tile-bar-fill" style="width:${barWidth}%"></div></div></div>`;
@@ -4791,7 +4794,7 @@ function renderStats(stats) {
     const color = tile.dataset.tileColor;
     const label = tile.dataset.tileLabel || '';
     if (tile.classList.contains('is-best')) {
-      attachConfetti(tile, ICON_PATHS.star, { fixedColor: '#ffcc00', count: 16, size: 16 });
+      attachConfetti(tile, ICON_PATHS.star, { fixedColor: '#34c759', count: 16, size: 16 });
     } else {
       attachConfetti(tile, ICON_PATHS.priceTag, { fixedColor: color, count: 10, size: 14 });
     }
