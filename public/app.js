@@ -4623,43 +4623,59 @@ function renderStats(stats) {
       </div>
     </div>`;
 
-  // Weekdays: chronological 7-tile heatmap (Mon..Sun), colour-tinted by rank.
+  // Weekdays: chronological 7-tile row (Mon..Sun). Each tile shows the
+  // day + price on a clean surface and renders a thin coloured progress
+  // bar at the bottom whose width tracks how cheap the day is. The
+  // cheapest day also gets a subtle tinted surface, a coloured border
+  // and a star badge.
   if (stats.dayAvgs.length) {
     const dayCount = stats.dayAvgs.length;
     const dayRankMap = new Map();
     stats.dayAvgs.forEach((d, idx) => dayRankMap.set(d.day, idx));
     const dayDisplayOrder = [1, 2, 3, 4, 5, 6, 0];
     const dayAbbrev = t('dayAbbr') || [];
+    const dayValuesArr = stats.dayAvgs.map(d => d.avg);
+    const dayMaxV = Math.max(...dayValuesArr);
+    const dayMinV = Math.min(...dayValuesArr);
+    const dayRangeV = Math.max(dayMaxV - dayMinV, 0.0001);
     let dayTiles = '';
     for (const dayNum of dayDisplayOrder) {
       const abbr = dayAbbrev[dayNum] || '';
       const data = stats.dayAvgs.find(d => d.day === dayNum);
       if (!data) {
-        dayTiles += `<div class="stats-tile is-empty"><div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">–</div></div>`;
+        dayTiles += `<div class="stats-tile is-empty"><div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">–</div><div class="stats-tile-bar"><div class="stats-tile-bar-fill"></div></div></div>`;
         continue;
       }
       const rank = dayRankMap.get(dayNum);
       const ratio = dayCount > 1 ? rank / (dayCount - 1) : 0;
       const color = rankColor(ratio);
       const isBest = rank === 0;
+      const cheapness = dayCount > 1 ? (dayMaxV - data.avg) / dayRangeV : 1;
+      const barWidth = Math.max(14, Math.round(cheapness * 100));
       const crown = isBest ? '<span class="stats-tile-crown" aria-hidden="true">★</span>' : '';
       const fullDayName = (t('dayNames') || [])[dayNum] || data.name || abbr;
-      dayTiles += `<div class="stats-tile${isBest ? ' is-best' : ''}" style="--tile-color:${color}" data-tile-label="${fullDayName} · ${formatPrice(data.avg)}" data-tile-color="${color}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">${formatPrice(data.avg).replace('€', '')}</div></div>`;
+      dayTiles += `<div class="stats-tile${isBest ? ' is-best' : ''}" style="--tile-color:${color}" data-tile-label="${fullDayName} · ${formatPrice(data.avg)}" data-tile-color="${color}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">${formatPrice(data.avg).replace('€', '')}</div><div class="stats-tile-bar"><div class="stats-tile-bar-fill" style="width:${barWidth}%"></div></div></div>`;
     }
     html += `<div class="section"><div class="section-header">${t('weekdays')}</div><div class="stats-tile-grid stats-tile-grid-7">${dayTiles}</div></div>`;
   }
 
-  // Hours: 24-cell heatmap strip — each cell = 1 hour, coloured by rank,
-  // empty (no data) hours dimmed. Axis labels below.
+  // Hours: 24-bar mini chart. Each hour is a vertical bar anchored at
+  // the bottom; bar height tracks cheapness (cheap = tall) and bar
+  // colour tracks the rank. Empty hours show a flat baseline so the
+  // strip still reads as a single continuous chart.
   if (stats.hourAvgs.length) {
     const hourCount = stats.hourAvgs.length;
     const hourMap = new Map();
     stats.hourAvgs.forEach((h, idx) => hourMap.set(h.hour, { ...h, rank: idx }));
+    const hourValuesArr = stats.hourAvgs.map(h => h.avg);
+    const hourMaxV = Math.max(...hourValuesArr);
+    const hourMinV = Math.min(...hourValuesArr);
+    const hourRangeV = Math.max(hourMaxV - hourMinV, 0.0001);
     let hourCells = '';
     for (let hour = 0; hour < 24; hour++) {
       const data = hourMap.get(hour);
       if (!data) {
-        hourCells += `<div class="stats-hour-cell" title="${hour}:00 — ${t('noStats') || 'no data'}"></div>`;
+        hourCells += `<div class="stats-hour-cell" title="${hour}:00"><span class="stats-hour-cell-fill"></span></div>`;
         continue;
       }
       const ratio = hourCount > 1 ? data.rank / (hourCount - 1) : 0;
@@ -4667,12 +4683,14 @@ function renderStats(stats) {
       const isBest = data.rank === 0;
       const suffix = t('oclock') ? ` ${t('oclock')}` : '';
       const label = `${hour}:00${suffix} · ${formatPrice(data.avg)}`;
-      hourCells += `<div class="stats-hour-cell has-data${isBest ? ' is-best' : ''}" style="--cell-color:${color}" title="${label}" data-cell-label="${label}" data-cell-color="${color}"></div>`;
+      const cheapness = hourCount > 1 ? (hourMaxV - data.avg) / hourRangeV : 1;
+      const barHeight = 30 + Math.round(cheapness * 70);
+      hourCells += `<div class="stats-hour-cell has-data${isBest ? ' is-best' : ''}" style="--cell-color:${color};--bar-height:${barHeight}%" title="${label}" data-cell-label="${label}" data-cell-color="${color}"><span class="stats-hour-cell-fill"></span></div>`;
     }
     html += `
       <div class="section">
         <div class="section-header">${t('hourRanking')}</div>
-        <div class="stats-hour-heatmap" role="img" aria-label="Hourly price heatmap">${hourCells}</div>
+        <div class="stats-hour-heatmap" role="img" aria-label="Hourly price chart">${hourCells}</div>
         <div class="stats-hour-axis" aria-hidden="true">
           <span>0</span><span>6</span><span>12</span><span>18</span><span>23</span>
         </div>
@@ -4716,9 +4734,27 @@ function renderStats(stats) {
       tile.style.animationDelay = `${Math.min(i * 35, 240)}ms`;
       tile.classList.add('anim-in');
     });
+    // Hour bars grow in left-to-right: stash the target height, drop to
+    // 0, stagger the transition-delay on each inner fill, then restore
+    // the target on the next frame.
     el.querySelectorAll('.stats-hour-cell').forEach((cell, i) => {
-      cell.style.animationDelay = `${Math.min(i * 12, 240)}ms`;
-      cell.classList.add('anim-in');
+      const target = cell.style.getPropertyValue('--bar-height');
+      const fill = cell.querySelector('.stats-hour-cell-fill');
+      if (target && fill) {
+        cell.style.setProperty('--bar-height', '0%');
+        fill.style.transitionDelay = `${Math.min(i * 18, 320)}ms`;
+        requestAnimationFrame(() => {
+          cell.style.setProperty('--bar-height', target);
+        });
+      }
+    });
+    el.querySelectorAll('.stats-tile-bar-fill').forEach((fill, i) => {
+      const target = fill.style.width;
+      if (target) {
+        fill.style.width = '0%';
+        fill.style.transitionDelay = `${Math.min(i * 40, 240)}ms`;
+        requestAnimationFrame(() => { fill.style.width = target; });
+      }
     });
     el.querySelectorAll('.ranking-item').forEach((item, i) => {
       item.style.animationDelay = `${Math.min(i * 25, 240)}ms`;
