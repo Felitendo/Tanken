@@ -630,6 +630,11 @@ const state = {
   smtpConfigured: false,
   alertNotified: false,
   selectedLocation: '',
+  // True once the user has explicitly changed the location dropdown
+  // (history/stats). While false, the picker auto-defaults to the
+  // scan location nearest to the user's GPS pin. Reset on country
+  // switch so the auto-pick kicks back in for the new country.
+  locationPickerTouched: false,
   availableLocations: [],
   priceExtremes: null,
   // Country-wide 24h percentile band per fuel: { fuel, at: {p10,p50,p90}|null, de: {...}|null }.
@@ -1703,6 +1708,7 @@ function applyCountryUi() {
   // Country change invalidates cached history/stats — they're country-scoped now.
   if (prev && prev !== next) {
     state.selectedLocation = '';
+    state.locationPickerTouched = false;
     state.loaded.history = false;
     state.loaded.stats = false;
   }
@@ -4021,6 +4027,32 @@ async function loadLocationPickers() {
     // them as "Unbekannter Standort" entries just clutters the dropdown.
     const knownLocations = locations.filter(locId => nameById.has(locId));
 
+    // Default the picker to the scan location closest to the user when
+    // we still have a GPS pin and the user hasn't yet overridden the
+    // dropdown for this country. Without coords (e.g. denied permission)
+    // we fall back to the "Alle Standorte" baseline.
+    if (!state.locationPickerTouched
+      && Number.isFinite(state.userLat)
+      && Number.isFinite(state.userLng)
+      && knownLocations.length) {
+      const knownIdSet = new Set(knownLocations);
+      const candidates = scanLocs.filter(l =>
+        l.country === country
+        && knownIdSet.has(l.id)
+        && Number.isFinite(l.lat)
+        && Number.isFinite(l.lng)
+      );
+      if (candidates.length) {
+        let nearest = candidates[0];
+        let nearestDist = distanceKm(state.userLat, state.userLng, nearest.lat, nearest.lng);
+        for (let i = 1; i < candidates.length; i++) {
+          const d = distanceKm(state.userLat, state.userLng, candidates[i].lat, candidates[i].lng);
+          if (d < nearestDist) { nearestDist = d; nearest = candidates[i]; }
+        }
+        state.selectedLocation = nearest.id;
+      }
+    }
+
     ['history-location-picker', 'stats-location-picker'].forEach(id => {
       const picker = document.getElementById(id);
       if (!picker) return;
@@ -4066,6 +4098,7 @@ async function loadHistoryTab() {
   const historyPicker = document.getElementById('history-location-picker');
   if (historyPicker) {
     historyPicker.addEventListener('change', async () => {
+      state.locationPickerTouched = true;
       state.selectedLocation = historyPicker.value;
       // Sync stats picker
       const statsPicker = document.getElementById('stats-location-picker');
@@ -4467,6 +4500,7 @@ async function loadStatsTab() {
   const statsPicker = document.getElementById('stats-location-picker');
   if (statsPicker) {
     statsPicker.addEventListener('change', async () => {
+      state.locationPickerTouched = true;
       state.selectedLocation = statsPicker.value;
       // Sync history picker
       const historyPicker = document.getElementById('history-location-picker');
