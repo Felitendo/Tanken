@@ -4380,11 +4380,11 @@ function renderStats(stats) {
   const bestHour = stats.hourAvgs[0];
   const hourLabel = bestHour ? (t('oclock') ? `${bestHour.hour}:00 ${t('oclock')}` : `${bestHour.hour}:00`) : '-';
   let html = `
-    <div class="stats-hero">
-      <div class="stats-hero-label">${t('avgPrice')}</div>
-      <div class="stats-hero-value">${formatPrice(stats.overall.avg)}</div>
-    </div>
-    <div class="metric-row">
+    <div class="metric-row stats-overview-row">
+      <div class="metric-card">
+        <div class="metric-label">${t('avgPrice')}</div>
+        <div class="metric-value">${formatPrice(stats.overall.avg)}</div>
+      </div>
       <div class="metric-card">
         <div class="metric-label">${t('lowest')}</div>
         <div class="metric-value" style="color:var(--color-good)">${formatPrice(stats.overall.lowest_ever)}</div>
@@ -4455,10 +4455,6 @@ function renderStats(stats) {
 
   // Defer animations to next frame so DOM write doesn't block tab bar
   requestAnimationFrame(() => {
-    const bigVal = el.querySelector('.stats-hero-value');
-    if (bigVal && stats.overall.avg) {
-      countUp(bigVal, stats.overall.avg, 800, v => formatPrice(v));
-    }
     el.querySelectorAll('.metric-value').forEach(cv => {
       const num = parseFloat(cv.textContent.replace(',', '.'));
       if (!isNaN(num) && num > 0) {

@@ -402,6 +402,9 @@ body.logged-in .cloud-sync-hint {
   gap: var(--sp-3);
   margin-bottom: var(--sp-3);
 }
+.stats-overview-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 @media (max-width: 600px) {
   .metric-row {
     grid-template-columns: 1fr;
@@ -533,7 +536,6 @@ body.logged-in .cloud-sync-hint {
   width: 100%;
 }
 
-#stats-content > .stats-hero,
 #stats-content > .metric-row {
   margin-left: var(--sp-4);
   margin-right: var(--sp-4);
@@ -3843,22 +3845,17 @@ html[data-theme="dark"] .pwa-popup-icon img,
   .best-time-card { padding: var(--sp-5) var(--sp-5); }
   .extreme-card { padding: var(--sp-5) var(--sp-5); }
   .stats-hero { padding: var(--sp-6) var(--sp-6); }
-  #stats-content > .stats-hero,
   #stats-content > .metric-row {
     margin-left: 0;
     margin-right: 0;
   }
-  #stats-content > .stats-hero {
-    min-height: 96px;
-    padding: var(--sp-4) var(--sp-5);
+  #stats-content > .stats-overview-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   #stats-content .metric-card,
   #stats-content .best-time-card {
     min-height: 88px;
     padding: var(--sp-4) var(--sp-5);
-  }
-  #stats-content .stats-hero-value {
-    font-size: 40px;
   }
 
   .metric-card:hover,
