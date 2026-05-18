@@ -3849,6 +3849,10 @@ html[data-theme="dark"] .pwa-popup-icon img,
     margin-left: 0;
     margin-right: 0;
   }
+  #stats-content > .section {
+    padding-left: 0;
+    padding-right: 0;
+  }
   #stats-content > .stats-overview-row {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
