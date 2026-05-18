@@ -3369,6 +3369,22 @@ body.logged-in .station-fav-sync.synced {
   box-sizing: border-box;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
+.location-picker-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.location-auto-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-hint);
+  padding-left: 4px;
+  letter-spacing: 0.1px;
+}
+.location-auto-hint[hidden] { display: none; }
+.location-auto-hint svg { opacity: 0.75; flex-shrink: 0; }
 .location-picker:hover {
   border-color: var(--color-hint);
 }

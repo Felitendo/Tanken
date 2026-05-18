@@ -95,9 +95,15 @@ export const APP_SHELL = `
         <button type="button" class="chip" data-country="de"><svg class="country-flag" viewBox="0 0 5 3" width="18" height="11" aria-hidden="true"><rect width="5" height="1" fill="#000"/><rect width="5" height="1" y="1" fill="#dd0000"/><rect width="5" height="1" y="2" fill="#ffce00"/></svg><span data-i18n="countryDE">Deutschland</span></button>
         <button type="button" class="chip" data-country="at"><svg class="country-flag" viewBox="0 0 9 6" width="16" height="11" aria-hidden="true"><rect width="9" height="6" fill="#ed2939"/><rect width="9" height="2" y="2" fill="#fff"/></svg><span data-i18n="countryAT">Österreich</span></button>
       </div>
-      <select id="history-location-picker" class="location-picker" aria-label="Standort filtern" style="display:none;margin-bottom:8px">
-        <option value="">Alle Standorte</option>
-      </select>
+      <div class="location-picker-row" style="display:none;margin-bottom:8px">
+        <select id="history-location-picker" class="location-picker" aria-label="Standort filtern">
+          <option value="">Alle Standorte</option>
+        </select>
+        <div id="history-location-hint" class="location-auto-hint" hidden>
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          <span data-i18n="locationAutoPicked">Automatisch · nächster Standort</span>
+        </div>
+      </div>
       <div class="section-header" data-i18n="timePeriod">ZEITRAUM</div>
       <div class="chip-row" role="tablist" aria-label="Zeitraum">
         <button type="button" class="chip active" data-days="7" data-i18n="days7">7 Tage</button>
@@ -131,9 +137,15 @@ export const APP_SHELL = `
         <button type="button" class="chip" data-country="de"><svg class="country-flag" viewBox="0 0 5 3" width="18" height="11" aria-hidden="true"><rect width="5" height="1" fill="#000"/><rect width="5" height="1" y="1" fill="#dd0000"/><rect width="5" height="1" y="2" fill="#ffce00"/></svg><span data-i18n="countryDE">Deutschland</span></button>
         <button type="button" class="chip" data-country="at"><svg class="country-flag" viewBox="0 0 9 6" width="16" height="11" aria-hidden="true"><rect width="9" height="6" fill="#ed2939"/><rect width="9" height="2" y="2" fill="#fff"/></svg><span data-i18n="countryAT">Österreich</span></button>
       </div>
-      <select id="stats-location-picker" class="location-picker" aria-label="Standort filtern" style="display:none">
-        <option value="">Alle Standorte</option>
-      </select>
+      <div class="location-picker-row" style="display:none">
+        <select id="stats-location-picker" class="location-picker" aria-label="Standort filtern">
+          <option value="">Alle Standorte</option>
+        </select>
+        <div id="stats-location-hint" class="location-auto-hint" hidden>
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          <span data-i18n="locationAutoPicked">Automatisch · nächster Standort</span>
+        </div>
+      </div>
     </div>
     <div id="stats-content"></div>
   </div>

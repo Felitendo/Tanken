@@ -56,6 +56,7 @@ const i18n = {
     periodLastDays: 'Letzte {n} Tage',
     periodSince: 'Seit {date}',
     periodToday: 'Heute',
+    locationAutoPicked: 'Automatisch · nächster Standort',
     oclock: 'Uhr',
     dayNames: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'],
     // Settings
@@ -281,6 +282,7 @@ const i18n = {
     periodLastDays: 'Last {n} days',
     periodSince: 'Since {date}',
     periodToday: 'Today',
+    locationAutoPicked: 'Auto · nearest location',
     oclock: '',
     dayNames: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     fuelType: 'FUEL TYPE',
@@ -4031,6 +4033,7 @@ async function loadLocationPickers() {
     // we still have a GPS pin and the user hasn't yet overridden the
     // dropdown for this country. Without coords (e.g. denied permission)
     // we fall back to the "Alle Standorte" baseline.
+    let autoPicked = false;
     if (!state.locationPickerTouched
       && Number.isFinite(state.userLat)
       && Number.isFinite(state.userLng)
@@ -4050,10 +4053,14 @@ async function loadLocationPickers() {
           if (d < nearestDist) { nearestDist = d; nearest = candidates[i]; }
         }
         state.selectedLocation = nearest.id;
+        autoPicked = true;
       }
     }
 
-    ['history-location-picker', 'stats-location-picker'].forEach(id => {
+    [
+      { picker: 'history-location-picker', hint: 'history-location-hint' },
+      { picker: 'stats-location-picker', hint: 'stats-location-hint' },
+    ].forEach(({ picker: id, hint: hintId }) => {
       const picker = document.getElementById(id);
       if (!picker) return;
       // Keep the first "Alle Standorte" option
@@ -4065,7 +4072,11 @@ async function loadLocationPickers() {
         picker.appendChild(opt);
       });
       picker.value = state.selectedLocation;
-      picker.style.display = knownLocations.length > 0 ? '' : 'none';
+      // Drive the parent wrapper visibility so the hint hides with it.
+      const wrap = picker.closest('.location-picker-row') || picker;
+      wrap.style.display = knownLocations.length > 0 ? '' : 'none';
+      const hint = document.getElementById(hintId);
+      if (hint) hint.hidden = !autoPicked || !state.selectedLocation;
     });
   } catch { /* ignore */ }
 }
@@ -4100,9 +4111,12 @@ async function loadHistoryTab() {
     historyPicker.addEventListener('change', async () => {
       state.locationPickerTouched = true;
       state.selectedLocation = historyPicker.value;
-      // Sync stats picker
+      // Sync stats picker and tear down the "auto-picked" hint on both
+      // since the user has just made their own choice.
       const statsPicker = document.getElementById('stats-location-picker');
       if (statsPicker) statsPicker.value = state.selectedLocation;
+      document.getElementById('history-location-hint')?.setAttribute('hidden', '');
+      document.getElementById('stats-location-hint')?.setAttribute('hidden', '');
       state.history = await fetchHistoryData();
       renderChart(state.history);
       // Reload stats if already loaded
@@ -4202,6 +4216,9 @@ function renderChart(data) {
   const hintColor = getComputedStyle(document.body).getPropertyValue('--color-hint') || '#999';
   const btnColor = getComputedStyle(document.body).getPropertyValue('--color-accent') || '#007aff';
   const bgSecondary = getComputedStyle(document.body).getPropertyValue('--color-bg-secondary').trim() || '#f2f2f7';
+  // Skip the entry animation when we're swapping data (e.g. location
+  // switch) — animating the y-axis on each switch reads as a jitter.
+  const isUpdate = !!state.chart;
   if (state.chart) state.chart.destroy();
   if (state.hourChart) { state.hourChart.destroy(); state.hourChart = null; }
   document.getElementById('hour-chart-section').style.display = 'none';
@@ -4251,6 +4268,7 @@ function renderChart(data) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: isUpdate ? false : { duration: 700 },
       interaction: { intersect: false, mode: 'index' },
       onClick: (evt, elements) => {
         if (!elements.length) return;
@@ -4502,9 +4520,12 @@ async function loadStatsTab() {
     statsPicker.addEventListener('change', async () => {
       state.locationPickerTouched = true;
       state.selectedLocation = statsPicker.value;
-      // Sync history picker
+      // Sync history picker and tear down the "auto-picked" hint on
+      // both since the user has just made their own choice.
       const historyPicker = document.getElementById('history-location-picker');
       if (historyPicker) historyPicker.value = state.selectedLocation;
+      document.getElementById('history-location-hint')?.setAttribute('hidden', '');
+      document.getElementById('stats-location-hint')?.setAttribute('hidden', '');
       await reloadStats();
       // Reload history if already loaded
       if (state.loaded.history) {
@@ -4851,6 +4872,7 @@ function renderStatsHourChart(stats) {
   const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
   const accentColor = styles.getPropertyValue('--color-accent').trim() || '#007aff';
 
+  const isUpdate = !!state.statsHourChart;
   if (state.statsHourChart) state.statsHourChart.destroy();
 
   state.statsHourChart = new Chart(canvas, {
@@ -4876,6 +4898,7 @@ function renderStatsHourChart(stats) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: isUpdate ? false : { duration: 600 },
       interaction: { intersect: false, mode: 'index' },
       plugins: {
         legend: { display: false },
