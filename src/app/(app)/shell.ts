@@ -130,7 +130,7 @@ export const APP_SHELL = `
   <div class="tab-view" id="view-stats">
     <header class="page-header">
       <h1 class="page-title" data-i18n="statsTitle">Statistiken</h1>
-      <p class="page-description" data-i18n="statsDescription">Wo, wann und wie viel — die beste Zeit zum Tanken.</p>
+      <p class="page-description" data-i18n="statsDescription">Wann und wo Tanken am günstigsten ist.</p>
     </header>
     <div class="section" style="padding-bottom:0">
       <div class="chip-row country-chip-row" id="stats-country-chips" role="tablist" aria-label="Land">

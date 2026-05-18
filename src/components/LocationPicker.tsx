@@ -243,7 +243,7 @@ export function LocationPicker({
       <div
         ref={containerRef}
         role="application"
-        aria-label="Kartenauswahl — Marker ziehen oder Karte anklicken"
+        aria-label="Kartenauswahl. Marker ziehen oder Karte anklicken."
         className={`${heightClass} w-full rounded-md border border-border overflow-hidden`}
       />
       <div className="text-xs text-muted-foreground font-mono tabular-nums" aria-live="polite">

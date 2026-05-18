@@ -342,10 +342,10 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
         )}
 
         <div className="grid grid-cols-4 gap-4">
-          <StatCell label={cs.mode === 'discovery' ? 'Grid' : 'Standorte'} value={cs.gridPoints ? cs.gridPoints.toLocaleString('de-DE') : '—'} />
-          <StatCell label="Stationen" value={cs.stationsScanned ? cs.stationsScanned.toLocaleString('de-DE') : '—'} />
-          <StatCell label="Dauer" value={cs.lastDurationSec ? fmtDuration(cs.lastDurationSec) : '—'} />
-          <StatCell label="Ø Call" value={cs.avgCallSec ? `${cs.avgCallSec}s` : '—'} />
+          <StatCell label={cs.mode === 'discovery' ? 'Grid' : 'Standorte'} value={cs.gridPoints ? cs.gridPoints.toLocaleString('de-DE') : '–'} />
+          <StatCell label="Stationen" value={cs.stationsScanned ? cs.stationsScanned.toLocaleString('de-DE') : '–'} />
+          <StatCell label="Dauer" value={cs.lastDurationSec ? fmtDuration(cs.lastDurationSec) : '–'} />
+          <StatCell label="Ø Call" value={cs.avgCallSec ? `${cs.avgCallSec}s` : '–'} />
         </div>
 
         {cs.log.length > 0 && (
@@ -565,7 +565,7 @@ function DenyDialog({
 }
 
 function fmtNextScanTime(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return '–';
   try {
     const d = new Date(iso);
     const now = new Date();
@@ -766,7 +766,7 @@ function LocationsQueue({
             Österreich (Grid-Discovery)
           </div>
           <p className="px-4 pt-3 text-xs text-muted-foreground">
-            AT-Standorte werden nicht einzeln angefragt — der Scanner durchläuft ein festes Grid über das gesamte Land.
+            AT-Standorte werden nicht einzeln angefragt. Der Scanner durchläuft ein festes Grid über das gesamte Land.
           </p>
           <div className="mt-2 divide-y">
             {enabledAt.map((loc) => renderRow(loc, null, 'idle'))}
@@ -778,7 +778,7 @@ function LocationsQueue({
       {disabled.length > 0 && (
         <Card className="py-0 gap-0">
           <div className="border-b px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Deaktiviert — nicht in der Warteschlange
+            Deaktiviert (nicht in der Warteschlange)
           </div>
           <div className="divide-y">
             {disabled.map((loc) => renderRow(loc, null, 'idle'))}
@@ -1121,7 +1121,7 @@ function ScannerConsole() {
             <StatCell label="Zyklen" value={String(status.cycleCount)} />
             <StatCell
               label="Letzter Zyklus"
-              value={status.lastCycleDurationSec ? fmtDuration(status.lastCycleDurationSec) : '—'}
+              value={status.lastCycleDurationSec ? fmtDuration(status.lastCycleDurationSec) : '–'}
               sub={status.nextCycleAt ? `Nächster: ${new Date(status.nextCycleAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : undefined}
             />
           </div>
@@ -1129,7 +1129,7 @@ function ScannerConsole() {
         <CardFooter className="justify-between border-t pt-4 text-[11px] text-muted-foreground">
           <span>
             {status.cache.oldestScan && status.cache.newestScan
-              ? `Cache: ${fmtRelative(status.cache.oldestScan)} — ${fmtRelative(status.cache.newestScan)}`
+              ? `Cache: ${fmtRelative(status.cache.oldestScan)} bis ${fmtRelative(status.cache.newestScan)}`
               : 'Cache leer'}
           </span>
           <Button
@@ -1335,7 +1335,7 @@ function AppConfigSection({
               placeholder="Für Fahrtdistanzen statt Luftlinie"
             />
             <p className="text-xs text-muted-foreground">
-              Optional — unter{' '}
+              Optional, unter{' '}
               <a
                 href="https://openrouteservice.org/dev/#/signup"
                 target="_blank"

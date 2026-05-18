@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
   const orsKey = runtimeConfig.orsApiKey;
   if (!orsKey) {
     return NextResponse.json(
-      { error: 'Routenplanung nicht konfiguriert — bitte Admin um einen ORS API Key bitten.' },
+      { error: 'Routenplanung nicht konfiguriert. Bitte Admin um einen ORS API Key bitten.' },
       { status: 503 },
     );
   }

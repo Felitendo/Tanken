@@ -137,7 +137,7 @@ const i18n = {
     historyTitle: 'Preisverlauf',
     historyDescription: 'Durchschnittspreise und Tiefstwerte über die letzten Tage.',
     statsTitle: 'Statistiken',
-    statsDescription: 'Wo, wann und wie viel — die beste Zeit zum Tanken.',
+    statsDescription: 'Wann und wo Tanken am günstigsten ist.',
     settingsTitle: 'Einstellungen',
     settingsDescription: 'Personalisiere die App und verwalte dein Felo-ID-Konto.',
     // Station history
@@ -223,7 +223,7 @@ const i18n = {
     cancel: 'Abbrechen',
     routeLoading: 'Route wird berechnet…',
     routeLoginRequired: 'Bitte einloggen, um die Routenplanung zu nutzen.',
-    routeNoOrs: 'Routenplanung nicht konfiguriert — bitte Admin um einen ORS-Key bitten.',
+    routeNoOrs: 'Routenplanung nicht konfiguriert. Bitte Admin um einen ORS-Key bitten.',
     routeNoRoute: 'Route konnte nicht berechnet werden.',
     routeNoStart: 'Bitte einen Startpunkt angeben.',
     routeNoDest: 'Bitte ein Ziel angeben.',
@@ -357,7 +357,7 @@ const i18n = {
     historyTitle: 'Price history',
     historyDescription: 'Average and lowest prices over the past few days.',
     statsTitle: 'Statistics',
-    statsDescription: 'Where, when, and how much — the best time to fill up.',
+    statsDescription: 'When and where fuel is cheapest.',
     settingsTitle: 'Settings',
     settingsDescription: 'Personalise the app and manage your Felo ID account.',
     priceHistory: 'PRICE HISTORY',
@@ -441,7 +441,7 @@ const i18n = {
     cancel: 'Cancel',
     routeLoading: 'Calculating route…',
     routeLoginRequired: 'Please log in to use route planning.',
-    routeNoOrs: 'Route planning not configured — ask the admin for an ORS key.',
+    routeNoOrs: 'Route planning not configured. Ask the admin for an ORS key.',
     routeNoRoute: 'Could not calculate route.',
     routeNoStart: 'Please enter a start point.',
     routeNoDest: 'Please enter a destination.',
@@ -771,6 +771,110 @@ function attachConfetti(el, svgInner, opts = {}) {
     void el.offsetWidth;
     el.classList.add('confetti-pop');
   });
+}
+
+// Replace the native <select> with a custom dropdown on desktop only.
+// Native browser selects look out of place against the rest of the UI;
+// on touch we keep them because the OS picker is the right affordance.
+// The native element stays in the DOM as the source of truth — we mirror
+// the value back and re-dispatch a `change` event, so existing listeners
+// keep working without any other changes.
+function enhanceSelectForDesktop(select) {
+  if (!select || select._dropdownEnhanced) return;
+  if (!window.matchMedia || !window.matchMedia('(min-width: 900px)').matches) return;
+  select._dropdownEnhanced = true;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'custom-select';
+  select.parentNode.insertBefore(wrapper, select);
+  wrapper.appendChild(select);
+
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'custom-select-trigger';
+  trigger.setAttribute('aria-haspopup', 'listbox');
+  trigger.setAttribute('aria-expanded', 'false');
+  wrapper.appendChild(trigger);
+
+  const panel = document.createElement('div');
+  panel.className = 'custom-select-panel';
+  panel.setAttribute('role', 'listbox');
+  wrapper.appendChild(panel);
+
+  let optionEls = [];
+
+  function refresh() {
+    const selected = select.options[select.selectedIndex];
+    trigger.innerHTML = `
+      <span class="custom-select-value">${selected ? selected.textContent : ''}</span>
+      <svg class="custom-select-caret" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg>
+    `;
+    panel.innerHTML = '';
+    optionEls = Array.from(select.options).map((opt) => {
+      const item = document.createElement('div');
+      item.className = 'custom-select-option' + (opt.selected ? ' selected' : '');
+      item.textContent = opt.textContent;
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', opt.selected ? 'true' : 'false');
+      item.dataset.value = opt.value;
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (select.value !== opt.value) {
+          select.value = opt.value;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        close();
+      });
+      panel.appendChild(item);
+      return item;
+    });
+  }
+
+  let onDocClick = null;
+  let onKeydown = null;
+
+  function open() {
+    if (wrapper.classList.contains('open')) return;
+    wrapper.classList.add('open');
+    trigger.setAttribute('aria-expanded', 'true');
+    onDocClick = (e) => { if (!wrapper.contains(e.target)) close(); };
+    onKeydown = (e) => {
+      if (e.key === 'Escape') { close(); trigger.focus(); }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const items = optionEls;
+        const currentIdx = items.findIndex(it => it.dataset.value === select.value);
+        const delta = e.key === 'ArrowDown' ? 1 : -1;
+        const next = items[Math.max(0, Math.min(items.length - 1, currentIdx + delta))];
+        if (next) next.click();
+      }
+    };
+    document.addEventListener('click', onDocClick);
+    document.addEventListener('keydown', onKeydown);
+  }
+
+  function close() {
+    if (!wrapper.classList.contains('open')) return;
+    wrapper.classList.remove('open');
+    trigger.setAttribute('aria-expanded', 'false');
+    if (onDocClick) document.removeEventListener('click', onDocClick);
+    if (onKeydown) document.removeEventListener('keydown', onKeydown);
+    onDocClick = null;
+    onKeydown = null;
+  }
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (wrapper.classList.contains('open')) close(); else open();
+  });
+
+  // Re-mirror when the underlying select changes (e.g. external code
+  // assigns a value programmatically, or option list is rebuilt).
+  select.addEventListener('change', refresh);
+  const mo = new MutationObserver(refresh);
+  mo.observe(select, { childList: true, subtree: true, characterData: true });
+
+  refresh();
 }
 
 // Pop a small floating chip above (x, y) that fades in, holds, then fades
@@ -4104,6 +4208,7 @@ async function loadLocationPickers() {
         picker.appendChild(opt);
       });
       picker.value = state.selectedLocation;
+      enhanceSelectForDesktop(picker);
       // Drive the parent wrapper visibility so the hint hides with it.
       const wrap = picker.closest('.location-picker-row') || picker;
       wrap.style.display = knownLocations.length > 0 ? '' : 'none';
@@ -6303,6 +6408,12 @@ function applySettingsToState(settings = {}) {
   if (themeSelect) themeSelect.value = state.theme;
   const histSelect = document.getElementById('history-default-picker');
   if (histSelect) histSelect.value = String(state.historyDefaultDays);
+  // Swap the native <select>s for the custom desktop dropdown on wide
+  // viewports — runs once per select.
+  if (themeSelect) enhanceSelectForDesktop(themeSelect);
+  if (histSelect) enhanceSelectForDesktop(histSelect);
+  const langSelectInit = document.getElementById('lang-picker');
+  if (langSelectInit) enhanceSelectForDesktop(langSelectInit);
   // Reflect the toggle's pressed state — the bar may already be in the DOM.
   if (typeof applyFavouritesToggleUi === 'function') applyFavouritesToggleUi();
   if (typeof applyGroupByPriceToggleUi === 'function') applyGroupByPriceToggleUi();

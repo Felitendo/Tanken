@@ -356,8 +356,8 @@ class ScanScheduler {
         this._waitingCancel = null;
       } else {
         const reason = atEntries.length === 0 ? 'AT-Cache leer' : 'AT-Cache unvollständig (fehlende Sorte)';
-        this.at.addLog(`${reason} — Start-Scan sofort`, 'info');
-        console.log(`[Scheduler] ${reason} on startup — running immediate scan`);
+        this.at.addLog(`${reason}, Start-Scan sofort`, 'info');
+        console.log(`[Scheduler] ${reason} on startup, running immediate scan`);
       }
       if (!this.timer) break;
 
@@ -374,7 +374,7 @@ class ScanScheduler {
       if (apiKey) {
         tasks.push(this.runDeCycle(apiKey));
       } else {
-        this.de.addLog('Kein API-Key — DE-Scan übersprungen', 'warn');
+        this.de.addLog('Kein API-Key, DE-Scan übersprungen', 'warn');
       }
       tasks.push(this.runAtGridCycle());
 
@@ -517,7 +517,7 @@ class ScanScheduler {
       return;
     }
     if (locs.length === 0) {
-      this.de.addLog('Keine aktiven DE-Scan-Standorte — im Admin-Panel hinzufügen', 'warn');
+      this.de.addLog('Keine aktiven DE-Scan-Standorte. Im Admin-Panel hinzufügen.', 'warn');
       return;
     }
 
@@ -555,7 +555,7 @@ class ScanScheduler {
 
     const ids = getDeStationIds();
     if (ids.length === 0) {
-      cs.addLog('Preisupdate übersprungen — keine Stationen im Cache', 'warn');
+      cs.addLog('Preisupdate übersprungen: keine Stationen im Cache', 'warn');
       cs.reset();
       return;
     }
@@ -671,7 +671,7 @@ class ScanScheduler {
     }
 
     if (locs.length === 0) {
-      cs.addLog('Keine aktiven DE-Scan-Standorte — im Admin-Panel hinzufügen', 'warn');
+      cs.addLog('Keine aktiven DE-Scan-Standorte. Im Admin-Panel hinzufügen.', 'warn');
       cs.reset();
       return;
     }
