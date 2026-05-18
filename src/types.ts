@@ -264,6 +264,8 @@ export interface HistoryStats {
     highest_ever: number;
     avg: number;
     entries: number;
+    since: string | null;
+    until: string | null;
   };
 }
 

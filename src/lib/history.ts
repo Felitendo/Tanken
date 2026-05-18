@@ -132,6 +132,9 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
 
   const allMin = datedEntries.map((entry) => entry.min_price);
   const allMax = datedEntries.map((entry) => entry.max_price);
+  const timestamps = datedEntries.map((entry) => entry.timestampDate.getTime());
+  const since = timestamps.length ? new Date(Math.min(...timestamps)).toISOString() : null;
+  const until = timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null;
 
   return {
     dayAvgs,
@@ -141,7 +144,9 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
       lowest_ever: allMin.length ? Math.min(...allMin) : 0,
       highest_ever: allMax.length ? Math.max(...allMax) : 0,
       avg: allMin.length ? allMin.reduce((sum, value) => sum + value, 0) / allMin.length : 0,
-      entries: datedEntries.length
+      entries: datedEntries.length,
+      since,
+      until
     }
   };
 }

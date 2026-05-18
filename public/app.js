@@ -53,6 +53,9 @@ const i18n = {
     stationRanking: 'TANKSTELLEN RANKING',
     priceSpread: 'PREISSPANNE',
     vsWorst: 'gespart',
+    periodLastDays: 'Letzte {n} Tage',
+    periodSince: 'Seit {date}',
+    periodToday: 'Heute',
     oclock: 'Uhr',
     dayNames: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'],
     // Settings
@@ -275,6 +278,9 @@ const i18n = {
     stationRanking: 'STATION RANKING',
     priceSpread: 'PRICE SPREAD',
     vsWorst: 'saved',
+    periodLastDays: 'Last {n} days',
+    periodSince: 'Since {date}',
+    periodToday: 'Today',
     oclock: '',
     dayNames: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     fuelType: 'FUEL TYPE',
@@ -4398,6 +4404,24 @@ function renderStats(stats) {
 
   const fmtDeltaShort = (n) => '−' + Number(n).toFixed(2).replace('.', ',') + '€';
 
+  // Build a period label for the hero — short days form when the range
+  // is recent, absolute date when it stretches back further.
+  let periodLabel = '';
+  if (stats.overall.since) {
+    const sinceDate = new Date(stats.overall.since);
+    const untilDate = stats.overall.until ? new Date(stats.overall.until) : new Date();
+    const daysSpan = Math.max(1, Math.round((untilDate.getTime() - sinceDate.getTime()) / 86400000) + 1);
+    if (daysSpan < 2) {
+      periodLabel = t('periodToday') || 'Today';
+    } else if (daysSpan < 90) {
+      periodLabel = (t('periodLastDays') || 'Last {n} days').replace('{n}', String(daysSpan));
+    } else {
+      const locale = state.lang === 'en' ? 'en-US' : 'de-DE';
+      const dateStr = sinceDate.toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
+      periodLabel = (t('periodSince') || 'Since {date}').replace('{date}', dateStr);
+    }
+  }
+
   let html = `
     <div class="section stats-hero-section">
       <div class="stats-hero-card">
@@ -4410,6 +4434,11 @@ function renderStats(stats) {
             <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
           </div>
         </div>
+        ${periodLabel ? `
+        <div class="stats-hero-period" title="${stats.overall.since ? new Date(stats.overall.since).toLocaleString(state.lang === 'en' ? 'en-US' : 'de-DE') : ''}">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19a2 2 0 002 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+          <span>${periodLabel}</span>
+        </div>` : ''}
         ${hi > lo ? `
         <div class="stats-spread">
           <div class="stats-spread-track">
