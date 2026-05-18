@@ -4812,25 +4812,14 @@ function renderStats(stats) {
     });
   });
 
-  // Fun: clicking any of the decorative icons spawns themed confetti.
-  // Each icon's burst uses the same SVG path the icon itself renders, so
-  // a click on the price-tag glyph really does shower price tags.
+  // Only the hero price-tag glyph is a fun easter-egg trigger here.
+  // The category icons inside the fact and best-time cards (trend
+  // arrows, chart, calendar, clock) stay as plain labels — making them
+  // tappable just turns them into pseudo-buttons that aren't actions.
   attachConfetti(el.querySelector('.stats-hero-glyph'), ICON_PATHS.priceTag, {
     colors: ['#34c759', '#007aff', '#ff9500', '#ffcc00', '#af52de'],
     count: 20, size: 18,
   });
-  attachConfetti(el.querySelector('.stats-fact-icon-good'), ICON_PATHS.trendDown, {
-    fixedColor: '#34c759', count: 14, size: 14,
-  });
-  attachConfetti(el.querySelector('.stats-fact-icon-bad'), ICON_PATHS.trendUp, {
-    fixedColor: '#ff3b30', count: 14, size: 14,
-  });
-  attachConfetti(el.querySelector('.stats-fact-icon-accent'), ICON_PATHS.chart, {
-    fixedColor: '#007aff', count: 14, size: 14,
-  });
-  const bestIcons = el.querySelectorAll('.best-time-card .best-time-icon-wrap');
-  if (bestIcons[0]) attachConfetti(bestIcons[0], ICON_PATHS.calendar, { fixedColor: '#007aff', count: 14, size: 14 });
-  if (bestIcons[1]) attachConfetti(bestIcons[1], ICON_PATHS.clock, { fixedColor: '#007aff', count: 14, size: 14 });
 
   // Every weekday tile is now interactive. The cheapest one keeps its
   // gold star burst; the others fire a small price-tag burst tinted by
@@ -4863,14 +4852,6 @@ function renderStats(stats) {
     });
   });
 
-  // Bonus pops: the "saved" pill rains green stars, and the period chip
-  // showers calendars.
-  el.querySelectorAll('.best-time-savings').forEach(pill => {
-    attachConfetti(pill, ICON_PATHS.star, { fixedColor: '#34c759', count: 12, size: 14 });
-  });
-  attachConfetti(el.querySelector('.stats-hero-period'), ICON_PATHS.calendar, {
-    fixedColor: '#007aff', count: 12, size: 14,
-  });
 }
 
 function setupSettings() {
