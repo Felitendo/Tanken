@@ -671,6 +671,95 @@ const haptic = (type = 'light') => {
   } catch {}
 };
 
+// Reusable SVG path data for confetti and decorative glyphs. Keeping them
+// in one place means a confetti burst exactly mirrors the icon it spawns
+// from (price tag → tag-shaped pieces, calendar → calendar pieces, …).
+const ICON_PATHS = {
+  priceTag: '<path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>',
+  trendDown: '<path d="M16 18l2.29-2.29-4.88-4.88-4 4L2 7.41 3.41 6l6 6 4-4 6.3 6.29L22 12v6z"/>',
+  trendUp: '<path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/>',
+  chart: '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>',
+  calendar: '<path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h5v5H7z"/>',
+  clock: '<path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>',
+  star: '<path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>',
+  fuel: '<path d="M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33 0 1.38 1.12 2.5 2.5 2.5.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14c0-1.1-.9-2-2-2h-1V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v16h10v-7.5h1.5v5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>',
+};
+
+// Fun "confetti" burst. Spawns N small SVG particles at (originX, originY),
+// each with random initial velocity, rotation, and scale. Particles obey a
+// crude gravity + drag model and fade out. Cleans itself up after ~1.2s.
+function spawnConfetti(originX, originY, svgInner, opts = {}) {
+  const count = opts.count ?? 18;
+  const colors = opts.colors ?? ['#34c759', '#007aff', '#ff9500', '#ffcc00', '#af52de', '#ff3b30'];
+  const size = opts.size ?? 18;
+  const fixedColor = opts.fixedColor;
+
+  const container = document.createElement('div');
+  container.className = 'confetti-burst';
+  document.body.appendChild(container);
+
+  const particles = [];
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    const color = fixedColor || colors[i % colors.length];
+    el.innerHTML = `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="${color}">${svgInner}</svg>`;
+    el.style.left = originX + 'px';
+    el.style.top = originY + 'px';
+    container.appendChild(el);
+    const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.3;
+    const speed = 260 + Math.random() * 320;
+    particles.push({
+      el, x: 0, y: 0,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      rot: Math.random() * 360,
+      rotVel: (Math.random() - 0.5) * 600,
+      scale: 0.6 + Math.random() * 0.6
+    });
+  }
+
+  const start = performance.now();
+  const dur = 1200;
+  let lastT = start;
+  function frame(now) {
+    const elapsed = now - start;
+    const dt = Math.min(0.05, (now - lastT) / 1000);
+    lastT = now;
+    if (elapsed > dur) { container.remove(); return; }
+    const t = elapsed / dur;
+    const opacity = t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35;
+    for (const p of particles) {
+      p.vy += 1500 * dt;
+      p.vx *= 0.97;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rot += p.rotVel * dt;
+      p.el.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y}px) rotate(${p.rot}deg) scale(${p.scale})`;
+      p.el.style.opacity = opacity.toFixed(3);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// Wire up an element so that clicking it triggers a confetti burst from its
+// centre, a haptic tap, and a brief scale-pop animation on the element.
+function attachConfetti(el, svgInner, opts = {}) {
+  if (!el || el._confettiAttached) return;
+  el._confettiAttached = true;
+  el.classList.add('confetti-trigger');
+  el.addEventListener('click', (e) => {
+    if (opts.stopPropagation !== false) e.stopPropagation();
+    haptic('light');
+    const r = el.getBoundingClientRect();
+    spawnConfetti(r.left + r.width / 2, r.top + r.height / 2, svgInner, opts);
+    el.classList.remove('confetti-pop');
+    void el.offsetWidth;
+    el.classList.add('confetti-pop');
+  });
+}
+
 async function init() {
   state.config = await api('/api/config');
   state.fuelType = state.config.fuel_type;
@@ -4626,6 +4715,34 @@ function renderStats(stats) {
       if (station) showStationSheet(station);
     });
   });
+
+  // Fun: clicking any of the decorative icons spawns themed confetti.
+  // Each icon's burst uses the same SVG path the icon itself renders, so
+  // a click on the price-tag glyph really does shower price tags.
+  attachConfetti(el.querySelector('.stats-hero-glyph'), ICON_PATHS.priceTag, {
+    colors: ['#34c759', '#007aff', '#ff9500', '#ffcc00', '#af52de'],
+    count: 20, size: 18,
+  });
+  attachConfetti(el.querySelector('.stats-fact-icon-good'), ICON_PATHS.trendDown, {
+    fixedColor: '#34c759', count: 14, size: 14,
+  });
+  attachConfetti(el.querySelector('.stats-fact-icon-bad'), ICON_PATHS.trendUp, {
+    fixedColor: '#ff3b30', count: 14, size: 14,
+  });
+  attachConfetti(el.querySelector('.stats-fact-icon-accent'), ICON_PATHS.chart, {
+    fixedColor: '#007aff', count: 14, size: 14,
+  });
+  const bestIcons = el.querySelectorAll('.best-time-card .best-time-icon-wrap');
+  if (bestIcons[0]) attachConfetti(bestIcons[0], ICON_PATHS.calendar, { fixedColor: '#007aff', count: 14, size: 14 });
+  if (bestIcons[1]) attachConfetti(bestIcons[1], ICON_PATHS.clock, { fixedColor: '#007aff', count: 14, size: 14 });
+
+  // The cheapest weekday tile (with the star badge) bursts gold stars.
+  const bestTile = el.querySelector('.stats-tile.is-best');
+  if (bestTile) {
+    attachConfetti(bestTile, ICON_PATHS.star, {
+      fixedColor: '#ffcc00', count: 16, size: 16,
+    });
+  }
 }
 
 function setupSettings() {
