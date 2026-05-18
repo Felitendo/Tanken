@@ -333,7 +333,7 @@ export const APP_SHELL = `
     </div>
 
     <div class="about-footer">
-      <span data-i18n="madeWith">Gemacht mit</span> ❤️ <span data-i18n="madeIn">in Deutschland</span>
+      <span data-i18n="madeWith">Gemacht mit</span> <span class="about-heart" role="button" tabindex="0" aria-label="❤️">❤️</span> <span data-i18n="madeIn">in Deutschland</span>
     </div>
 
   </div>

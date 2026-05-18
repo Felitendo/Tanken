@@ -683,6 +683,8 @@ const ICON_PATHS = {
   clock: '<path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>',
   star: '<path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>',
   fuel: '<path d="M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33 0 1.38 1.12 2.5 2.5 2.5.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14c0-1.1-.9-2-2-2h-1V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v16h10v-7.5h1.5v5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>',
+  heart: '<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>',
+  cloud: '<path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>',
 };
 
 // Fun "confetti" burst. Spawns N small SVG particles at (originX, originY),
@@ -703,7 +705,11 @@ function spawnConfetti(originX, originY, svgInner, opts = {}) {
     const el = document.createElement('div');
     el.className = 'confetti-piece';
     const color = fixedColor || colors[i % colors.length];
-    el.innerHTML = `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="${color}">${svgInner}</svg>`;
+    if (opts.imgSrc) {
+      el.innerHTML = `<img src="${opts.imgSrc}" width="${size}" height="${size}" alt="" style="display:block;border-radius:${opts.imgRadius || 0}px" draggable="false" />`;
+    } else {
+      el.innerHTML = `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="${color}">${svgInner}</svg>`;
+    }
     el.style.left = originX + 'px';
     el.style.top = originY + 'px';
     container.appendChild(el);
@@ -758,6 +764,24 @@ function attachConfetti(el, svgInner, opts = {}) {
     void el.offsetWidth;
     el.classList.add('confetti-pop');
   });
+}
+
+// Pop a small floating chip above (x, y) that fades in, holds, then fades
+// out. Useful for tiny tap targets like the hour heatmap cells where the
+// value can't fit inside the element itself.
+function showFloatingValue(originX, originY, text, color) {
+  const el = document.createElement('div');
+  el.className = 'floating-value';
+  el.textContent = text;
+  el.style.left = originX + 'px';
+  el.style.top = originY + 'px';
+  if (color) el.style.color = color;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 260);
+  }, 1100);
 }
 
 async function init() {
@@ -4619,7 +4643,8 @@ function renderStats(stats) {
       const color = rankColor(ratio);
       const isBest = rank === 0;
       const crown = isBest ? '<span class="stats-tile-crown" aria-hidden="true">★</span>' : '';
-      dayTiles += `<div class="stats-tile${isBest ? ' is-best' : ''}" style="--tile-color:${color}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">${formatPrice(data.avg).replace('€', '')}</div></div>`;
+      const fullDayName = (t('dayNames') || [])[dayNum] || data.name || abbr;
+      dayTiles += `<div class="stats-tile${isBest ? ' is-best' : ''}" style="--tile-color:${color}" data-tile-label="${fullDayName} · ${formatPrice(data.avg)}" data-tile-color="${color}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">${formatPrice(data.avg).replace('€', '')}</div></div>`;
     }
     html += `<div class="section"><div class="section-header">${t('weekdays')}</div><div class="stats-tile-grid stats-tile-grid-7">${dayTiles}</div></div>`;
   }
@@ -4641,7 +4666,8 @@ function renderStats(stats) {
       const color = rankColor(ratio);
       const isBest = data.rank === 0;
       const suffix = t('oclock') ? ` ${t('oclock')}` : '';
-      hourCells += `<div class="stats-hour-cell has-data${isBest ? ' is-best' : ''}" style="--cell-color:${color}" title="${hour}:00${suffix} — ${formatPrice(data.avg)}"></div>`;
+      const label = `${hour}:00${suffix} · ${formatPrice(data.avg)}`;
+      hourCells += `<div class="stats-hour-cell has-data${isBest ? ' is-best' : ''}" style="--cell-color:${color}" title="${label}" data-cell-label="${label}" data-cell-color="${color}"></div>`;
     }
     html += `
       <div class="section">
@@ -4736,13 +4762,45 @@ function renderStats(stats) {
   if (bestIcons[0]) attachConfetti(bestIcons[0], ICON_PATHS.calendar, { fixedColor: '#007aff', count: 14, size: 14 });
   if (bestIcons[1]) attachConfetti(bestIcons[1], ICON_PATHS.clock, { fixedColor: '#007aff', count: 14, size: 14 });
 
-  // The cheapest weekday tile (with the star badge) bursts gold stars.
-  const bestTile = el.querySelector('.stats-tile.is-best');
-  if (bestTile) {
-    attachConfetti(bestTile, ICON_PATHS.star, {
-      fixedColor: '#ffcc00', count: 16, size: 16,
+  // Every weekday tile is now interactive. The cheapest one keeps its
+  // gold star burst; the others fire a small price-tag burst tinted by
+  // their rank colour and reveal a floating chip with the full label.
+  el.querySelectorAll('.stats-tile').forEach(tile => {
+    if (tile.classList.contains('is-empty')) return;
+    const color = tile.dataset.tileColor;
+    const label = tile.dataset.tileLabel || '';
+    if (tile.classList.contains('is-best')) {
+      attachConfetti(tile, ICON_PATHS.star, { fixedColor: '#ffcc00', count: 16, size: 16 });
+    } else {
+      attachConfetti(tile, ICON_PATHS.priceTag, { fixedColor: color, count: 10, size: 14 });
+    }
+    tile.addEventListener('click', () => {
+      const r = tile.getBoundingClientRect();
+      if (label) showFloatingValue(r.left + r.width / 2, r.top, label, color);
     });
-  }
+  });
+
+  // Hour heatmap cells: each populated cell becomes a tap target. Bursts
+  // a small confetti in the cell's rank colour and floats a chip with the
+  // exact hour and price — solves the "tooltip on touch" gap.
+  el.querySelectorAll('.stats-hour-cell.has-data').forEach(cell => {
+    const color = cell.dataset.cellColor;
+    const label = cell.dataset.cellLabel || '';
+    attachConfetti(cell, ICON_PATHS.clock, { fixedColor: color, count: 7, size: 12 });
+    cell.addEventListener('click', () => {
+      const r = cell.getBoundingClientRect();
+      if (label) showFloatingValue(r.left + r.width / 2, r.top, label, color);
+    });
+  });
+
+  // Bonus pops: the "saved" pill rains green stars, and the period chip
+  // showers calendars.
+  el.querySelectorAll('.best-time-savings').forEach(pill => {
+    attachConfetti(pill, ICON_PATHS.star, { fixedColor: '#34c759', count: 12, size: 14 });
+  });
+  attachConfetti(el.querySelector('.stats-hero-period'), ICON_PATHS.calendar, {
+    fixedColor: '#007aff', count: 12, size: 14,
+  });
 }
 
 function setupSettings() {
@@ -4773,6 +4831,17 @@ function setupSettings() {
   });
 
   initAlertUI();
+
+  // Easter eggs in the About section — the app icon bursts copies of
+  // itself, and the heart in the footer rains hearts.
+  attachConfetti(document.querySelector('.about-app-icon'), null, {
+    imgSrc: '/icons/icon-192.png',
+    imgRadius: 6,
+    count: 16, size: 24,
+  });
+  attachConfetti(document.querySelector('.about-heart'), ICON_PATHS.heart, {
+    fixedColor: '#ff3b30', count: 18, size: 18,
+  });
 
   // Contributors collapsible
   const contribToggle = document.getElementById('about-contributors-toggle');
