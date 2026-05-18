@@ -47,6 +47,8 @@ export function readPriceHistory(filePath: string): HistoryEntry[] {
 export interface StationPriceInput {
   timestamp: string;
   station_name: string;
+  station_id?: string;
+  station_brand?: string;
   price: number;
 }
 
@@ -62,6 +64,10 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
   const dayPrices: Record<number, number[]> = {};
   const hourPrices: Record<number, number[]> = {};
   const stationPrices: Record<string, number[]> = {};
+  // Most-recent station_id and station_brand seen per station name, so the
+  // ranking can carry enough metadata for the client to open the same
+  // station detail UI the map uses.
+  const stationMeta: Record<string, { id?: string; brand?: string }> = {};
 
   // Use individual station data for day/hour/station stats if available
   const priceSource = stationData && stationData.length > 0 ? stationData : null;
@@ -83,6 +89,11 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
       if (sp.station_name) {
         stationPrices[sp.station_name] = stationPrices[sp.station_name] ?? [];
         stationPrices[sp.station_name].push(sp.price);
+        // Keep the most recent id/brand we see (input is sorted ASC by time).
+        const meta = stationMeta[sp.station_name] || {};
+        if (sp.station_id) meta.id = sp.station_id;
+        if (sp.station_brand) meta.brand = sp.station_brand;
+        stationMeta[sp.station_name] = meta;
       }
     }
   } else {
@@ -126,7 +137,9 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
       station,
       avg: prices.reduce((sum, price) => sum + price, 0) / prices.length,
       min: Math.min(...prices),
-      count: prices.length
+      count: prices.length,
+      id: stationMeta[station]?.id,
+      brand: stationMeta[station]?.brand,
     }))
     .sort((left, right) => left.avg - right.avg);
 

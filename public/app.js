@@ -3326,9 +3326,13 @@ function setupPullToRefresh() {
   document.addEventListener('touchend', onTouchEnd, { passive: true });
 }
 
-function showStationSheet(station) {
+function showStationSheet(station, opts = {}) {
   const sheet = document.getElementById('bottom-sheet');
   const body = document.getElementById('bottom-sheet-body');
+  // Layout mode — the default bottom sheet vs. a centred modal popup
+  // (used by the stats tab where the user clicks a station from a
+  // ranking and expects the detail to appear front-and-centre).
+  sheet.classList.toggle('centered', !!opts.centered);
   const priceParts = formatPriceParts(station.price);
   const color = priceColorStable(station.price, station._locationId, station.lat, station.lng);
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
@@ -3369,10 +3373,10 @@ function showStationSheet(station) {
       ${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}
       <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>
     </div>
-    <div class="sheet-info-row">
+    ${(station.street || station.place) ? `<div class="sheet-info-row">
       <svg class="sheet-info-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
-      <span>${fixEnc(station.street)} ${station.houseNumber || ''}, ${station.postCode || ''} ${fixEnc(station.place)}</span>
-    </div>
+      <span>${fixEnc(station.street || '')} ${station.houseNumber || ''}${(station.street || station.houseNumber) && (station.postCode || station.place) ? ', ' : ''}${station.postCode || ''} ${fixEnc(station.place || '')}</span>
+    </div>` : ''}
     <div class="sheet-info-row" id="sheet-status-row">
       <span class="sheet-info-icon"><span id="sheet-status-dot" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:${station.isOpen ? '#34c759' : '#ff3b30'}"></span></span>
       <span id="sheet-status-text">${station.isOpen ? t('open') : t('closed')}</span>
@@ -3383,7 +3387,7 @@ function showStationSheet(station) {
       <span><strong>${t('lastUpdated')}:</strong> ${formatDataAge(state.dataTimestamp)}</span>
     </div>` : ''}
     <div class="sheet-hours-section" id="sheet-hours-section"></div>
-    <div class="sheet-nav-buttons${isAndroid ? ' android-only' : ''}">
+    ${(station.lat != null && station.lng != null) ? `<div class="sheet-nav-buttons${isAndroid ? ' android-only' : ''}">
       <a href="${gmapsUrl}" target="_blank" class="sheet-nav-btn gmaps">
         <img src="/icons/google-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
         <span>Google Maps</span>
@@ -3392,7 +3396,7 @@ function showStationSheet(station) {
         <img src="/icons/apple-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
         <span>Apple Maps</span>
       </a>`}
-    </div>
+    </div>` : ''}
     <div class="sheet-chart-section">
       <div class="sheet-chart-header-row">
         <div class="sheet-chart-header">${t('priceHistory')}</div>
@@ -3440,13 +3444,16 @@ function showStationSheet(station) {
   state.sheetExpanded = false;
   const handleArea = document.getElementById('sheet-handle-area');
 
-  // Add expand button for desktop
+  // Skip the desktop expand button when shown as a centred popup —
+  // there's no "drag to expand" affordance in modal mode.
   content.querySelector('.sheet-expand-btn')?.remove();
-  const expandBtn = document.createElement('button');
-  expandBtn.className = 'sheet-expand-btn';
-  updateExpandBtnIcon(expandBtn, false);
-  expandBtn.addEventListener('click', () => toggleSheetExpanded(content));
-  content.appendChild(expandBtn);
+  if (!opts.centered) {
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'sheet-expand-btn';
+    updateExpandBtnIcon(expandBtn, false);
+    expandBtn.addEventListener('click', () => toggleSheetExpanded(content));
+    content.appendChild(expandBtn);
+  }
 
   const closeSheet = () => {
     if (state.sheetChart) { state.sheetChart.destroy(); state.sheetChart = null; }
@@ -3454,18 +3461,40 @@ function showStationSheet(station) {
       clearInterval(state._manualScanCountdownTimer);
       state._manualScanCountdownTimer = null;
     }
+    if (state._centeredEscapeListener) {
+      document.removeEventListener('keydown', state._centeredEscapeListener);
+      state._centeredEscapeListener = null;
+    }
     state.sheetExpanded = false;
     content.style.transform = '';
     content.classList.remove('dragging', 'snapping', 'expanded');
     content.querySelector('.sheet-expand-btn')?.remove();
     content.querySelector('.sheet-desktop-close')?.remove();
+    content.querySelector('.centered-close-btn')?.remove();
     backdrop.style.opacity = '';
     sheet.classList.add('hidden');
+    sheet.classList.remove('centered');
     sheet.setAttribute('aria-hidden', 'true');
     backdrop.removeEventListener('click', closeSheet);
     if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
     if (state.defaultBounds) showResetViewBtn();
   };
+
+  // Inject a corner close button when shown as a centred popup —
+  // there's no swipe-handle in modal mode. Escape also closes.
+  if (opts.centered) {
+    content.querySelector('.centered-close-btn')?.remove();
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'centered-close-btn';
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+    closeBtn.addEventListener('click', closeSheet);
+    content.appendChild(closeBtn);
+    const onEscape = (e) => { if (e.key === 'Escape') closeSheet(); };
+    document.addEventListener('keydown', onEscape);
+    state._centeredEscapeListener = onEscape;
+  }
 
   // Tick the "expires in" countdown + progress bar if the station came from
   // a manual scan. The bar starts full and depletes over the TTL window;
@@ -3509,8 +3538,9 @@ function showStationSheet(station) {
   }
   backdrop.addEventListener('click', closeSheet);
 
-  // --- Desktop: add close button for side panel ---
-  if (window.matchMedia('(min-width: 900px)').matches) {
+  // --- Desktop: add close button for side panel (skip in centered
+  //     popup mode — we already injected our own corner X). ---
+  if (!opts.centered && window.matchMedia('(min-width: 900px)').matches) {
     content.querySelector('.sheet-desktop-close')?.remove();
     const closeBtn = document.createElement('button');
     closeBtn.className = 'sheet-desktop-close';
@@ -3519,8 +3549,10 @@ function showStationSheet(station) {
     content.prepend(closeBtn);
   }
 
-  // --- Real drag-to-dismiss ---
-  setupSheetDrag(content, handleArea, backdrop, closeSheet);
+  // --- Real drag-to-dismiss (only on the bottom sheet, not the modal). ---
+  if (!opts.centered) {
+    setupSheetDrag(content, handleArea, backdrop, closeSheet);
+  }
 
   state.sheetStationName = station.name;
   state.sheetStation = station;
@@ -4742,7 +4774,10 @@ function renderStats(stats) {
       const color = rankColor(ratio);
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
       const isMedal = i < 3;
-      html += `<div class="ranking-item station-ranking-item${isMedal ? ' ranking-medal' : ''}" data-station-name="${fixEnc(s.station)}" style="--rank-color:${color}"><div class="ranking-pos">${medal}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price" style="color:${color}">${formatPrice(s.avg)}</div></div>`;
+      const idAttr = s.id ? ` data-station-id="${s.id}"` : '';
+      const brandAttr = s.brand ? ` data-station-brand="${fixEnc(s.brand)}"` : '';
+      const avgAttr = ` data-station-avg="${s.avg}"`;
+      html += `<div class="ranking-item station-ranking-item${isMedal ? ' ranking-medal' : ''}" data-station-name="${fixEnc(s.station)}"${idAttr}${brandAttr}${avgAttr} style="--rank-color:${color}"><div class="ranking-pos">${medal}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price" style="color:${color}">${formatPrice(s.avg)}</div></div>`;
     });
     html += '</div></div>';
   }
@@ -4790,11 +4825,14 @@ function renderStats(stats) {
   });
 
   el.querySelectorAll('.station-ranking-item').forEach(item => {
-    item.addEventListener('click', () => {
+    item.addEventListener('click', async () => {
       haptic('light');
       const name = item.dataset.stationName;
-      const station = (state.stations || []).find(s => (s.name || s.brand) === name);
-      if (station) showStationSheet(station);
+      const id = item.dataset.stationId;
+      const brand = item.dataset.stationBrand || '';
+      const avg = parseFloat(item.dataset.stationAvg) || null;
+      const station = await resolveRankedStation({ id, name, brand, avg });
+      if (station) showStationSheet(station, { centered: true });
     });
   });
 
@@ -4825,6 +4863,59 @@ function renderStats(stats) {
     });
   });
 
+}
+
+// Resolve a station from the Stats ranking into the shape showStationSheet
+// expects. Tries the in-memory map cache first (covers users who've been on
+// the map for this area), then falls back to /api/station/:id (works for
+// German Tankerkönig IDs). Last resort: a minimal pseudo-station built
+// from just the name + brand + average price so the sheet at least opens
+// with what we know.
+async function resolveRankedStation({ id, name, brand, avg }) {
+  const cached = (state.stations || []).find(s =>
+    (id && s.id === id) || (name && (s.name === name || s.brand === name))
+  );
+  if (cached) return cached;
+
+  if (id) {
+    try {
+      const remote = await api(`/api/station/${encodeURIComponent(id)}`);
+      if (remote && !remote.error) {
+        return {
+          id: remote.id || id,
+          name: remote.name || name,
+          brand: remote.brand || brand || '',
+          street: remote.street || '',
+          houseNumber: remote.houseNumber || '',
+          postCode: remote.postCode || '',
+          place: remote.place || '',
+          lat: remote.lat,
+          lng: remote.lng,
+          price: avg ?? remote.price ?? 0,
+          isOpen: remote.isOpen,
+          openingTimes: remote.openingTimes,
+          overrides: remote.overrides,
+        };
+      }
+    } catch { /* fall through to pseudo */ }
+  }
+
+  // No live data — give the sheet enough to render its header + history
+  // chart (which keys on the station name) without exploding on missing
+  // fields. Address/hours/maps buttons will simply read as empty.
+  return {
+    id,
+    name,
+    brand,
+    street: '',
+    houseNumber: '',
+    postCode: '',
+    place: '',
+    lat: null,
+    lng: null,
+    price: avg ?? 0,
+    isOpen: undefined,
+  };
 }
 
 // Helper: convert an "rgb(r, g, b)" string to "rgba(r, g, b, a)".

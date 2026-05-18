@@ -258,7 +258,7 @@ export interface HistoryEntry {
 export interface HistoryStats {
   dayAvgs: Array<{ day: number; name: string; avg: number; count: number }>;
   hourAvgs: Array<{ hour: number; avg: number; count: number }>;
-  stationRanking: Array<{ station: string; avg: number; min: number; count: number }>;
+  stationRanking: Array<{ station: string; avg: number; min: number; count: number; id?: string; brand?: string }>;
   overall: {
     lowest_ever: number;
     highest_ever: number;

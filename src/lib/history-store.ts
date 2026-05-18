@@ -99,6 +99,7 @@ export interface StationPriceRow {
   timestamp: string;
   station_name: string;
   station_brand: string;
+  station_id?: string;
   price: number;
   location_id?: string;
 }
@@ -118,10 +119,11 @@ export async function readStationPrices(locationId?: string, country?: HistoryCo
     timestamp: Date;
     station_name: string;
     station_brand: string;
+    station_id: string | null;
     price: number;
     location_id: string | null;
   }>(
-    `SELECT timestamp, station_name, station_brand, price, location_id
+    `SELECT timestamp, station_name, station_brand, station_id, price, location_id
      FROM station_prices ${where}
      ORDER BY timestamp ASC`,
     params
@@ -130,6 +132,7 @@ export async function readStationPrices(locationId?: string, country?: HistoryCo
     timestamp: r.timestamp.toISOString(),
     station_name: r.station_name,
     station_brand: r.station_brand,
+    station_id: r.station_id || undefined,
     price: Number(r.price),
     location_id: r.location_id || undefined,
   }));
