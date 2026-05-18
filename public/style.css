@@ -3848,6 +3848,18 @@ html[data-theme="dark"] .pwa-popup-icon img,
     margin-left: 0;
     margin-right: 0;
   }
+  #stats-content > .stats-hero {
+    min-height: 96px;
+    padding: var(--sp-4) var(--sp-5);
+  }
+  #stats-content .metric-card,
+  #stats-content .best-time-card {
+    min-height: 88px;
+    padding: var(--sp-4) var(--sp-5);
+  }
+  #stats-content .stats-hero-value {
+    font-size: 40px;
+  }
 
   .metric-card:hover,
   .best-time-card:hover,
