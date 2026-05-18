@@ -698,7 +698,7 @@ const ICON_PATHS = {
 // each with random initial velocity, rotation, and scale. Particles obey a
 // crude gravity + drag model and fade out. Cleans itself up after ~1.2s.
 function spawnConfetti(originX, originY, svgInner, opts = {}) {
-  const count = opts.count ?? 18;
+  const count = opts.count ?? 26;
   const colors = opts.colors ?? ['#34c759', '#007aff', '#ff9500', '#ffcc00', '#af52de', '#ff3b30'];
   const size = opts.size ?? 18;
   const fixedColor = opts.fixedColor;
@@ -721,19 +721,19 @@ function spawnConfetti(originX, originY, svgInner, opts = {}) {
     el.style.top = originY + 'px';
     container.appendChild(el);
     const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.3;
-    const speed = 260 + Math.random() * 320;
+    const speed = 240 + Math.random() * 320;
     particles.push({
       el, x: 0, y: 0,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       rot: Math.random() * 360,
-      rotVel: (Math.random() - 0.5) * 600,
-      scale: 0.6 + Math.random() * 0.6
+      rotVel: (Math.random() - 0.5) * 480,
+      scale: 0.65 + Math.random() * 0.55
     });
   }
 
   const start = performance.now();
-  const dur = 1200;
+  const dur = 1900;
   let lastT = start;
   function frame(now) {
     const elapsed = now - start;
@@ -741,10 +741,10 @@ function spawnConfetti(originX, originY, svgInner, opts = {}) {
     lastT = now;
     if (elapsed > dur) { container.remove(); return; }
     const t = elapsed / dur;
-    const opacity = t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35;
+    const opacity = t < 0.72 ? 1 : 1 - (t - 0.72) / 0.28;
     for (const p of particles) {
-      p.vy += 1500 * dt;
-      p.vx *= 0.97;
+      p.vy += 800 * dt;
+      p.vx *= 0.985;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.rot += p.rotVel * dt;
@@ -4849,7 +4849,7 @@ function renderStats(stats) {
       const barWidth = Math.round(expensiveness * 100);
       const crown = isBest ? '<span class="stats-tile-crown" aria-hidden="true">★</span>' : '';
       const fullDayName = (t('dayNames') || [])[dayNum] || data.name || abbr;
-      dayTiles += `<div class="stats-tile${isBest ? ' is-best' : ''}" style="--tile-color:${color}" data-tile-label="${fullDayName} · ${formatPrice(data.avg)}" data-tile-color="${color}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">${formatPrice(data.avg).replace('€', '')}</div><div class="stats-tile-bar"><div class="stats-tile-bar-fill" style="width:${barWidth}%"></div></div></div>`;
+      dayTiles += `<div class="stats-tile${isBest ? ' is-best' : ''}" style="--tile-color:${color}" data-tile-label="${fullDayName} · ${formatPrice(data.avg)}" data-tile-color="${color}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value" style="color:${color}">${formatPrice(data.avg)}</div><div class="stats-tile-bar"><div class="stats-tile-bar-fill" style="width:${barWidth}%"></div></div></div>`;
     }
     html += `<div class="section"><div class="section-header">${t('weekdays')}</div><div class="stats-tile-grid stats-tile-grid-7">${dayTiles}</div></div>`;
   }
@@ -4947,7 +4947,7 @@ function renderStats(stats) {
   // tappable just turns them into pseudo-buttons that aren't actions.
   attachConfetti(el.querySelector('.stats-hero-glyph'), ICON_PATHS.priceTag, {
     colors: ['#34c759', '#007aff', '#ff9500', '#ffcc00', '#af52de'],
-    count: 20, size: 18,
+    count: 30, size: 18,
   });
 
   // Every weekday tile is now interactive. The cheapest one keeps its
@@ -4958,9 +4958,9 @@ function renderStats(stats) {
     const color = tile.dataset.tileColor;
     const label = tile.dataset.tileLabel || '';
     if (tile.classList.contains('is-best')) {
-      attachConfetti(tile, ICON_PATHS.star, { fixedColor: '#34c759', count: 16, size: 16 });
+      attachConfetti(tile, ICON_PATHS.star, { fixedColor: '#34c759', count: 24, size: 16 });
     } else {
-      attachConfetti(tile, ICON_PATHS.priceTag, { fixedColor: color, count: 10, size: 14 });
+      attachConfetti(tile, ICON_PATHS.priceTag, { fixedColor: color, count: 14, size: 14 });
     }
     tile.addEventListener('click', () => {
       const r = tile.getBoundingClientRect();
@@ -5021,6 +5021,19 @@ async function resolveRankedStation({ id, name, brand, avg }) {
     price: avg ?? 0,
     isOpen: undefined,
   };
+}
+
+// Lazily create (and reuse) a single floating tooltip element for the
+// stats hour chart so the price can be coloured per-hover.
+function ensureStatsHourTooltipEl() {
+  let el = document.getElementById('stats-hour-tooltip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'stats-hour-tooltip';
+    el.className = 'stats-hour-tooltip';
+    document.body.appendChild(el);
+  }
+  return el;
 }
 
 // Helper: convert an "rgb(r, g, b)" string to "rgba(r, g, b, a)".
@@ -5139,23 +5152,34 @@ function renderStatsHourChart(stats) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: 'rgba(20, 20, 20, 0.94)',
-          titleColor: 'rgba(255, 255, 255, 0.6)',
-          bodyColor: '#fff',
-          titleFont: { size: 11, weight: '600', family: '-apple-system, BlinkMacSystemFont, Roboto, sans-serif' },
-          bodyFont: { size: 16, weight: '700', family: '-apple-system, BlinkMacSystemFont, Roboto, sans-serif' },
-          padding: 12,
-          cornerRadius: 12,
-          displayColors: false,
-          caretSize: 6,
-          callbacks: {
-            title: (items) => {
-              if (!items.length) return '';
-              const hour = items[0].dataIndex;
-              const suffix = t('oclock');
-              return suffix ? `${hour}:00 ${suffix}` : `${hour}:00`;
-            },
-            label: (c) => c.parsed.y == null ? '' : formatPrice(c.parsed.y),
+          // Replace Chart.js's flat tooltip with a custom HTML tooltip
+          // so the price text can carry the hovered hour's rank colour
+          // (Chart.js doesn't allow per-tooltip body colours otherwise).
+          enabled: false,
+          external: (ctx) => {
+            const el = ensureStatsHourTooltipEl();
+            const tt = ctx.tooltip;
+            if (!tt || tt.opacity === 0 || !tt.dataPoints || !tt.dataPoints.length) {
+              el.classList.remove('show');
+              return;
+            }
+            const dp = tt.dataPoints[0];
+            if (dp.parsed.y == null) {
+              el.classList.remove('show');
+              return;
+            }
+            const idx = dp.dataIndex;
+            const color = pointBg[idx] || '#ff9500';
+            const suffix = t('oclock');
+            const hourLabel = suffix ? `${idx}:00 ${suffix}` : `${idx}:00`;
+            el.innerHTML = `
+              <div class="stats-hour-tooltip-time">${hourLabel}</div>
+              <div class="stats-hour-tooltip-price" style="color:${color}">${formatPrice(dp.parsed.y)}</div>
+            `;
+            const rect = ctx.chart.canvas.getBoundingClientRect();
+            el.style.left = (rect.left + window.scrollX + tt.caretX) + 'px';
+            el.style.top = (rect.top + window.scrollY + tt.caretY) + 'px';
+            el.classList.add('show');
           }
         }
       },
@@ -5252,10 +5276,10 @@ function setupSettings() {
   attachConfetti(document.querySelector('.about-app-icon'), null, {
     imgSrc: '/icons/icon-192.png',
     imgRadius: 6,
-    count: 16, size: 24,
+    count: 24, size: 24,
   });
   attachConfetti(document.querySelector('.about-heart'), ICON_PATHS.heart, {
-    fixedColor: '#ff3b30', count: 18, size: 18,
+    fixedColor: '#ff3b30', count: 28, size: 18,
   });
 
   // Contributors collapsible

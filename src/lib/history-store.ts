@@ -67,13 +67,23 @@ export async function readPriceHistoryByStation(stationName: string, stationId?:
   }));
 }
 
-export async function readPriceHistoryFromDatabase(locationId?: string, country?: HistoryCountry): Promise<HistoryEntry[]> {
+export async function readPriceHistoryFromDatabase(
+  locationId?: string,
+  country?: HistoryCountry,
+  sinceDays?: number,
+): Promise<HistoryEntry[]> {
+  const sinceClause = (sinceDays && sinceDays > 0)
+    ? `timestamp >= NOW() - INTERVAL '${Math.floor(sinceDays)} days'`
+    : '';
+
   if (locationId) {
+    const clauses = ['location_id = $1'];
+    if (sinceClause) clauses.push(sinceClause);
     const result = await database.query<HistoryRow>(
       `
         SELECT timestamp, min_price, avg_price, max_price, station, num_stations, location_id
         FROM price_history
-        WHERE location_id = $1
+        WHERE ${clauses.join(' AND ')}
         ORDER BY timestamp ASC
       `,
       [locationId]
@@ -82,7 +92,10 @@ export async function readPriceHistoryFromDatabase(locationId?: string, country?
   }
 
   const cc = countryClause(country, 1);
-  const where = cc.sql ? `WHERE ${cc.sql}` : '';
+  const clauses: string[] = [];
+  if (cc.sql) clauses.push(cc.sql);
+  if (sinceClause) clauses.push(sinceClause);
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const result = await database.query<HistoryRow>(
     `
       SELECT timestamp, min_price, avg_price, max_price, station, num_stations, location_id
@@ -104,7 +117,11 @@ export interface StationPriceRow {
   location_id?: string;
 }
 
-export async function readStationPrices(locationId?: string, country?: HistoryCountry): Promise<StationPriceRow[]> {
+export async function readStationPrices(
+  locationId?: string,
+  country?: HistoryCountry,
+  sinceDays?: number,
+): Promise<StationPriceRow[]> {
   const clauses: string[] = [];
   const params: (string | number)[] = [];
   if (locationId) {
@@ -113,6 +130,9 @@ export async function readStationPrices(locationId?: string, country?: HistoryCo
   } else {
     const cc = countryClause(country, params.length + 1);
     if (cc.sql) { params.push(...cc.params); clauses.push(cc.sql); }
+  }
+  if (sinceDays && sinceDays > 0) {
+    clauses.push(`timestamp >= NOW() - INTERVAL '${Math.floor(sinceDays)} days'`);
   }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const result = await database.query<{

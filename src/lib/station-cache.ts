@@ -268,12 +268,21 @@ export async function persistPriceSnapshot(): Promise<number> {
   const db = getDb();
   if (!db) return 0;
 
-  // Clean up old history
+  // Clean up old history. Both station_prices (per-station snapshots
+  // feeding the heatmap & stats) and price_history (aggregated rows
+  // feeding the history chart) share the same retention window so
+  // neither table grows unbounded.
   await db.query(
     `DELETE FROM station_prices WHERE timestamp < NOW() - ($1::int * INTERVAL '1 day')`,
     [PRICE_HISTORY_RETENTION_DAYS]
   ).catch(err => {
-    console.error('[StationCache] History cleanup error:', err instanceof Error ? err.message : err);
+    console.error('[StationCache] station_prices cleanup error:', err instanceof Error ? err.message : err);
+  });
+  await db.query(
+    `DELETE FROM price_history WHERE timestamp < NOW() - ($1::int * INTERVAL '1 day')`,
+    [PRICE_HISTORY_RETENTION_DAYS]
+  ).catch(err => {
+    console.error('[StationCache] price_history cleanup error:', err instanceof Error ? err.message : err);
   });
 
   const timestamp = new Date().toISOString();

@@ -805,16 +805,20 @@ body.logged-in .cloud-sync-hint {
   line-height: 1;
 }
 .stats-tile-value {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--color-text);
+  color: var(--tile-color, var(--color-text));
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   line-height: 1.1;
   margin-top: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.stats-tile.is-best .stats-tile-value {
-  color: var(--tile-color);
+.stats-tile.is-empty .stats-tile-value {
+  color: var(--color-hint);
 }
 .stats-tile-bar {
   margin-top: auto;
@@ -841,6 +845,42 @@ body.logged-in .cloud-sync-hint {
   color: var(--tile-color);
   z-index: 2;
   line-height: 1;
+}
+
+/* === Hour line chart — custom HTML tooltip so the price text can pick
+       up the hovered hour's rank colour. === */
+.stats-hour-tooltip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 99997;
+  background: rgba(20, 20, 20, 0.94);
+  border-radius: 12px;
+  padding: 9px 14px;
+  transform: translate(-50%, calc(-100% - 14px)) scale(0.94);
+  transform-origin: bottom center;
+  opacity: 0;
+  transition: opacity 0.16s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28);
+  white-space: nowrap;
+  font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  text-align: center;
+}
+.stats-hour-tooltip.show {
+  opacity: 1;
+  transform: translate(-50%, calc(-100% - 14px)) scale(1);
+}
+.stats-hour-tooltip-time {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.62);
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+.stats-hour-tooltip-price {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 /* === Hour line chart — Chart.js canvas wrapper === */
