@@ -4583,6 +4583,9 @@ function renderChart(data) {
           },
           grid: { color: sepColor, lineWidth: 0.5 },
           border: { display: false },
+          // Padding around the data range so the line + halo never
+          // clip against the chart's top/bottom edges.
+          grace: '12%',
         }
       }
     },
@@ -4684,10 +4687,14 @@ function renderChart(data) {
 
   // Make the extreme cards open the same centred popup the stats
   // ranking does. resolveRankedStation handles cache → /api/station/:id
-  // → minimal pseudo fallback.
+  // → minimal pseudo fallback. Animate in only on the first render so
+  // period/location refreshes don't re-trigger the slide-in.
+  const isFresh = !isUpdate;
   summary.querySelectorAll('.history-extreme-card').forEach((card, i) => {
-    card.style.animationDelay = `${Math.min(i * 60, 120)}ms`;
-    card.classList.add('anim-in');
+    if (isFresh) {
+      card.style.animationDelay = `${Math.min(i * 60, 120)}ms`;
+      card.classList.add('anim-in');
+    }
     if (card.classList.contains('is-empty')) return;
     card.addEventListener('click', async () => {
       haptic('light');
@@ -4792,9 +4799,13 @@ function renderHistoryStats(data) {
       </div>` : ''}
     </div>`;
 
-  // Slide-in + count-up on the hero just like the stats tab does for
-  // its own headline value. Deferred to the next frame so the DOM write
-  // doesn't compete with the tab-switch animation.
+  // Slide-in + count-up only on the very first render of the tab —
+  // re-running them on every period-chip / location switch reads as a
+  // jittery "everything just re-animated" effect. state.chart is the
+  // marker: it's truthy whenever we're about to swap data (the chart
+  // hasn't been destroyed yet at this point in renderChart).
+  const isFresh = !state.chart;
+  if (!isFresh) return;
   requestAnimationFrame(() => {
     const card = el.querySelector('.history-hero-card');
     if (card) card.classList.add('anim-in');
@@ -4954,6 +4965,7 @@ function renderHourChart(entries, dayKey) {
           },
           grid: { color: sepColor, lineWidth: 0.5 },
           border: { display: false },
+          grace: '12%',
         }
       }
     },
@@ -5599,6 +5611,10 @@ function renderStatsHourChart(stats) {
         y: {
           display: false,
           beginAtZero: false,
+          // Breathing room above and below the actual range so the
+          // line never touches the chart edges (the lowest/highest
+          // hour was getting clipped against the bottom).
+          grace: '18%',
         }
       }
     },
