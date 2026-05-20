@@ -190,52 +190,88 @@ export const APP_SHELL = `
 
     <div class="section">
       <div class="section-header"><span data-i18n="priceAlert">PREISALARM</span><span class="sync-badge" data-sync-key="alert" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg class="sync-icon-idle" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg><svg class="sync-icon-spin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg><svg class="sync-icon-ok" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.09-5.09L16.5 10.5 10 17z"/></svg></span></div>
-      <div class="card settings-card">
-        <div class="card-row card-toggle-row">
-          <div class="card-row-left">
+      <div class="card alert-card" id="alert-card">
+        <div class="alert-toggle-row">
+          <div class="alert-toggle-left">
             <div class="settings-icon-chip settings-icon-accent" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
             </div>
-            <span class="settings-row-label" data-i18n="notification">Benachrichtigung</span>
+            <div class="alert-toggle-text">
+              <div class="alert-toggle-title" data-i18n="notification">Benachrichtigung</div>
+              <div class="alert-toggle-sub" data-i18n="alertBackgroundHint">Läuft im Hintergrund, auch wenn die App geschlossen ist.</div>
+            </div>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="alert-toggle" aria-label="Preisalarm aktivieren" />
             <span class="toggle-track"></span>
           </label>
         </div>
+
         <div id="alert-config" class="alert-config-body" style="display:none">
-          <div class="alert-config-group">
+          <!-- Threshold hero — big editable number with stepper buttons -->
+          <div class="alert-threshold">
+            <div class="alert-threshold-head" data-i18n="threshold">Schwellenwert</div>
+            <div class="alert-threshold-row">
+              <button id="alert-minus" type="button" class="alert-step-btn" aria-label="Schwellenwert verringern">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M19 13H5v-2h14v2z"/></svg>
+              </button>
+              <div class="alert-threshold-display" id="alert-price-display" aria-live="polite">2,00€</div>
+              <button id="alert-plus" type="button" class="alert-step-btn" aria-label="Schwellenwert erhöhen">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              </button>
+            </div>
+            <!-- Threshold-vs-current-cheapest visualisation -->
+            <div class="alert-threshold-bar" id="alert-threshold-bar" hidden>
+              <div class="alert-threshold-bar-track"></div>
+              <div class="alert-threshold-bar-current" id="alert-bar-current"></div>
+              <div class="alert-threshold-bar-marker" id="alert-bar-marker"></div>
+              <div class="alert-threshold-bar-labels">
+                <span id="alert-bar-low"></span>
+                <span id="alert-bar-high"></span>
+              </div>
+            </div>
+            <div class="alert-ref-price" id="alert-ref-price"></div>
+          </div>
+
+          <!-- Channel switcher + per-channel config -->
+          <div class="alert-channel-section">
             <div class="alert-config-label" data-i18n="notificationChannel">Benachrichtigungskanal</div>
             <div id="alert-channel-picker" class="alert-channel-picker" role="tablist">
               <button class="alert-ch-seg active" type="button" role="tab" aria-selected="true" data-channel="ntfy">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M21 11.5c0-1.66-1.34-3-3-3h-2.5c-.55 0-1-.45-1-1s.45-1 1-1H17V5h-1.5C13.57 5 12 6.57 12 8.5s1.57 3.5 3.5 3.5H18c.55 0 1 .45 1 1s-.45 1-1 1H6c-2.21 0-4 1.79-4 4s1.79 4 4 4h12c2.21 0 4-1.79 4-4 0-1.38-.7-2.59-1.76-3.31C20.4 13.27 21 12.45 21 11.5z"/></svg>
                 ntfy.sh
               </button>
               <button class="alert-ch-seg" type="button" role="tab" aria-selected="false" data-channel="email" id="alert-ch-email" style="display:none">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
                 E-Mail
               </button>
             </div>
-          </div>
-          <div id="alert-ntfy-config" class="alert-config-group">
-            <input type="text" id="alert-ntfy-topic" class="alert-input" data-i18n-placeholder="ntfyTopicPlaceholder" placeholder="ntfy Topic (z.B. mein-tankalarm)" aria-label="ntfy Topic" />
-            <div class="alert-input-hint" id="alert-ntfy-hint" data-i18n-html="ntfyHint">Installiere die <a href="https://ntfy.sh" target="_blank" rel="noopener" style="color:var(--color-accent)">ntfy App</a> und abonniere dein Topic.</div>
-          </div>
-          <div id="alert-email-config" class="alert-config-group" style="display:none">
-            <input type="email" id="alert-email-address" class="alert-input" data-i18n-placeholder="emailPlaceholder" placeholder="E-Mail-Adresse" aria-label="E-Mail-Adresse" />
-            <div class="alert-input-hint" data-i18n="emailHint">Preisalarme werden an diese Adresse gesendet.</div>
-          </div>
-          <div class="alert-ref-price" id="alert-ref-price"></div>
-          <div class="alert-price-row">
-            <button id="alert-minus" type="button" class="alert-step-btn" aria-label="Schwellenwert verringern">−</button>
-            <div style="text-align:center">
-              <div id="alert-price-display" class="alert-price-display" aria-live="polite">2,00€</div>
-              <div class="alert-price-caption" data-i18n="threshold">Schwellenwert</div>
+            <div id="alert-ntfy-config" class="alert-config-group">
+              <input type="text" id="alert-ntfy-topic" class="alert-input" data-i18n-placeholder="ntfyTopicPlaceholder" placeholder="ntfy Topic (z.B. mein-tankalarm)" aria-label="ntfy Topic" />
+              <div class="alert-input-hint" id="alert-ntfy-hint" data-i18n-html="ntfyHint">Installiere die <a href="https://ntfy.sh" target="_blank" rel="noopener" style="color:var(--color-accent)">ntfy App</a> und abonniere dein Topic.</div>
             </div>
-            <button id="alert-plus" type="button" class="alert-step-btn" aria-label="Schwellenwert erhöhen">+</button>
+            <div id="alert-email-config" class="alert-config-group" style="display:none">
+              <input type="email" id="alert-email-address" class="alert-input" data-i18n-placeholder="emailPlaceholder" placeholder="E-Mail-Adresse" aria-label="E-Mail-Adresse" />
+              <div class="alert-input-hint" data-i18n="emailHint">Preisalarme werden an diese Adresse gesendet.</div>
+            </div>
           </div>
-          <button id="alert-save" type="button" class="alert-save-btn" data-i18n="saveAlarm">Alarm speichern</button>
-          <button id="alert-test" type="button" class="alert-test-btn" data-i18n="sendTestNotification">Test-Benachrichtigung senden</button>
+
+          <!-- Status / activity panel — surfaces the background check -->
+          <div class="alert-status-panel" id="alert-status-panel">
+            <div class="alert-status-row" id="alert-status-state">
+              <span class="alert-status-dot" aria-hidden="true"></span>
+              <span class="alert-status-label" id="alert-status-label" data-i18n="alertStatusInactive">Noch nicht aktiv</span>
+            </div>
+            <div class="alert-status-row alert-status-row-secondary" id="alert-status-last" hidden>
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true" class="alert-status-icon"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+              <span id="alert-status-last-text"></span>
+            </div>
+          </div>
+
+          <div class="alert-actions">
+            <button id="alert-save" type="button" class="alert-save-btn" data-i18n="saveAlarm">Alarm speichern</button>
+            <button id="alert-test" type="button" class="alert-test-btn" data-i18n="sendTestNotification">Test-Benachrichtigung senden</button>
+          </div>
           <div id="alert-active-info" class="alert-active-info" style="display:none"></div>
         </div>
       </div>

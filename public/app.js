@@ -69,6 +69,16 @@ const i18n = {
     location: 'STANDORT',
     priceAlert: 'PREISALARM',
     notification: 'Benachrichtigung',
+    alertBackgroundHint: 'Läuft im Hintergrund, auch wenn die App geschlossen ist.',
+    alertStatusInactive: 'Noch nicht aktiv',
+    alertStatusArmed: 'Aktiv · überwacht im Hintergrund',
+    alertStatusBelow: 'Aktuell unter Schwellenwert',
+    alertStatusLastFiredFmt: 'Zuletzt benachrichtigt {when} bei {price}',
+    alertStatusCheapestFmt: 'Aktuell günstigster Preis: {price}',
+    alertJustNow: 'gerade eben',
+    alertMinutesAgoFmt: 'vor {n} Min.',
+    alertHoursAgoFmt: 'vor {n} Std.',
+    alertDaysAgoFmt: 'vor {n} Tagen',
     notificationChannel: 'Benachrichtigungskanal',
     ntfyTopicPlaceholder: 'ntfy Topic (z.B. mein-tankalarm)',
     ntfyHint: 'Installiere die <a href="https://ntfy.sh" target="_blank" style="color:var(--color-accent)">ntfy App</a> und abonniere dein Topic.',
@@ -301,6 +311,16 @@ const i18n = {
     location: 'LOCATION',
     priceAlert: 'PRICE ALERT',
     notification: 'Notification',
+    alertBackgroundHint: 'Runs in the background, even when the app is closed.',
+    alertStatusInactive: 'Not active yet',
+    alertStatusArmed: 'Active · monitoring in the background',
+    alertStatusBelow: 'Currently below threshold',
+    alertStatusLastFiredFmt: 'Last notified {when} at {price}',
+    alertStatusCheapestFmt: 'Currently cheapest price: {price}',
+    alertJustNow: 'just now',
+    alertMinutesAgoFmt: '{n} min ago',
+    alertHoursAgoFmt: '{n} h ago',
+    alertDaysAgoFmt: '{n} d ago',
     notificationChannel: 'Notification Channel',
     ntfyTopicPlaceholder: 'ntfy Topic (e.g. my-fuel-alert)',
     ntfyHint: 'Install the <a href="https://ntfy.sh" target="_blank" style="color:var(--color-accent)">ntfy app</a> and subscribe to your topic.',
@@ -6438,25 +6458,42 @@ function initAlertUI() {
   refreshAlertUi();
 }
 
+// Format a relative timestamp like "vor 3 Min." / "vor 2 Std." for the
+// alert status panel. Uses the same i18n keys as the rest of the app.
+function formatRelativeAgo(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const diffMs = Date.now() - d.getTime();
+  if (diffMs < 60_000) return t('alertJustNow') || 'just now';
+  const mins = Math.round(diffMs / 60_000);
+  if (mins < 60) return (t('alertMinutesAgoFmt') || '{n} min ago').replace('{n}', mins);
+  const hours = Math.round(mins / 60);
+  if (hours < 36) return (t('alertHoursAgoFmt') || '{n} h ago').replace('{n}', hours);
+  const days = Math.round(hours / 24);
+  return (t('alertDaysAgoFmt') || '{n} d ago').replace('{n}', days);
+}
+
 async function refreshAlertUi() {
   const toggle = document.getElementById('alert-toggle');
   const configEl = document.getElementById('alert-config');
   const activeInfo = document.getElementById('alert-active-info');
   const refEl = document.getElementById('alert-ref-price');
+  const card = document.getElementById('alert-card');
 
-  // Don't blank the toggle before the network round-trip finishes — that's
-  // the flicker the user sees when re-opening the settings tab. Instead we
-  // overwrite once with whatever the server returns.
-
-  // Reference price (cheapest in current radius) is informational only; if
-  // the request fails we just leave the previous label in place.
+  // Track the cheapest in radius so the threshold bar + status panel can
+  // show how the user's threshold relates to the current market.
+  let cheapestInRadius = null;
   try {
     const coords = getActiveCoords();
     const stations = await api(`/api/stations?lat=${coords.lat}&lng=${coords.lng}&rad=${state.radiusKm}&fuel=${state.fuelType}`);
     const priced = stations.filter(s => typeof s.price === 'number');
     if (priced.length) {
-      const min = Math.min(...priced.map(s => s.price));
-      refEl.textContent = `${t('currentCheapest')}: ${formatPrice(min)}`;
+      const prices = priced.map(s => s.price);
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      cheapestInRadius = { min, max };
+      refEl.textContent = (t('alertStatusCheapestFmt') || 'Currently cheapest price: {price}').replace('{price}', formatPrice(min));
       if (!state.alertPrice) state.alertPrice = Math.max(1.5, Math.round((min - 0.03) * 100) / 100);
     }
   } catch {}
@@ -6473,9 +6510,9 @@ async function refreshAlertUi() {
     state.alertEmail = alert.email || '';
     toggle.checked = true;
     configEl.style.display = 'block';
-    activeInfo.style.display = 'block';
-    const chLabel = state.alertChannel === 'email' ? ' (E-Mail)' : ' (ntfy.sh)';
-    activeInfo.textContent = `${t('alertActive')} ${formatPrice(alert.threshold)}${chLabel}`;
+    if (card) card.classList.add('is-armed');
+    activeInfo.style.display = 'none'; // status panel replaces this
+    activeInfo.textContent = '';
 
     // Restore channel picker UI
     const channelSegs = document.querySelectorAll('#alert-channel-picker .alert-ch-seg');
@@ -6490,12 +6527,67 @@ async function refreshAlertUi() {
     if (ntfyInput) ntfyInput.value = state.alertNtfyTopic;
     const emailInput = document.getElementById('alert-email-address');
     if (emailInput) emailInput.value = state.alertEmail;
+
+    // Status panel — surfaces the background evaluator's state so the
+    // user understands the alert is being checked server-side, not
+    // only when the website is open.
+    const statusLabel = document.getElementById('alert-status-label');
+    const statusState = document.getElementById('alert-status-state');
+    const lastRow = document.getElementById('alert-status-last');
+    const lastText = document.getElementById('alert-status-last-text');
+    if (statusLabel && statusState) {
+      const isBelow = cheapestInRadius && cheapestInRadius.min < alert.threshold;
+      statusState.classList.toggle('is-below', !!isBelow);
+      statusLabel.textContent = isBelow
+        ? t('alertStatusBelow') || 'Currently below threshold'
+        : t('alertStatusArmed') || 'Active · monitoring in the background';
+    }
+    if (lastRow && lastText) {
+      if (alert.lastNotifiedAt) {
+        const when = formatRelativeAgo(alert.lastNotifiedAt);
+        const priceStr = typeof alert.lastNotifiedPrice === 'number'
+          ? formatPrice(alert.lastNotifiedPrice)
+          : '';
+        lastRow.hidden = false;
+        lastText.textContent = (t('alertStatusLastFiredFmt') || 'Last notified {when} at {price}')
+          .replace('{when}', when)
+          .replace('{price}', priceStr);
+      } else {
+        lastRow.hidden = true;
+      }
+    }
   } else {
     // No active alert — collapse the panel.
     toggle.checked = false;
     configEl.style.display = 'none';
+    if (card) card.classList.remove('is-armed');
     activeInfo.style.display = 'none';
     activeInfo.textContent = '';
+  }
+
+  // Threshold-vs-current-cheapest bar. The threshold marker slides along
+  // a track bounded by [cheapest-0.10, cheapest+0.15] so the user can
+  // see whether their threshold is realistic without having to do mental
+  // maths against the cheapest price.
+  const barEl = document.getElementById('alert-threshold-bar');
+  const barCurrent = document.getElementById('alert-bar-current');
+  const barMarker = document.getElementById('alert-bar-marker');
+  const barLow = document.getElementById('alert-bar-low');
+  const barHigh = document.getElementById('alert-bar-high');
+  if (barEl && cheapestInRadius && state.alertPrice) {
+    const low = Math.max(1.0, cheapestInRadius.min - 0.10);
+    const high = cheapestInRadius.min + 0.15;
+    const range = Math.max(high - low, 0.0001);
+    const clamp01 = (n) => Math.max(0, Math.min(1, n));
+    const currentPct = clamp01((cheapestInRadius.min - low) / range) * 100;
+    const markerPct = clamp01((state.alertPrice - low) / range) * 100;
+    barEl.hidden = false;
+    if (barCurrent) barCurrent.style.left = `${currentPct}%`;
+    if (barMarker) barMarker.style.left = `${markerPct}%`;
+    if (barLow) barLow.textContent = formatPrice(low);
+    if (barHigh) barHigh.textContent = formatPrice(high);
+  } else if (barEl) {
+    barEl.hidden = true;
   }
 
   updateAlertDisplay();
@@ -6503,7 +6595,21 @@ async function refreshAlertUi() {
 
 function updateAlertDisplay() {
   const display = document.getElementById('alert-price-display');
-  display.textContent = formatPrice(state.alertPrice || 2.0);
+  if (display) display.textContent = formatPrice(state.alertPrice || 2.0);
+  // Slide the threshold marker on the visual bar as the user steps the
+  // price. Keep the marker inside the visible track.
+  const barEl = document.getElementById('alert-threshold-bar');
+  const marker = document.getElementById('alert-bar-marker');
+  if (barEl && !barEl.hidden && marker) {
+    const lowText = document.getElementById('alert-bar-low')?.textContent || '';
+    const highText = document.getElementById('alert-bar-high')?.textContent || '';
+    const low = parseFloat(lowText.replace(',', '.'));
+    const high = parseFloat(highText.replace(',', '.'));
+    if (Number.isFinite(low) && Number.isFinite(high) && high > low) {
+      const pct = Math.max(0, Math.min(1, ((state.alertPrice || 0) - low) / (high - low)));
+      marker.style.left = `${pct * 100}%`;
+    }
+  }
 }
 
 async function saveAlert() {
