@@ -63,11 +63,14 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
   const dayNames = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
   const dayPrices: Record<number, number[]> = {};
   const hourPrices: Record<number, number[]> = {};
+  // Grouped by station_id when present (one physical station = one
+  // bucket), falling back to station_name. Two stations sharing a
+  // display name used to collide; using the id where available
+  // separates them properly. stationMeta keeps the display name + id +
+  // brand keyed by the same grouping key so the ranking can render
+  // and link out correctly.
   const stationPrices: Record<string, number[]> = {};
-  // Most-recent station_id and station_brand seen per station name, so the
-  // ranking can carry enough metadata for the client to open the same
-  // station detail UI the map uses.
-  const stationMeta: Record<string, { id?: string; brand?: string }> = {};
+  const stationMeta: Record<string, { id?: string; brand?: string; name?: string }> = {};
 
   // Use individual station data for day/hour/station stats if available
   const priceSource = stationData && stationData.length > 0 ? stationData : null;
@@ -87,13 +90,14 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
       hourPrices[hour].push(sp.price);
 
       if (sp.station_name) {
-        stationPrices[sp.station_name] = stationPrices[sp.station_name] ?? [];
-        stationPrices[sp.station_name].push(sp.price);
-        // Keep the most recent id/brand we see (input is sorted ASC by time).
-        const meta = stationMeta[sp.station_name] || {};
+        const key = sp.station_id || sp.station_name;
+        stationPrices[key] = stationPrices[key] ?? [];
+        stationPrices[key].push(sp.price);
+        const meta = stationMeta[key] || {};
         if (sp.station_id) meta.id = sp.station_id;
         if (sp.station_brand) meta.brand = sp.station_brand;
-        stationMeta[sp.station_name] = meta;
+        meta.name = sp.station_name;
+        stationMeta[key] = meta;
       }
     }
   } else {
@@ -111,6 +115,10 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
       if (entry.station) {
         stationPrices[entry.station] = stationPrices[entry.station] ?? [];
         stationPrices[entry.station].push(entry.min_price);
+        // No id/brand available on aggregate rows — keep the name only.
+        const meta = stationMeta[entry.station] || {};
+        meta.name = entry.station;
+        stationMeta[entry.station] = meta;
       }
     }
   }
@@ -132,14 +140,26 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
     }))
     .sort((left, right) => left.avg - right.avg);
 
-  const stationRanking = Object.entries(stationPrices)
-    .map(([station, prices]) => ({
-      station,
+  // A station that was sampled just once or twice can land at #1 by
+  // pure chance (caught a single dip). Require at least 3 samples so
+  // the average is meaningful, but don't filter so aggressively that
+  // a fresh location with sparse data shows an empty ranking — if no
+  // station meets the threshold, fall back to all of them.
+  const STATION_MIN_SAMPLES = 3;
+  const stationEntries = Object.entries(stationPrices);
+  const passing = stationEntries.filter(([, prices]) => prices.length >= STATION_MIN_SAMPLES);
+  const sourceEntries = passing.length > 0 ? passing : stationEntries;
+
+  const stationRanking = sourceEntries
+    .map(([key, prices]) => ({
+      // Use the human-readable name we stashed, not the bucket key
+      // (which may be a station_id).
+      station: stationMeta[key]?.name || key,
       avg: prices.reduce((sum, price) => sum + price, 0) / prices.length,
       min: Math.min(...prices),
       count: prices.length,
-      id: stationMeta[station]?.id,
-      brand: stationMeta[station]?.brand,
+      id: stationMeta[key]?.id,
+      brand: stationMeta[key]?.brand,
     }))
     .sort((left, right) => left.avg - right.avg);
 

@@ -1500,6 +1500,16 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   height: 70%;
   width: 4px;
 }
+/* Small "Ø" mark in the ranking price so users understand the number is
+   the 30-day average rather than the current price. Hover-title row
+   carries min + sample count for the full picture. */
+.ranking-price-avg-mark {
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 4px;
+  opacity: 0.65;
+  letter-spacing: 0.5px;
+}
 
 @media (max-width: 360px) {
   .stats-fact-value { font-size: 14px; }

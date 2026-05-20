@@ -5237,7 +5237,12 @@ function renderStats(stats) {
       const idAttr = s.id ? ` data-station-id="${s.id}"` : '';
       const brandAttr = s.brand ? ` data-station-brand="${fixEnc(s.brand)}"` : '';
       const avgAttr = ` data-station-avg="${s.avg}"`;
-      html += `<div class="ranking-item station-ranking-item${isMedal ? ' ranking-medal' : ''}" data-station-name="${fixEnc(s.station)}"${idAttr}${brandAttr}${avgAttr} style="--rank-color:${color}"><div class="ranking-pos">${medal}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price" style="color:${color}">${formatPrice(s.avg)}</div></div>`;
+      // Tooltip with the lowest observed price + sample count so users
+      // can see the ranking confidence without us cluttering the row.
+      const minLabel = Number.isFinite(s.min) ? `↓ ${formatPrice(s.min)}` : '';
+      const countLabel = Number.isFinite(s.count) ? `${s.count} ${state.lang === 'en' ? 'samples' : 'Messungen'}` : '';
+      const titleParts = [`Ø ${formatPrice(s.avg)}`, minLabel, countLabel].filter(Boolean).join(' · ');
+      html += `<div class="ranking-item station-ranking-item${isMedal ? ' ranking-medal' : ''}" data-station-name="${fixEnc(s.station)}"${idAttr}${brandAttr}${avgAttr} title="${titleParts}" style="--rank-color:${color}"><div class="ranking-pos">${medal}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price" style="color:${color}"><span class="ranking-price-avg-mark">Ø</span>${formatPrice(s.avg)}</div></div>`;
     });
     html += '</div></div>';
   }
