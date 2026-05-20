@@ -3525,13 +3525,11 @@ function setupPullToRefresh() {
   document.addEventListener('touchend', onTouchEnd, { passive: true });
 }
 
-function showStationSheet(station, opts = {}) {
+function showStationSheet(station) {
   const sheet = document.getElementById('bottom-sheet');
   const body = document.getElementById('bottom-sheet-body');
-  // Layout mode — the default bottom sheet vs. a centred modal popup
-  // (used by the stats tab where the user clicks a station from a
-  // ranking and expects the detail to appear front-and-centre).
-  sheet.classList.toggle('centered', !!opts.centered);
+  // The map's bottom sheet only. Stats/Verlauf use openStationDetail.
+  sheet.classList.remove('detail-modal', 'centered');
   const priceParts = formatPriceParts(station.price);
   const color = priceColorStable(station.price, station._locationId, station.lat, station.lng);
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
@@ -3643,16 +3641,12 @@ function showStationSheet(station, opts = {}) {
   state.sheetExpanded = false;
   const handleArea = document.getElementById('sheet-handle-area');
 
-  // Skip the desktop expand button when shown as a centred popup —
-  // there's no "drag to expand" affordance in modal mode.
   content.querySelector('.sheet-expand-btn')?.remove();
-  if (!opts.centered) {
-    const expandBtn = document.createElement('button');
-    expandBtn.className = 'sheet-expand-btn';
-    updateExpandBtnIcon(expandBtn, false);
-    expandBtn.addEventListener('click', () => toggleSheetExpanded(content));
-    content.appendChild(expandBtn);
-  }
+  const expandBtn = document.createElement('button');
+  expandBtn.className = 'sheet-expand-btn';
+  updateExpandBtnIcon(expandBtn, false);
+  expandBtn.addEventListener('click', () => toggleSheetExpanded(content));
+  content.appendChild(expandBtn);
 
   const closeSheet = () => {
     if (state.sheetChart) { state.sheetChart.destroy(); state.sheetChart = null; }
@@ -3660,40 +3654,18 @@ function showStationSheet(station, opts = {}) {
       clearInterval(state._manualScanCountdownTimer);
       state._manualScanCountdownTimer = null;
     }
-    if (state._centeredEscapeListener) {
-      document.removeEventListener('keydown', state._centeredEscapeListener);
-      state._centeredEscapeListener = null;
-    }
     state.sheetExpanded = false;
     content.style.transform = '';
     content.classList.remove('dragging', 'snapping', 'expanded');
     content.querySelector('.sheet-expand-btn')?.remove();
     content.querySelector('.sheet-desktop-close')?.remove();
-    content.querySelector('.centered-close-btn')?.remove();
     backdrop.style.opacity = '';
     sheet.classList.add('hidden');
-    sheet.classList.remove('centered');
     sheet.setAttribute('aria-hidden', 'true');
     backdrop.removeEventListener('click', closeSheet);
     if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
     if (state.defaultBounds) showResetViewBtn();
   };
-
-  // Inject a corner close button when shown as a centred popup —
-  // there's no swipe-handle in modal mode. Escape also closes.
-  if (opts.centered) {
-    content.querySelector('.centered-close-btn')?.remove();
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'centered-close-btn';
-    closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', 'Close');
-    closeBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
-    closeBtn.addEventListener('click', closeSheet);
-    content.appendChild(closeBtn);
-    const onEscape = (e) => { if (e.key === 'Escape') closeSheet(); };
-    document.addEventListener('keydown', onEscape);
-    state._centeredEscapeListener = onEscape;
-  }
 
   // Tick the "expires in" countdown + progress bar if the station came from
   // a manual scan. The bar starts full and depletes over the TTL window;
@@ -3737,9 +3709,8 @@ function showStationSheet(station, opts = {}) {
   }
   backdrop.addEventListener('click', closeSheet);
 
-  // --- Desktop: add close button for side panel (skip in centered
-  //     popup mode — we already injected our own corner X). ---
-  if (!opts.centered && window.matchMedia('(min-width: 900px)').matches) {
+  // --- Desktop: add close button for side panel. ---
+  if (window.matchMedia('(min-width: 900px)').matches) {
     content.querySelector('.sheet-desktop-close')?.remove();
     const closeBtn = document.createElement('button');
     closeBtn.className = 'sheet-desktop-close';
@@ -3748,10 +3719,8 @@ function showStationSheet(station, opts = {}) {
     content.prepend(closeBtn);
   }
 
-  // --- Real drag-to-dismiss (only on the bottom sheet, not the modal). ---
-  if (!opts.centered) {
-    setupSheetDrag(content, handleArea, backdrop, closeSheet);
-  }
+  // --- Real drag-to-dismiss. ---
+  setupSheetDrag(content, handleArea, backdrop, closeSheet);
 
   state.sheetStationName = station.name;
   state.sheetStation = station;
@@ -3881,27 +3850,29 @@ function parseOpeningTimes(openingTimes, wholeDay, isOpen) {
 
 const STATION_DETAIL_TTL_MS = 60 * 60 * 1000;
 
-async function refreshStationStatus(station) {
-  if (!station?.id) return;
-  // Cache detail responses per station-id for an hour. Opening the same
-  // sheet repeatedly (or hopping between siblings) shouldn't hammer
-  // Tankerkönig — the price/opening-times barely move within an hour and
-  // the scheduler refreshes the underlying scan cache on its own cycle.
+// Shared 1-hour cache so the map bottom-sheet and the Stats/Verlauf
+// detail modal don't double-fetch when the user flips between them.
+async function fetchStationDetailCached(id) {
+  if (!id) return null;
   state._stationDetailCache = state._stationDetailCache || {};
   const now = Date.now();
-  const cached = state._stationDetailCache[station.id];
+  const cached = state._stationDetailCache[id];
+  if (cached && cached.expiresAt > now) return cached.detail;
   let detail;
-  if (cached && cached.expiresAt > now) {
-    detail = cached.detail;
-  } else {
-    try {
-      detail = await api(`/api/station/${station.id}`);
-    } catch {
-      return;
-    }
-    if (!detail) return;
-    state._stationDetailCache[station.id] = { detail, expiresAt: now + STATION_DETAIL_TTL_MS };
+  try {
+    detail = await api(`/api/station/${encodeURIComponent(id)}`);
+  } catch {
+    return null;
   }
+  if (!detail || detail.error) return null;
+  state._stationDetailCache[id] = { detail, expiresAt: now + STATION_DETAIL_TTL_MS };
+  return detail;
+}
+
+async function refreshStationStatus(station) {
+  if (!station?.id) return;
+  const detail = await fetchStationDetailCached(station.id);
+  if (!detail) return;
   try {
 
     const isOpen = Boolean(detail.isOpen);
@@ -3948,6 +3919,296 @@ async function refreshStationStatus(station) {
   } catch {
     // Silently fail — cached data stays as fallback
   }
+}
+
+// ─── Stats / Verlauf station detail modal ──────────────────────────────
+// Opened when the user clicks a station in the Tankstellen-Ranking
+// (Stats tab) or one of the cheapest/most-expensive cards (Verlauf tab).
+// Shares the #bottom-sheet DOM element so only one detail surface is open
+// at a time, but renders its own self-contained modal — no manual-scan
+// banner, no "Umgebung neu scannen" button, no drag-to-dismiss, no
+// expand button. Just the data.
+async function resolveStationDetail(seed) {
+  const { id, name, brand, fallbackPrice } = seed || {};
+  // Exact id-match against the live map cache. A name/brand fuzzy match
+  // would happily return any random "ARAL" pin for a totally different
+  // physical station.
+  const cached = id ? (state.stations || []).find(s => s.id === id) : null;
+  // /api/station/:id handles DE (Tankerkönig detail.php) and AT (cache
+  // lookup) transparently — same response shape either way.
+  const detail = id ? await fetchStationDetailCached(id) : null;
+
+  const fuel = state.fuelType || 'e5';
+  const toNumOrNull = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  // Live scanned price wins (matches what the map shows). Fall back to
+  // detail.php's fuel-specific price, then to whatever the ranking row
+  // carried as a last resort.
+  let price = null;
+  if (cached && typeof cached.price === 'number' && cached.price > 0) price = cached.price;
+  else if (detail && typeof detail[fuel] === 'number' && detail[fuel] > 0) price = detail[fuel];
+  else if (typeof fallbackPrice === 'number' && fallbackPrice > 0) price = fallbackPrice;
+
+  const lat = (cached && Number.isFinite(cached.lat)) ? cached.lat : toNumOrNull(detail?.lat);
+  const lng = (cached && Number.isFinite(cached.lng)) ? cached.lng : toNumOrNull(detail?.lng);
+
+  const userLat = state.userLat;
+  const userLng = state.userLng;
+  let dist;
+  let distApprox;
+  if (cached && Number.isFinite(cached.dist) && cached.dist > 0) {
+    dist = cached.dist;
+    distApprox = Boolean(cached.distApprox);
+  } else if (lat != null && lng != null && Number.isFinite(userLat) && Number.isFinite(userLng)) {
+    dist = distanceKm(userLat, userLng, lat, lng);
+    distApprox = true;
+  }
+
+  const isOpen = typeof detail?.isOpen === 'boolean'
+    ? detail.isOpen
+    : (typeof cached?.isOpen === 'boolean' ? cached.isOpen : undefined);
+
+  return {
+    id: id || detail?.id || cached?.id || '',
+    name: cached?.name || detail?.name || name || '',
+    brand: cached?.brand || detail?.brand || brand || '',
+    street: detail?.street || cached?.street || '',
+    houseNumber: detail?.houseNumber || cached?.houseNumber || '',
+    postCode: (detail?.postCode != null && detail.postCode !== '')
+      ? String(detail.postCode)
+      : (cached?.postCode || ''),
+    place: detail?.place || cached?.place || '',
+    lat,
+    lng,
+    price,
+    isOpen,
+    openingTimes: detail?.openingTimes ?? null,
+    wholeDay: Boolean(detail?.wholeDay),
+    dist,
+    distApprox,
+  };
+}
+
+function renderStationDetailSkeleton(seed) {
+  const name = fixEnc(seed?.name || seed?.brand || '');
+  const brand = fixEnc(seed?.brand || '');
+  return `
+    <div class="sheet-station-header">
+      <div style="flex:1;min-width:0">
+        <div class="sheet-station-name">${name}</div>
+        ${brand ? `<div class="sheet-station-brand">${brand}</div>` : ''}
+      </div>
+    </div>
+    <div class="detail-skeleton" aria-hidden="true">
+      <div class="detail-skeleton-line detail-skeleton-price"></div>
+      <div class="detail-skeleton-line"></div>
+      <div class="detail-skeleton-line short"></div>
+      <div class="detail-skeleton-line short"></div>
+      <div class="detail-skeleton-block"></div>
+    </div>
+  `;
+}
+
+function renderStationDetailHtml(station) {
+  const showPrice = station.price != null && station.price > 0;
+  const priceParts = showPrice ? formatPriceParts(station.price) : null;
+  const color = showPrice ? priceColorStable(station.price, station._locationId, station.lat, station.lng) : '';
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    || (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const hasCoords = Number.isFinite(station.lat) && Number.isFinite(station.lng);
+  const gmapsUrl = hasCoords
+    ? (isIOS
+      ? `comgooglemaps://?daddr=${station.lat},${station.lng}&directionsmode=driving`
+      : isAndroid
+        ? `google.navigation:q=${station.lat},${station.lng}`
+        : `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`)
+    : null;
+  const appleMapsUrl = hasCoords
+    ? (isIOS
+      ? `maps://?daddr=${station.lat},${station.lng}`
+      : `https://maps.apple.com/?daddr=${station.lat},${station.lng}`)
+    : null;
+
+  const isFav = station.id && state.favourites.includes(station.id);
+  const hours = parseOpeningTimes(station.openingTimes, station.wholeDay, Boolean(station.isOpen));
+
+  const knownOpen = typeof station.isOpen === 'boolean';
+  let statusLabel = '';
+  if (knownOpen) statusLabel = station.isOpen ? t('open') : t('closed');
+  if (hours?.label) statusLabel = statusLabel ? `${statusLabel} · ${hours.label}` : hours.label;
+
+  const hasAddress = Boolean(station.street || station.place);
+  const hasDist = typeof station.dist === 'number' && Number.isFinite(station.dist);
+
+  return `
+    <div class="sheet-station-header">
+      <div style="flex:1;min-width:0">
+        <div class="sheet-station-name">${fixEnc(station.name || station.brand || '')}</div>
+        ${station.brand ? `<div class="sheet-station-brand">${fixEnc(station.brand)}</div>` : ''}
+      </div>
+      ${station.id ? `<button class="fav-btn sheet-fav-btn${isFav ? ' active' : ''}" data-station-id="${station.id}" aria-label="${isFav ? t('removeFavourite') : t('addFavourite')}"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></button>` : ''}
+    </div>
+    ${showPrice ? `<div class="sheet-station-price" style="color:${color}">
+      ${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}
+      <span style="font-size:16px;font-weight:400;color:var(--color-hint)">€/L</span>
+    </div>` : ''}
+    ${hasAddress ? `<div class="sheet-info-row">
+      <svg class="sheet-info-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
+      <span>${fixEnc(station.street || '')}${station.houseNumber ? ' ' + station.houseNumber : ''}${(station.street || station.houseNumber) && (station.postCode || station.place) ? ', ' : ''}${station.postCode || ''} ${fixEnc(station.place || '')}</span>
+    </div>` : ''}
+    ${(knownOpen || hasDist) ? `<div class="sheet-info-row">
+      <span class="sheet-info-icon">${knownOpen ? `<span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:${station.isOpen ? '#34c759' : '#ff3b30'}"></span>` : ''}</span>
+      <span>${statusLabel}</span>
+      ${hasDist ? `<span style="margin-left:auto;color:var(--color-hint)">${station.distApprox ? '~' : ''}${station.dist.toFixed(1)} ${t('kmAway')}</span>` : ''}
+    </div>` : ''}
+    ${state.dataTimestamp ? `<div class="sheet-info-row">
+      <svg class="sheet-info-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+      <span><strong>${t('lastUpdated')}:</strong> ${formatDataAge(state.dataTimestamp)}</span>
+    </div>` : ''}
+    ${hours?.allTimes?.length ? `<div class="sheet-hours-section" id="detail-hours-section">
+      <div class="sheet-hours-toggle" id="detail-hours-toggle">
+        <span class="sheet-info-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="color:var(--color-hint)"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg></span>
+        <span>${t('openingHours')}</span>
+        <svg class="sheet-hours-chevron" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-left:auto;color:var(--color-hint)"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+      </div>
+      <div class="sheet-hours-list">
+        ${hours.allTimes.map(r => `<div class="sheet-hours-row"><span class="sheet-hours-day">${fixEnc(r.text)}</span><span class="sheet-hours-time">${r.hours}</span></div>`).join('')}
+      </div>
+    </div>` : ''}
+    ${gmapsUrl ? `<div class="sheet-nav-buttons${isAndroid ? ' android-only' : ''}">
+      <a href="${gmapsUrl}" target="_blank" class="sheet-nav-btn gmaps">
+        <img src="/icons/google-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
+        <span>Google Maps</span>
+      </a>
+      ${isAndroid ? '' : `<a href="${appleMapsUrl}" target="_blank" class="sheet-nav-btn amaps">
+        <img src="/icons/apple-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
+        <span>Apple Maps</span>
+      </a>`}
+    </div>` : ''}
+    <div class="sheet-chart-section">
+      <div class="sheet-chart-header-row">
+        <div class="sheet-chart-header">${t('priceHistory')}</div>
+        <div class="sheet-chart-toggle">
+          <button class="sheet-toggle-btn${state.historyDefaultDays === 7 ? '' : ' active'}" data-range="1">${t('sheet24h')}</button>
+          <button class="sheet-toggle-btn${state.historyDefaultDays === 7 ? ' active' : ''}" data-range="7">${t('sheet7d')}</button>
+        </div>
+      </div>
+      <div class="sheet-chart-container">
+        <div id="sheet-chart-loading" class="sheet-chart-empty"><div class="spinner"></div></div>
+        <canvas id="sheet-price-chart" style="display:none"></canvas>
+      </div>
+    </div>
+  `;
+}
+
+async function openStationDetail(seed) {
+  const sheet = document.getElementById('bottom-sheet');
+  const body = document.getElementById('bottom-sheet-body');
+  if (!sheet || !body || !seed) return;
+
+  // Clean up any prior state — also kills a map bottom-sheet if it was open
+  if (state.sheetChart) { state.sheetChart.destroy(); state.sheetChart = null; }
+  if (state._manualScanCountdownTimer) {
+    clearInterval(state._manualScanCountdownTimer);
+    state._manualScanCountdownTimer = null;
+  }
+  if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
+  if (state._detailEscapeListener) {
+    document.removeEventListener('keydown', state._detailEscapeListener);
+    state._detailEscapeListener = null;
+  }
+
+  sheet.classList.remove('centered'); // legacy: ensure no lingering class
+  sheet.classList.add('detail-modal');
+  sheet.classList.remove('hidden');
+  sheet.setAttribute('aria-hidden', 'false');
+
+  const backdrop = sheet.querySelector('.bottom-sheet-backdrop');
+  const content = sheet.querySelector('.bottom-sheet-content');
+  content.style.transform = '';
+  content.classList.remove('dragging', 'snapping', 'expanded');
+  state.sheetExpanded = false;
+  content.querySelector('.sheet-expand-btn')?.remove();
+  content.querySelector('.sheet-desktop-close')?.remove();
+  content.querySelector('.detail-modal-close')?.remove();
+
+  // Token tracks "this modal session". If the user opens another detail
+  // while this one's data is still loading, the older one bails out.
+  const token = (state._detailToken = (state._detailToken || 0) + 1);
+
+  const closeDetail = () => {
+    if (state.sheetChart) { state.sheetChart.destroy(); state.sheetChart = null; }
+    if (state._detailEscapeListener) {
+      document.removeEventListener('keydown', state._detailEscapeListener);
+      state._detailEscapeListener = null;
+    }
+    content.querySelector('.detail-modal-close')?.remove();
+    backdrop.removeEventListener('click', closeDetail);
+    sheet.classList.add('hidden');
+    sheet.classList.remove('detail-modal');
+    sheet.setAttribute('aria-hidden', 'true');
+    body.innerHTML = '';
+    state.sheetStation = null;
+    state.sheetStationName = null;
+  };
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'detail-modal-close';
+  closeBtn.type = 'button';
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+  closeBtn.addEventListener('click', closeDetail);
+  content.appendChild(closeBtn);
+
+  const onEscape = (e) => { if (e.key === 'Escape') closeDetail(); };
+  document.addEventListener('keydown', onEscape);
+  state._detailEscapeListener = onEscape;
+  backdrop.addEventListener('click', closeDetail);
+
+  // 1. Skeleton with whatever we know from the click seed
+  body.innerHTML = renderStationDetailSkeleton(seed);
+
+  // 2. Resolve full data (cache + detail endpoint)
+  const station = await resolveStationDetail(seed);
+  if (token !== state._detailToken) return; // newer detail opened during fetch
+  if (sheet.classList.contains('hidden')) return; // user closed during fetch
+
+  // 3. Full render
+  body.innerHTML = renderStationDetailHtml(station);
+
+  // Favourite toggle
+  const favBtn = body.querySelector('.sheet-fav-btn');
+  if (favBtn) {
+    favBtn.addEventListener('click', () => toggleFavourite(favBtn.dataset.stationId));
+  }
+  // Opening-hours expand
+  const hoursToggle = body.querySelector('#detail-hours-toggle');
+  if (hoursToggle) {
+    hoursToggle.addEventListener('click', () => {
+      haptic('light');
+      document.getElementById('detail-hours-section')?.classList.toggle('expanded');
+    });
+  }
+  // Chart range toggle
+  body.querySelectorAll('.sheet-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('disabled')) return;
+      haptic('light');
+      body.querySelectorAll('.sheet-toggle-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadSheetChart(state.sheetStationName, parseInt(btn.dataset.range, 10), state.sheetStation?.id);
+    });
+  });
+
+  // 4. Chart
+  state.sheetStation = station;
+  state.sheetStationName = station.name;
+  loadSheetChart(station.name, state.historyDefaultDays || 1, station.id);
 }
 
 // Lazy-load admin-curated scan locations once and cache them. Used to
@@ -4705,10 +4966,10 @@ function renderChart(data) {
       ${extremeCard('high', t('highestPrice'), highestPrice, highestStation, expensiveId, expensiveBrand)}
     </div>`;
 
-  // Make the extreme cards open the same centred popup the stats
-  // ranking does. resolveRankedStation handles cache → /api/station/:id
-  // → minimal pseudo fallback. Animate in only on the first render so
-  // period/location refreshes don't re-trigger the slide-in.
+  // Open the same detail modal the stats ranking uses — openStationDetail
+  // resolves cache + /api/station/:id and handles DE/AT transparently.
+  // Animate in only on the first render so period/location refreshes
+  // don't re-trigger the slide-in.
   const isFresh = !isUpdate;
   summary.querySelectorAll('.history-extreme-card').forEach((card, i) => {
     if (isFresh) {
@@ -4716,14 +4977,13 @@ function renderChart(data) {
       card.classList.add('anim-in');
     }
     if (card.classList.contains('is-empty')) return;
-    card.addEventListener('click', async () => {
+    card.addEventListener('click', () => {
       haptic('light');
       const id = card.dataset.stationId;
       const name = card.dataset.stationName;
       const brand = card.dataset.stationBrand || '';
       const price = parseFloat(card.dataset.stationPrice) || null;
-      const station = await resolveRankedStation({ id, name, brand, avg: price });
-      if (station) showStationSheet(station, { centered: true });
+      openStationDetail({ id, name, brand, fallbackPrice: price });
     });
   });
 }
@@ -5322,14 +5582,13 @@ function renderStats(stats) {
   });
 
   el.querySelectorAll('.station-ranking-item').forEach(item => {
-    item.addEventListener('click', async () => {
+    item.addEventListener('click', () => {
       haptic('light');
       const name = item.dataset.stationName;
       const id = item.dataset.stationId;
       const brand = item.dataset.stationBrand || '';
       const avg = parseFloat(item.dataset.stationAvg) || null;
-      const station = await resolveRankedStation({ id, name, brand, avg });
-      if (station) showStationSheet(station, { centered: true });
+      openStationDetail({ id, name, brand, fallbackPrice: avg });
     });
   });
 
@@ -5360,88 +5619,6 @@ function renderStats(stats) {
     });
   });
 
-}
-
-// Resolve a station from the stats/history ranking into the same shape
-// showStationSheet uses for map-opened stations, so the centred popup
-// shows everything the map's bottom sheet does (address, distance,
-// current price, opening hours, maps buttons, price chart).
-//
-// Priority:
-//  1. In-memory map cache — already has every field showStationSheet
-//     expects (the map's /api/stations response).
-//  2. /api/station/:id (Tankerkönig detail.php). Returns id/name/brand,
-//     address, lat/lng, isOpen, openingTimes, wholeDay, and the three
-//     fuel prices — we pick the current fuel for the price field and
-//     compute distance from the user's GPS pin.
-//  3. Minimal pseudo-station — enough to render the header + chart.
-async function resolveRankedStation({ id, name, brand, avg }) {
-  const cached = (state.stations || []).find(s =>
-    (id && s.id === id) || (name && (s.name === name || s.brand === name))
-  );
-  if (cached) return cached;
-
-  if (id) {
-    try {
-      const remote = await api(`/api/station/${encodeURIComponent(id)}`);
-      if (remote && !remote.error) {
-        const fuel = state.fuelType || 'e5';
-        const livePrice = typeof remote[fuel] === 'number' && remote[fuel] > 0
-          ? remote[fuel]
-          : null;
-        // Prefer the live price (matches the map sheet's main number);
-        // fall back to the ranking's historical average if the detail
-        // call didn't return a price for this fuel.
-        const price = livePrice ?? avg ?? 0;
-        const userLat = state.userLat;
-        const userLng = state.userLng;
-        const toNumOrNull = (v) => {
-          const n = parseFloat(v);
-          return Number.isFinite(n) ? n : null;
-        };
-        const lat = toNumOrNull(remote.lat);
-        const lng = toNumOrNull(remote.lng);
-        const dist = (Number.isFinite(userLat) && Number.isFinite(userLng) && lat != null && lng != null)
-          ? distanceKm(userLat, userLng, lat, lng)
-          : null;
-        return {
-          id: remote.id || id,
-          name: remote.name || name,
-          brand: remote.brand || brand || '',
-          street: remote.street || '',
-          houseNumber: remote.houseNumber || '',
-          postCode: remote.postCode != null ? String(remote.postCode) : '',
-          place: remote.place || '',
-          lat,
-          lng,
-          price,
-          isOpen: Boolean(remote.isOpen),
-          openingTimes: remote.openingTimes,
-          overrides: remote.overrides,
-          wholeDay: remote.wholeDay,
-          dist: dist != null ? dist : undefined,
-          distApprox: dist != null,
-        };
-      }
-    } catch { /* fall through to pseudo */ }
-  }
-
-  // No live data — give the sheet enough to render its header + history
-  // chart without exploding on missing fields. Address/hours/maps
-  // buttons gracefully hide via the guards inside showStationSheet.
-  return {
-    id,
-    name,
-    brand,
-    street: '',
-    houseNumber: '',
-    postCode: '',
-    place: '',
-    lat: null,
-    lng: null,
-    price: avg ?? 0,
-    isOpen: undefined,
-  };
 }
 
 // Lazily create (and reuse) a single floating tooltip element for the

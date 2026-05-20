@@ -64,11 +64,10 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
   const dayPrices: Record<number, number[]> = {};
   const hourPrices: Record<number, number[]> = {};
   // Grouped by station_id when present (one physical station = one
-  // bucket), falling back to station_name. Two stations sharing a
-  // display name used to collide; using the id where available
-  // separates them properly. stationMeta keeps the display name + id +
-  // brand keyed by the same grouping key so the ranking can render
-  // and link out correctly.
+  // bucket); otherwise a composite `${name}|${brand}` key so two
+  // stations sharing only a display name don't collide. stationMeta
+  // keeps id/brand/name keyed by the same grouping key so the ranking
+  // can render and link out correctly.
   const stationPrices: Record<string, number[]> = {};
   const stationMeta: Record<string, { id?: string; brand?: string; name?: string }> = {};
 
@@ -90,7 +89,9 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
       hourPrices[hour].push(sp.price);
 
       if (sp.station_name) {
-        const key = sp.station_id || sp.station_name;
+        const key = sp.station_id
+          ? sp.station_id
+          : `${sp.station_name}|${sp.station_brand ?? ''}`;
         stationPrices[key] = stationPrices[key] ?? [];
         stationPrices[key].push(sp.price);
         const meta = stationMeta[key] || {};
@@ -99,6 +100,31 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
         meta.name = sp.station_name;
         stationMeta[key] = meta;
       }
+    }
+
+    // Some legacy rows were inserted without a station_id. Fold those
+    // name+brand buckets into the id-keyed bucket of the matching
+    // station so we don't show one entry per data era. Match strictly
+    // on name AND brand; if multiple ids share the same name+brand
+    // (unlikely), keep the no-id rows separate.
+    const nameToId = new Map<string, string[]>();
+    for (const [key, meta] of Object.entries(stationMeta)) {
+      if (!meta.id) continue;
+      const lookup = `${meta.name ?? ''}|${meta.brand ?? ''}`;
+      const list = nameToId.get(lookup) ?? [];
+      list.push(key);
+      nameToId.set(lookup, list);
+    }
+    for (const key of Object.keys(stationPrices)) {
+      const meta = stationMeta[key];
+      if (!meta || meta.id) continue;
+      const lookup = `${meta.name ?? ''}|${meta.brand ?? ''}`;
+      const matches = nameToId.get(lookup);
+      if (!matches || matches.length !== 1) continue;
+      const target = matches[0];
+      stationPrices[target] = stationPrices[target].concat(stationPrices[key]);
+      delete stationPrices[key];
+      delete stationMeta[key];
     }
   } else {
     // Fallback: use aggregated price_history entries (legacy / no station_prices data)
@@ -140,12 +166,12 @@ export function buildHistoryStats(entries: HistoryEntry[], stationData?: Station
     }))
     .sort((left, right) => left.avg - right.avg);
 
-  // A station that was sampled just once or twice can land at #1 by
-  // pure chance (caught a single dip). Require at least 3 samples so
-  // the average is meaningful, but don't filter so aggressively that
+  // A station that was sampled a handful of times can land at #1 by
+  // pure chance (caught a single dip). Require enough samples for the
+  // average to be meaningful, but don't filter so aggressively that
   // a fresh location with sparse data shows an empty ranking — if no
   // station meets the threshold, fall back to all of them.
-  const STATION_MIN_SAMPLES = 3;
+  const STATION_MIN_SAMPLES = 5;
   const stationEntries = Object.entries(stationPrices);
   const passing = stationEntries.filter(([, prices]) => prices.length >= STATION_MIN_SAMPLES);
   const sourceEntries = passing.length > 0 ? passing : stationEntries;

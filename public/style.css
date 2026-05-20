@@ -2727,22 +2727,24 @@ body.logged-in .station-fav-sync.synced {
   opacity: 0.5;
 }
 
-/* === Centred modal variant — used when station detail is opened from
-       the stats Tankstellen-Ranking. Same content as the bottom sheet,
-       but presented as a floating card in the middle of the screen. */
-.bottom-sheet.centered {
+/* === Station detail modal — used when the user opens a station from
+       the Stats Tankstellen-Ranking or the Verlauf cheapest/most-expensive
+       cards. Same internal layout as the map bottom-sheet, but presented
+       as a floating card in the middle of the screen instead of a
+       drag-to-dismiss sheet glued to the bottom edge. */
+.bottom-sheet.detail-modal {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
   box-sizing: border-box;
 }
-.bottom-sheet.centered .bottom-sheet-backdrop {
+.bottom-sheet.detail-modal .bottom-sheet-backdrop {
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
-.bottom-sheet.centered .bottom-sheet-content {
+.bottom-sheet.detail-modal .bottom-sheet-content {
   position: relative;
   bottom: auto;
   left: auto;
@@ -2758,25 +2760,25 @@ body.logged-in .station-fav-sync.synced {
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
               opacity 0.2s ease;
 }
-.bottom-sheet.centered:not(.hidden) .bottom-sheet-content {
+.bottom-sheet.detail-modal:not(.hidden) .bottom-sheet-content {
   transform: scale(1);
   opacity: 1;
   /* Tiny overshoot on the way in: scale up to 1.02 mid-flight, settle
      back to 1. Soft "pop" without the awkward translate-up. */
-  animation: centered-popup-pop 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: detail-modal-pop 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-@keyframes centered-popup-pop {
+@keyframes detail-modal-pop {
   0%   { transform: scale(0.86); opacity: 0; }
   60%  { transform: scale(1.02); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
 }
-.bottom-sheet.centered .bottom-sheet-handle-area {
+.bottom-sheet.detail-modal .bottom-sheet-handle-area {
   display: none;
 }
-.bottom-sheet.centered .sheet-expand-btn {
+.bottom-sheet.detail-modal .sheet-expand-btn {
   display: none;
 }
-.centered-close-btn {
+.detail-modal-close {
   position: absolute;
   top: 12px;
   right: 12px;
@@ -2793,17 +2795,62 @@ body.logged-in .station-fav-sync.synced {
   transition: background 0.18s ease, transform 0.15s ease;
   padding: 0;
 }
-.centered-close-btn:hover {
+.detail-modal-close:hover {
   background: color-mix(in srgb, var(--color-text) 14%, transparent);
 }
-.centered-close-btn:active {
+.detail-modal-close:active {
   transform: scale(0.92);
 }
+
+/* Skeleton placeholders shown while we fetch the full detail data. */
+.detail-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 20px 20px;
+}
+.detail-skeleton-line,
+.detail-skeleton-block {
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-text) 8%, transparent) 0%,
+    color-mix(in srgb, var(--color-text) 14%, transparent) 50%,
+    color-mix(in srgb, var(--color-text) 8%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: detail-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.detail-skeleton-line {
+  height: 14px;
+  width: 100%;
+}
+.detail-skeleton-line.short {
+  width: 60%;
+}
+.detail-skeleton-line.detail-skeleton-price {
+  height: 36px;
+  width: 50%;
+  margin-bottom: 6px;
+}
+.detail-skeleton-block {
+  height: 140px;
+  margin-top: 8px;
+}
+@keyframes detail-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .bottom-sheet.centered .bottom-sheet-content,
-  .bottom-sheet.centered:not(.hidden) .bottom-sheet-content {
+  .bottom-sheet.detail-modal .bottom-sheet-content,
+  .bottom-sheet.detail-modal:not(.hidden) .bottom-sheet-content {
     transition: opacity 0.18s ease;
     transform: none;
+    animation: none;
+  }
+  .detail-skeleton-line,
+  .detail-skeleton-block {
     animation: none;
   }
 }

@@ -255,6 +255,26 @@ export function getAllUniqueStationsForFuel(fuelType: string): CachedStation[] {
   return Array.from(map.values()).map(e => e.station);
 }
 
+/**
+ * Find the freshest cached copy of a station by exact id, across all fuels
+ * and locations. Used by the station detail endpoint to resolve AT stations
+ * (which Tankerkönig's detail.php can't), and as a no-network fast path for
+ * the Stats/Verlauf detail popup.
+ */
+export function findCachedStationById(id: string): { station: CachedStation; fuelType: string; timestamp: number } | null {
+  if (!id) return null;
+  let best: { station: CachedStation; fuelType: string; timestamp: number } | null = null;
+  for (const entry of getCache().values()) {
+    for (const s of entry.stations) {
+      if (s.id !== id) continue;
+      if (!best || entry.timestamp > best.timestamp) {
+        best = { station: s, fuelType: entry.fuelType, timestamp: entry.timestamp };
+      }
+    }
+  }
+  return best;
+}
+
 
 /** Max age for station price history. */
 const PRICE_HISTORY_RETENTION_DAYS = 30;
