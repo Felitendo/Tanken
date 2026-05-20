@@ -4111,6 +4111,10 @@ async function loadSheetChart(stationName, days = 1, stationId) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        // The popup that hosts this chart already has its own scale-in
+        // entrance — Chart.js's default growing-from-zero animation on
+        // top of that reads as a competing "fly in". Suppress it.
+        animation: false,
         interaction: { intersect: false, mode: 'index' },
         plugins: {
           legend: { display: false },
@@ -4390,6 +4394,35 @@ function renderChart(data) {
   const pointRadii = daily.map((_, i) => i === lastIdx ? 7 : minBaseRadius);
   const pointHoverRadii = daily.map((_, i) => i === lastIdx ? 10 : minBaseRadius + 3);
 
+  // Horizontal gradient stroke — one CanvasGradient spanning the chart
+  // width with a colour stop at each day's x position, sampled from
+  // that day's rank colour. Matches the stats hour chart treatment so
+  // both tabs read in the same visual language.
+  const buildHistoryLineGradient = (chartCtx) => {
+    const chart = chartCtx.chart;
+    const { ctx: c, chartArea } = chart;
+    if (!chartArea) return '#ff9500';
+    const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+    const denom = Math.max(1, pointColors.length - 1);
+    pointColors.forEach((color, i) => {
+      g.addColorStop(Math.max(0, Math.min(1, i / denom)), color);
+    });
+    return g;
+  };
+  // Vertical area gradient — red top, orange middle, yellow bottom.
+  // Same warm palette the stats hour chart uses for its fill so the
+  // two charts feel like siblings.
+  const buildHistoryFillGradient = (chartCtx) => {
+    const chart = chartCtx.chart;
+    const { ctx: c, chartArea } = chart;
+    if (!chartArea) return 'rgba(255,149,0,0.15)';
+    const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+    g.addColorStop(0,   'rgba(255, 59, 48, 0.34)');
+    g.addColorStop(0.5, 'rgba(255, 149, 0, 0.18)');
+    g.addColorStop(1,   'rgba(255, 204, 0, 0.04)');
+    return g;
+  };
+
   state.chart = new Chart(ctx, {
     type: 'line',
     data: {
@@ -4398,37 +4431,16 @@ function renderChart(data) {
         {
           label: 'Min',
           data: minVals,
-          // Vertical gradient stroke: red at the top of the chart area
-          // (expensive y values), green at the bottom. The line "warms
-          // up" when it climbs and "cools" when it dips.
-          borderColor: (chartCtx) => {
-            const chart = chartCtx.chart;
-            const { ctx: c, chartArea } = chart;
-            if (!chartArea) return '#ff9500';
-            const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-            g.addColorStop(0,   '#ff3b30');
-            g.addColorStop(0.55, '#ff9500');
-            g.addColorStop(1,   '#34c759');
-            return g;
-          },
-          backgroundColor: (chartCtx) => {
-            const chart = chartCtx.chart;
-            const { ctx: c, chartArea } = chart;
-            if (!chartArea) return 'rgba(52,199,89,0.08)';
-            const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-            g.addColorStop(0,   'rgba(255, 59, 48, 0.08)');
-            g.addColorStop(0.55, 'rgba(255, 149, 0, 0.06)');
-            g.addColorStop(1,   'rgba(52, 199, 89, 0.22)');
-            return g;
-          },
+          borderColor: buildHistoryLineGradient,
+          backgroundColor: buildHistoryFillGradient,
           borderWidth: 3,
           borderCapStyle: 'round',
           borderJoinStyle: 'round',
-          tension: 0.35,
+          tension: 0.4,
           fill: true,
           pointBackgroundColor: pointColors,
           pointBorderColor: bgSecondary,
-          pointBorderWidth: 2,
+          pointBorderWidth: 2.5,
           pointRadius: pointRadii,
           pointHoverRadius: pointHoverRadii,
           pointHoverBorderWidth: 3,
@@ -4774,6 +4786,31 @@ function renderHourChart(entries, dayKey) {
   if (state.hourChart) state.hourChart.destroy();
   const ctx = document.getElementById('hour-chart');
 
+  // Same horizontal-stroke + warm vertical-fill recipe as the day
+  // chart (and the stats hour chart) — keeps the visual family
+  // consistent across the whole app.
+  const buildHourLineGradient = (chartCtx) => {
+    const chart = chartCtx.chart;
+    const { ctx: c, chartArea } = chart;
+    if (!chartArea) return '#ff9500';
+    const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+    const denom = Math.max(1, pointColors.length - 1);
+    pointColors.forEach((color, i) => {
+      g.addColorStop(Math.max(0, Math.min(1, i / denom)), color);
+    });
+    return g;
+  };
+  const buildHourFillGradient = (chartCtx) => {
+    const chart = chartCtx.chart;
+    const { ctx: c, chartArea } = chart;
+    if (!chartArea) return 'rgba(255,149,0,0.15)';
+    const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+    g.addColorStop(0,   'rgba(255, 59, 48, 0.32)');
+    g.addColorStop(0.5, 'rgba(255, 149, 0, 0.18)');
+    g.addColorStop(1,   'rgba(255, 204, 0, 0.04)');
+    return g;
+  };
+
   state.hourChart = new Chart(ctx, {
     type: 'line',
     data: {
@@ -4781,30 +4818,12 @@ function renderHourChart(entries, dayKey) {
       datasets: [{
         label: 'Min',
         data: minVals,
-        borderColor: (chartCtx) => {
-          const chart = chartCtx.chart;
-          const { ctx: c, chartArea } = chart;
-          if (!chartArea) return '#ff9500';
-          const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          g.addColorStop(0,   '#ff3b30');
-          g.addColorStop(0.55, '#ff9500');
-          g.addColorStop(1,   '#34c759');
-          return g;
-        },
-        backgroundColor: (chartCtx) => {
-          const chart = chartCtx.chart;
-          const { ctx: c, chartArea } = chart;
-          if (!chartArea) return 'rgba(52,199,89,0.08)';
-          const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          g.addColorStop(0,   'rgba(255, 59, 48, 0.08)');
-          g.addColorStop(0.55, 'rgba(255, 149, 0, 0.06)');
-          g.addColorStop(1,   'rgba(52, 199, 89, 0.20)');
-          return g;
-        },
+        borderColor: buildHourLineGradient,
+        backgroundColor: buildHourFillGradient,
         borderWidth: 2.5,
         borderCapStyle: 'round',
         borderJoinStyle: 'round',
-        tension: 0.35,
+        tension: 0.4,
         fill: true,
         pointBackgroundColor: pointColors,
         pointBorderColor: bgSecondary,
