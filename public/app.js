@@ -6866,10 +6866,11 @@ async function persistStateSettings(nextSettings = {}) {
   saveSettingsLocal();
   if (state.user) {
     setSyncBadgeState('syncing', changedKeys);
-    // Hold the syncing state just long enough for the pulse to register —
-    // the actual POST often returns in ~50ms which would otherwise look
-    // like nothing happened.
-    const minDelay = new Promise(r => setTimeout(r, 350));
+    // Tiny floor so a < 16 ms round-trip doesn't make the spinner flash
+    // for a single frame. Otherwise let the green check land as soon as
+    // the network round-trip finishes — that's the feedback the user
+    // is waiting for.
+    const minDelay = new Promise(r => setTimeout(r, 90));
     try {
       await Promise.all([saveSettingsRemote(), minDelay]);
       setSyncBadgeState('synced', changedKeys);
