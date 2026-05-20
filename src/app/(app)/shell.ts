@@ -343,7 +343,7 @@ export const APP_SHELL = `
         <div class="about-hero-info">
           <div class="about-app-name">Tanken</div>
           <div id="app-version" class="about-app-version"></div>
-          <div class="about-hero-tag" data-i18n="aboutTagline">Tanken-Preise verfolgen, sparen, fertig.</div>
+          <div class="about-hero-tag" data-i18n="aboutTagline">Spritpreise im Blick.</div>
         </div>
       </div>
       <div class="card about-card about-links-card">

@@ -146,7 +146,7 @@ const i18n = {
     settingsTitle: 'Einstellungen',
     settingsDescription: 'Deine App-Einstellungen und dein Konto.',
     feloId: 'FELO ID',
-    aboutTagline: 'Tanken-Preise verfolgen, sparen, fertig.',
+    aboutTagline: 'Spritpreise im Blick.',
     // Station history
     priceHistory: 'PREISVERLAUF',
     areaHistory: 'Gebietspreisverlauf',
@@ -373,7 +373,7 @@ const i18n = {
     settingsTitle: 'Settings',
     settingsDescription: 'Your app preferences and account.',
     feloId: 'FELO ID',
-    aboutTagline: 'Track fuel prices, save, done.',
+    aboutTagline: 'Fuel prices at a glance.',
     priceHistory: 'PRICE HISTORY',
     areaHistory: 'Area price trend',
     noHistory: 'No history available',
