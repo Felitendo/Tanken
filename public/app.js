@@ -5325,12 +5325,19 @@ function renderStats(stats) {
 
 }
 
-// Resolve a station from the Stats ranking into the shape showStationSheet
-// expects. Tries the in-memory map cache first (covers users who've been on
-// the map for this area), then falls back to /api/station/:id (works for
-// German Tankerkönig IDs). Last resort: a minimal pseudo-station built
-// from just the name + brand + average price so the sheet at least opens
-// with what we know.
+// Resolve a station from the stats/history ranking into the same shape
+// showStationSheet uses for map-opened stations, so the centred popup
+// shows everything the map's bottom sheet does (address, distance,
+// current price, opening hours, maps buttons, price chart).
+//
+// Priority:
+//  1. In-memory map cache — already has every field showStationSheet
+//     expects (the map's /api/stations response).
+//  2. /api/station/:id (Tankerkönig detail.php). Returns id/name/brand,
+//     address, lat/lng, isOpen, openingTimes, wholeDay, and the three
+//     fuel prices — we pick the current fuel for the price field and
+//     compute distance from the user's GPS pin.
+//  3. Minimal pseudo-station — enough to render the header + chart.
 async function resolveRankedStation({ id, name, brand, avg }) {
   const cached = (state.stations || []).find(s =>
     (id && s.id === id) || (name && (s.name === name || s.brand === name))
@@ -5341,28 +5348,50 @@ async function resolveRankedStation({ id, name, brand, avg }) {
     try {
       const remote = await api(`/api/station/${encodeURIComponent(id)}`);
       if (remote && !remote.error) {
+        const fuel = state.fuelType || 'e5';
+        const livePrice = typeof remote[fuel] === 'number' && remote[fuel] > 0
+          ? remote[fuel]
+          : null;
+        // Prefer the live price (matches the map sheet's main number);
+        // fall back to the ranking's historical average if the detail
+        // call didn't return a price for this fuel.
+        const price = livePrice ?? avg ?? 0;
+        const userLat = state.userLat;
+        const userLng = state.userLng;
+        const toNumOrNull = (v) => {
+          const n = parseFloat(v);
+          return Number.isFinite(n) ? n : null;
+        };
+        const lat = toNumOrNull(remote.lat);
+        const lng = toNumOrNull(remote.lng);
+        const dist = (Number.isFinite(userLat) && Number.isFinite(userLng) && lat != null && lng != null)
+          ? distanceKm(userLat, userLng, lat, lng)
+          : null;
         return {
           id: remote.id || id,
           name: remote.name || name,
           brand: remote.brand || brand || '',
           street: remote.street || '',
           houseNumber: remote.houseNumber || '',
-          postCode: remote.postCode || '',
+          postCode: remote.postCode != null ? String(remote.postCode) : '',
           place: remote.place || '',
-          lat: remote.lat,
-          lng: remote.lng,
-          price: avg ?? remote.price ?? 0,
-          isOpen: remote.isOpen,
+          lat,
+          lng,
+          price,
+          isOpen: Boolean(remote.isOpen),
           openingTimes: remote.openingTimes,
           overrides: remote.overrides,
+          wholeDay: remote.wholeDay,
+          dist: dist != null ? dist : undefined,
+          distApprox: dist != null,
         };
       }
     } catch { /* fall through to pseudo */ }
   }
 
   // No live data — give the sheet enough to render its header + history
-  // chart (which keys on the station name) without exploding on missing
-  // fields. Address/hours/maps buttons will simply read as empty.
+  // chart without exploding on missing fields. Address/hours/maps
+  // buttons gracefully hide via the guards inside showStationSheet.
   return {
     id,
     name,
