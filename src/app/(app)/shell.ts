@@ -153,27 +153,30 @@ export const APP_SHELL = `
   <div class="tab-view" id="view-settings">
     <header class="page-header">
       <h1 class="page-title" data-i18n="settingsTitle">Einstellungen</h1>
-      <p class="page-description" data-i18n="settingsDescription">Personalisiere die App und verwalte dein Felo-ID-Konto.</p>
+      <p class="page-description" data-i18n="settingsDescription">Deine App-Einstellungen und dein Konto.</p>
     </header>
+
+    <!-- FELO ID hero -->
     <div class="section">
-      <div class="section-header">FELO ID</div>
-      <div class="card" id="account-card">
-        <div class="card-row">
-          <div class="card-row-left">
-            <div class="account-avatar" id="account-avatar"></div>
-            <div>
-              <div class="card-title" id="account-name">Nicht eingeloggt</div>
-              <div class="card-subtitle" id="account-subline">Login optional, zum Sync deiner Einstellungen.</div>
-            </div>
+      <div class="account-hero" id="account-card">
+        <div class="account-hero-top">
+          <div class="account-hero-avatar" id="account-avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor" class="account-hero-avatar-placeholder"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
           </div>
-          <button type="button" id="account-login-btn" class="card-action">Login</button>
+          <div class="account-hero-text">
+            <div class="account-hero-label" data-i18n="feloId">FELO ID</div>
+            <div class="account-hero-name" id="account-name">Nicht eingeloggt</div>
+            <div class="account-hero-subline" id="account-subline">Login optional, zum Sync deiner Einstellungen.</div>
+          </div>
+        </div>
+        <div class="account-hero-actions">
+          <div class="account-hero-sync-hint" id="cloud-sync-hint">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
+            <span data-i18n="cloudSyncHint">Anmelden für Cloud-Sync, um Einstellungen geräteübergreifend zu synchronisieren</span>
+          </div>
+          <button type="button" id="account-login-btn" class="account-hero-btn">Login</button>
         </div>
       </div>
-    </div>
-
-    <div id="cloud-sync-hint" class="cloud-sync-hint">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
-      <span data-i18n="cloudSyncHint">Anmelden für Cloud-Sync, um Einstellungen geräteübergreifend zu synchronisieren</span>
     </div>
 
     <div class="section">
@@ -187,10 +190,12 @@ export const APP_SHELL = `
 
     <div class="section">
       <div class="section-header"><span data-i18n="priceAlert">PREISALARM</span><span class="sync-badge" data-sync-key="alert" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg class="sync-icon-idle" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg><svg class="sync-icon-spin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg><svg class="sync-icon-ok" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.09-5.09L16.5 10.5 10 17z"/></svg></span></div>
-      <div class="card">
+      <div class="card settings-card">
         <div class="card-row card-toggle-row">
           <div class="card-row-left">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" style="color:var(--color-hint);flex-shrink:0"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+            <div class="settings-icon-chip settings-icon-accent" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+            </div>
             <span class="settings-row-label" data-i18n="notification">Benachrichtigung</span>
           </div>
           <label class="toggle-switch">
@@ -261,44 +266,67 @@ export const APP_SHELL = `
 
     <div class="section">
       <div class="section-header" data-i18n="appearance">DARSTELLUNG</div>
-      <div class="card">
+      <div class="card settings-card">
         <div class="settings-row">
           <div class="settings-row-left">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="color:var(--color-hint);flex-shrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93s3.05-7.44 7-7.93v15.86z"/></svg>
-            <span data-i18n="appearanceLabel" style="font-size:15px;font-weight:500">Darstellung</span>
+            <div class="settings-icon-chip settings-icon-accent" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93s3.05-7.44 7-7.93v15.86z"/></svg>
+            </div>
+            <span class="settings-row-label" data-i18n="appearanceLabel">Darstellung</span>
           </div>
-          <select id="theme-picker" class="settings-select">
-            <option value="auto">Auto</option>
-            <option value="light" data-i18n-option="themeLight">Hell</option>
-            <option value="dark" data-i18n-option="themeDark">Dunkel</option>
-          </select>
+        </div>
+        <div class="seg-control" id="theme-seg" role="tablist" aria-label="Theme">
+          <button type="button" class="seg-option" data-value="auto" role="tab">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69zM12 18V6c3.31 0 6 2.69 6 6s-2.69 6-6 6z"/></svg>
+            <span>Auto</span>
+          </button>
+          <button type="button" class="seg-option" data-value="light" role="tab">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z"/></svg>
+            <span data-i18n="themeLight">Hell</span>
+          </button>
+          <button type="button" class="seg-option" data-value="dark" role="tab">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 109 9c0-.46-.04-.92-.1-1.36A5.389 5.389 0 0112 3z"/></svg>
+            <span data-i18n="themeDark">Dunkel</span>
+          </button>
+          <span class="seg-thumb" aria-hidden="true"></span>
         </div>
       </div>
     </div>
 
     <div class="section">
       <div class="section-header"><span data-i18n="historyDefault">PREISVERLAUF</span><span class="sync-badge" data-sync-key="historyDefaultDays" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg class="sync-icon-idle" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg><svg class="sync-icon-spin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg><svg class="sync-icon-ok" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.09-5.09L16.5 10.5 10 17z"/></svg></span></div>
-      <div class="card">
+      <div class="card settings-card">
         <div class="settings-row">
           <div class="settings-row-left">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="color:var(--color-hint);flex-shrink:0"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
-            <span data-i18n="historyDefaultLabel" style="font-size:15px;font-weight:500">Standard-Ansicht</span>
+            <div class="settings-icon-chip settings-icon-accent" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+            </div>
+            <span class="settings-row-label" data-i18n="historyDefaultLabel">Standard-Ansicht</span>
           </div>
-          <select id="history-default-picker" class="settings-select">
-            <option value="1" data-i18n-option="historyDefault24h">24 Stunden</option>
-            <option value="7" data-i18n-option="historyDefault7d">7 Tage</option>
-          </select>
+        </div>
+        <div class="seg-control" id="history-default-seg" role="tablist" aria-label="History default range">
+          <button type="button" class="seg-option" data-value="1" role="tab">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+            <span data-i18n="historyDefault24h">24 Stunden</span>
+          </button>
+          <button type="button" class="seg-option" data-value="7" role="tab">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h5v5H7z"/></svg>
+            <span data-i18n="historyDefault7d">7 Tage</span>
+          </button>
+          <span class="seg-thumb" aria-hidden="true"></span>
         </div>
       </div>
     </div>
 
     <div class="section">
       <div class="section-header"><span data-i18n="language">SPRACHE</span><span class="sync-badge" data-sync-key="lang" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg class="sync-icon-idle" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg><svg class="sync-icon-spin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg><svg class="sync-icon-ok" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.09-5.09L16.5 10.5 10 17z"/></svg></span></div>
-      <div class="card">
+      <div class="card settings-card">
         <div class="settings-row">
           <div class="settings-row-left">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="color:var(--color-hint);flex-shrink:0"><path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>
-            <span data-i18n="languageLabel" style="font-size:15px;font-weight:500">Sprache</span>
+            <div class="settings-icon-chip settings-icon-accent" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>
+            </div>
+            <span class="settings-row-label" data-i18n="languageLabel">Sprache</span>
           </div>
           <select id="lang-picker" class="settings-select">
             <option value="de">Deutsch</option>
@@ -310,13 +338,12 @@ export const APP_SHELL = `
 
     <div class="section">
       <div class="section-header" data-i18n="about">ÜBER</div>
-      <div class="card about-card">
-        <div class="about-app-row">
-          <img src="/icons/icon-192.png" alt="Tanken" width="48" height="48" class="about-app-icon" />
-          <div class="about-app-info">
-            <div class="about-app-name">Tanken</div>
-            <div id="app-version" class="about-app-version"></div>
-          </div>
+      <div class="about-hero">
+        <img src="/icons/icon-192.png" alt="Tanken" width="68" height="68" class="about-app-icon" />
+        <div class="about-hero-info">
+          <div class="about-app-name">Tanken</div>
+          <div id="app-version" class="about-app-version"></div>
+          <div class="about-hero-tag" data-i18n="aboutTagline">Tanken-Preise verfolgen, sparen, fertig.</div>
         </div>
       </div>
       <div class="card about-card about-links-card">

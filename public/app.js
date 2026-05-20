@@ -144,7 +144,9 @@ const i18n = {
     statsTitle: 'Statistiken',
     statsDescription: 'Wann und wo Tanken am günstigsten ist.',
     settingsTitle: 'Einstellungen',
-    settingsDescription: 'Personalisiere die App und verwalte dein Felo-ID-Konto.',
+    settingsDescription: 'Deine App-Einstellungen und dein Konto.',
+    feloId: 'FELO ID',
+    aboutTagline: 'Tanken-Preise verfolgen, sparen, fertig.',
     // Station history
     priceHistory: 'PREISVERLAUF',
     areaHistory: 'Gebietspreisverlauf',
@@ -369,7 +371,9 @@ const i18n = {
     statsTitle: 'Statistics',
     statsDescription: 'When and where fuel is cheapest.',
     settingsTitle: 'Settings',
-    settingsDescription: 'Personalise the app and manage your Felo ID account.',
+    settingsDescription: 'Your app preferences and account.',
+    feloId: 'FELO ID',
+    aboutTagline: 'Track fuel prices, save, done.',
     priceHistory: 'PRICE HISTORY',
     areaHistory: 'Area price trend',
     noHistory: 'No history available',
@@ -1070,12 +1074,18 @@ function setupAccountUi() {
 }
 
 function renderAccountUi() {
+  const card = document.getElementById('account-card');
   const name = document.getElementById('account-name');
   const sub = document.getElementById('account-subline');
   const btn = document.getElementById('account-login-btn');
   const avatar = document.getElementById('account-avatar');
+  const syncHint = document.getElementById('cloud-sync-hint');
   if (!name || !sub || !btn) return;
+  // Placeholder SVG shown when logged out — kept here so we can swap it
+  // back when the user logs out from a previously logged-in state.
+  const placeholderSvg = `<svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor" class="account-hero-avatar-placeholder"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
   if (state.user) {
+    if (card) card.classList.add('is-signed-in');
     name.textContent = state.user.preferred_username || state.user.displayName || t('loggedIn');
     const connectedVia = state.config?.auth?.oidcName || 'OIDC';
     sub.textContent = state.user.email || `${t('connectedWith')} ${connectedVia}`;
@@ -1089,15 +1099,19 @@ function renderAccountUi() {
       }
       avatar.classList.add('visible');
     }
+    // Sync is on once logged in — drop the "sign in for cloud sync" hint.
+    if (syncHint) syncHint.style.display = 'none';
   } else {
+    if (card) card.classList.remove('is-signed-in');
     name.textContent = t('notLoggedIn');
     const oidcName = state.config?.auth?.oidcName;
     sub.textContent = state.config?.auth?.notes?.oidc || (oidcName ? `${t('loginWith')} ${oidcName}` : t('configureOidc'));
     btn.textContent = oidcName ? `${t('loginWith')} ${oidcName}` : 'Login';
     if (avatar) {
-      avatar.innerHTML = '';
+      avatar.innerHTML = placeholderSvg;
       avatar.classList.remove('visible');
     }
+    if (syncHint) syncHint.style.display = '';
   }
 }
 
@@ -1118,28 +1132,79 @@ if (typeof window !== 'undefined' && window.matchMedia) {
   else if (mql.addListener) mql.addListener(handler);
 }
 
+// Generic segmented control wiring — N buttons with data-value + a
+// sliding .seg-thumb behind them. The thumb tracks the active option's
+// position via offsetWidth/offsetLeft so we can use it across themes
+// where the box-model varies (padding, gap). Returns a setter the
+// caller can use to programmatically change the active value without
+// firing the change callback.
+function setupSegmentedControl(containerId, initialValue, onChange) {
+  const container = document.getElementById(containerId);
+  if (!container) return () => {};
+  const options = Array.from(container.querySelectorAll('.seg-option'));
+  const thumb = container.querySelector('.seg-thumb');
+
+  const moveThumb = (activeOpt) => {
+    if (!activeOpt || !thumb) return;
+    const w = activeOpt.offsetWidth;
+    const left = activeOpt.offsetLeft;
+    if (w <= 0) return; // layout not ready yet — ResizeObserver will retry
+    thumb.style.width = `${w}px`;
+    thumb.style.transform = `translateX(${left}px)`;
+  };
+
+  const setActive = (value, fire) => {
+    let activeOpt = null;
+    options.forEach((opt) => {
+      const isActive = opt.dataset.value === value;
+      opt.classList.toggle('active', isActive);
+      opt.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      if (isActive) activeOpt = opt;
+    });
+    moveThumb(activeOpt);
+    if (fire && onChange) onChange(value);
+  };
+
+  options.forEach((opt) => {
+    opt.addEventListener('click', () => {
+      haptic('light');
+      setActive(opt.dataset.value, true);
+    });
+  });
+
+  setActive(initialValue, false);
+
+  // The settings tab is display:none on boot. offsetWidth is 0 until
+  // it becomes visible — re-pin the thumb once layout exists.
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(() => {
+      const active = container.querySelector('.seg-option.active');
+      if (active) moveThumb(active);
+    });
+    ro.observe(container);
+  }
+
+  return (value) => setActive(value, false);
+}
+
 function setupTheme() {
   applyTheme(state.theme);
-  const select = document.getElementById('theme-picker');
-  if (!select) return;
-  select.value = state.theme;
-  select.addEventListener('change', () => {
-    haptic('light');
-    applyTheme(select.value);
+  setupSegmentedControl('theme-seg', state.theme || 'auto', (v) => {
+    applyTheme(v);
     // Theme is device-local only — don't trigger cloud sync
     saveSettingsLocal();
   });
 }
 
 function setupHistoryDefaultPicker() {
-  const select = document.getElementById('history-default-picker');
-  if (!select) return;
-  select.value = String(state.historyDefaultDays || 1);
-  select.addEventListener('change', () => {
-    haptic('light');
-    const v = parseInt(select.value, 10);
-    persistStateSettings({ historyDefaultDays: v === 7 ? 7 : 1 });
-  });
+  setupSegmentedControl(
+    'history-default-seg',
+    String(state.historyDefaultDays || 1),
+    (v) => {
+      const num = parseInt(v, 10);
+      persistStateSettings({ historyDefaultDays: num === 7 ? 7 : 1 });
+    }
+  );
 }
 
 function setupLangPicker() {
@@ -6730,14 +6795,10 @@ function applySettingsToState(settings = {}) {
   state.radiusKm = 25;
 
   applyTheme(state.theme);
-  const themeSelect = document.getElementById('theme-picker');
-  if (themeSelect) themeSelect.value = state.theme;
-  const histSelect = document.getElementById('history-default-picker');
-  if (histSelect) histSelect.value = String(state.historyDefaultDays);
-  // Swap the native <select>s for the custom desktop dropdown on wide
-  // viewports — runs once per select.
-  if (themeSelect) enhanceSelectForDesktop(themeSelect);
-  if (histSelect) enhanceSelectForDesktop(histSelect);
+  // Theme and history-default ranges are segmented controls now — they
+  // pick up their initial value from state inside their own setup
+  // functions. The language picker stays a <select>; swap it for the
+  // custom desktop dropdown on wide viewports.
   const langSelectInit = document.getElementById('lang-picker');
   if (langSelectInit) enhanceSelectForDesktop(langSelectInit);
   // Reflect the toggle's pressed state — the bar may already be in the DOM.
