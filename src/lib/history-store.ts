@@ -160,6 +160,8 @@ export async function readStationPrices(
 
 export interface PriceExtreme {
   station_name: string;
+  station_id?: string;
+  station_brand?: string;
   price: number;
   timestamp: string;
 }
@@ -176,18 +178,28 @@ export async function getPriceExtremes(locationId?: string, country?: HistoryCou
   }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
-  const cheapestResult = await database.query<{ station_name: string; price: number; timestamp: Date }>(
-    `SELECT station_name, price, timestamp FROM station_prices ${where} ORDER BY price ASC LIMIT 1`,
+  type ExtremeRow = {
+    station_name: string;
+    station_id: string | null;
+    station_brand: string | null;
+    price: number;
+    timestamp: Date;
+  };
+
+  const cheapestResult = await database.query<ExtremeRow>(
+    `SELECT station_name, station_id, station_brand, price, timestamp FROM station_prices ${where} ORDER BY price ASC LIMIT 1`,
     params
   );
 
-  const expensiveResult = await database.query<{ station_name: string; price: number; timestamp: Date }>(
-    `SELECT station_name, price, timestamp FROM station_prices ${where} ORDER BY price DESC LIMIT 1`,
+  const expensiveResult = await database.query<ExtremeRow>(
+    `SELECT station_name, station_id, station_brand, price, timestamp FROM station_prices ${where} ORDER BY price DESC LIMIT 1`,
     params
   );
 
-  const mapRow = (r: { station_name: string; price: number; timestamp: Date }): PriceExtreme => ({
+  const mapRow = (r: ExtremeRow): PriceExtreme => ({
     station_name: r.station_name,
+    station_id: r.station_id || undefined,
+    station_brand: r.station_brand || undefined,
     price: Number(r.price),
     timestamp: r.timestamp.toISOString(),
   });

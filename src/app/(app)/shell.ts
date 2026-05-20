@@ -88,7 +88,7 @@ export const APP_SHELL = `
   <div class="tab-view" id="view-history">
     <header class="page-header">
       <h1 class="page-title" data-i18n="historyTitle">Preisverlauf</h1>
-      <p class="page-description" data-i18n="historyDescription">Durchschnittspreise und Tiefstwerte über die letzten Tage.</p>
+      <p class="page-description" data-i18n="historyDescription">Wie sich die Preise zuletzt entwickelt haben.</p>
     </header>
     <div class="section">
       <div class="chip-row country-chip-row" id="history-country-chips" role="tablist" aria-label="Land">

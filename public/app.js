@@ -57,6 +57,11 @@ const i18n = {
     periodSince: 'Seit {date}',
     periodToday: 'Heute',
     locationAutoPicked: 'Automatisch · nächster Standort',
+    historyTooltipHint: 'Antippen für Stundenansicht',
+    historyAvgLabel: 'Ø',
+    historyHighLabel: 'Max',
+    historyHourTitle: 'Stundenansicht',
+    closeHourView: 'Schließen',
     oclock: 'Uhr',
     dayNames: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'],
     // Settings
@@ -135,7 +140,7 @@ const i18n = {
     pwaWin3: 'Optional: <strong>An Taskleiste anheften</strong> für schnellen Zugriff',
     // Page headers
     historyTitle: 'Preisverlauf',
-    historyDescription: 'Durchschnittspreise und Tiefstwerte über die letzten Tage.',
+    historyDescription: 'Wie sich die Preise zuletzt entwickelt haben.',
     statsTitle: 'Statistiken',
     statsDescription: 'Wann und wo Tanken am günstigsten ist.',
     settingsTitle: 'Einstellungen',
@@ -283,6 +288,11 @@ const i18n = {
     periodSince: 'Since {date}',
     periodToday: 'Today',
     locationAutoPicked: 'Auto · nearest location',
+    historyTooltipHint: 'Tap for hourly view',
+    historyAvgLabel: 'avg',
+    historyHighLabel: 'high',
+    historyHourTitle: 'Hourly view',
+    closeHourView: 'Close',
     oclock: '',
     dayNames: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     fuelType: 'FUEL TYPE',
@@ -355,7 +365,7 @@ const i18n = {
     pwaWin2: 'Confirm with <strong>"Install"</strong>',
     pwaWin3: 'Optional: <strong>Pin to taskbar</strong> for quick access',
     historyTitle: 'Price history',
-    historyDescription: 'Average and lowest prices over the past few days.',
+    historyDescription: 'How prices have moved recently.',
     statsTitle: 'Statistics',
     statsDescription: 'When and where fuel is cheapest.',
     settingsTitle: 'Settings',
@@ -4283,18 +4293,23 @@ function renderChart(data) {
     const statsEl = document.getElementById('history-stats');
     if (statsEl) { statsEl.style.display = 'none'; statsEl.innerHTML = ''; }
     const summary = document.getElementById('history-summary');
+    const emptyCard = (label, accent) => `
+      <div class="history-extreme-card is-empty" style="--accent:${accent}">
+        <div class="history-extreme-icon">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M19 13H5v-2h14v2z"/></svg>
+        </div>
+        <div class="history-extreme-body">
+          <div class="history-extreme-label">${label}</div>
+          <div class="history-extreme-value">–</div>
+          <div class="history-extreme-station">–</div>
+        </div>
+      </div>`;
     summary.innerHTML = `
       <div class="empty-state-inline">${t('noHistory')}</div>
       <div class="section-header">${t('summary')}</div>
-      <div class="extreme-card is-empty">
-        <div class="extreme-label">${t('lowestPrice')}</div>
-        <div class="extreme-value">–</div>
-        <div class="extreme-station">–</div>
-      </div>
-      <div class="extreme-card is-empty">
-        <div class="extreme-label">${t('highestPrice')}</div>
-        <div class="extreme-value">–</div>
-        <div class="extreme-station">–</div>
+      <div class="history-extreme-row">
+        ${emptyCard(t('lowestPrice'), 'var(--color-good)')}
+        ${emptyCard(t('highestPrice'), 'var(--color-bad)')}
       </div>`;
     return;
   }
@@ -4349,10 +4364,10 @@ function renderChart(data) {
   });
 
   const ctx = document.getElementById('price-chart');
-  const textColor = getComputedStyle(document.body).getPropertyValue('--color-text') || '#000';
-  const hintColor = getComputedStyle(document.body).getPropertyValue('--color-hint') || '#999';
-  const btnColor = getComputedStyle(document.body).getPropertyValue('--color-accent') || '#007aff';
-  const bgSecondary = getComputedStyle(document.body).getPropertyValue('--color-bg-secondary').trim() || '#f2f2f7';
+  const styles = getComputedStyle(document.body);
+  const hintColor = styles.getPropertyValue('--color-hint').trim() || '#999';
+  const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
+  const bgSecondary = styles.getPropertyValue('--color-bg-secondary').trim() || '#f2f2f7';
   // Skip the entry animation when we're swapping data (e.g. location
   // switch) — animating the y-axis on each switch reads as a jitter.
   const isUpdate = !!state.chart;
@@ -4360,12 +4375,20 @@ function renderChart(data) {
   if (state.hourChart) { state.hourChart.destroy(); state.hourChart = null; }
   document.getElementById('hour-chart-section').style.display = 'none';
 
+  // Per-day rank colour mapped to each day's min_price — cheap → green,
+  // expensive → red. Used for points, the latest-day glow, and the
+  // hover tooltip's price text.
+  const minVals = daily.map(d => d.min_price);
+  const minLo = Math.min(...minVals);
+  const minHi = Math.max(...minVals);
+  const minRange = Math.max(minHi - minLo, 0.0001);
+  const dayColor = (price) => rankColor((price - minLo) / minRange);
+  const pointColors = daily.map(d => dayColor(d.min_price));
+
   const lastIdx = daily.length - 1;
-  const minBaseRadius = daily.length < 20 ? 4 : 2;
-  const minPointRadius = daily.map((_, i) => i === lastIdx ? 7 : minBaseRadius);
-  const minPointHoverRadius = daily.map((_, i) => i === lastIdx ? 8 : minBaseRadius + 2);
-  const minPointBorderWidth = daily.map((_, i) => i === lastIdx ? 3 : 0);
-  const minPointBorderColor = daily.map(() => bgSecondary);
+  const minBaseRadius = daily.length < 25 ? 4 : 2.5;
+  const pointRadii = daily.map((_, i) => i === lastIdx ? 7 : minBaseRadius);
+  const pointHoverRadii = daily.map((_, i) => i === lastIdx ? 10 : minBaseRadius + 3);
 
   state.chart = new Chart(ctx, {
     type: 'line',
@@ -4373,39 +4396,50 @@ function renderChart(data) {
       labels,
       datasets: [
         {
-          label: 'Ø',
-          data: daily.map(d => d.avg_price),
-          borderColor: btnColor.trim() || '#007aff',
-          backgroundColor: 'rgba(0,122,255,0.06)',
-          borderWidth: 2,
-          borderDash: [4, 4],
-          fill: '+1',
-          tension: 0.3,
-          pointRadius: daily.length < 20 ? 3 : 1,
-          pointBackgroundColor: btnColor.trim() || '#007aff',
-          order: 1,
-        },
-        {
           label: 'Min',
-          data: daily.map(d => d.min_price),
-          borderColor: '#34c759',
-          backgroundColor: 'rgba(52,199,89,0.1)',
-          borderWidth: 2.5,
-          fill: false,
-          tension: 0.3,
-          pointRadius: minPointRadius,
-          pointHoverRadius: minPointHoverRadius,
-          pointBorderWidth: minPointBorderWidth,
-          pointBorderColor: minPointBorderColor,
-          pointBackgroundColor: '#34c759',
-          order: 2,
+          data: minVals,
+          // Vertical gradient stroke: red at the top of the chart area
+          // (expensive y values), green at the bottom. The line "warms
+          // up" when it climbs and "cools" when it dips.
+          borderColor: (chartCtx) => {
+            const chart = chartCtx.chart;
+            const { ctx: c, chartArea } = chart;
+            if (!chartArea) return '#ff9500';
+            const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+            g.addColorStop(0,   '#ff3b30');
+            g.addColorStop(0.55, '#ff9500');
+            g.addColorStop(1,   '#34c759');
+            return g;
+          },
+          backgroundColor: (chartCtx) => {
+            const chart = chartCtx.chart;
+            const { ctx: c, chartArea } = chart;
+            if (!chartArea) return 'rgba(52,199,89,0.08)';
+            const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+            g.addColorStop(0,   'rgba(255, 59, 48, 0.08)');
+            g.addColorStop(0.55, 'rgba(255, 149, 0, 0.06)');
+            g.addColorStop(1,   'rgba(52, 199, 89, 0.22)');
+            return g;
+          },
+          borderWidth: 3,
+          borderCapStyle: 'round',
+          borderJoinStyle: 'round',
+          tension: 0.35,
+          fill: true,
+          pointBackgroundColor: pointColors,
+          pointBorderColor: bgSecondary,
+          pointBorderWidth: 2,
+          pointRadius: pointRadii,
+          pointHoverRadius: pointHoverRadii,
+          pointHoverBorderWidth: 3,
+          pointHoverBorderColor: bgSecondary,
         },
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: isUpdate ? false : { duration: 700 },
+      animation: isUpdate ? false : { duration: 1100, easing: 'easeOutQuart' },
       interaction: { intersect: false, mode: 'index' },
       onClick: (evt, elements) => {
         if (!elements.length) return;
@@ -4416,41 +4450,114 @@ function renderChart(data) {
         }
       },
       plugins: {
-        legend: {
-          display: true,
-          position: 'top',
-          align: 'end',
-          labels: {
-            color: textColor.trim() || '#000',
-            font: { size: 12, family: '-apple-system, BlinkMacSystemFont, Roboto, sans-serif' },
-            boxWidth: 12,
-            padding: 12
-          }
-        },
+        legend: { display: false },
         tooltip: {
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          titleFont: { size: 13 },
-          bodyFont: { size: 13 },
-          callbacks: {
-            title: (items) => {
-              if (!items.length) return '';
-              const d = daily[items[0].dataIndex];
-              if (!d) return '';
-              const dt = new Date(d.timestamp);
-              const dayNames = t('dayNames') || [];
-              const name = dayNames[dt.getDay()] || '';
-              return `${name} ${dt.getDate()}.${dt.getMonth() + 1}.${dt.getFullYear()}`;
-            },
-            label: (c) => `${c.dataset.label}: ${formatPrice(c.parsed.y)}`
-          },
-          footer: () => [t('tapForHours') || 'Tap for hourly detail'],
+          // Custom HTML tooltip so the price can be coloured by rank
+          // and we can stack min / avg / max in one card.
+          enabled: false,
+          external: (chartCtx) => {
+            const el = ensureHistoryTooltipEl();
+            const tt = chartCtx.tooltip;
+            if (!tt || tt.opacity === 0 || !tt.dataPoints || !tt.dataPoints.length) {
+              el.classList.remove('show');
+              return;
+            }
+            const idx = tt.dataPoints[0].dataIndex;
+            const day = daily[idx];
+            if (!day) { el.classList.remove('show'); return; }
+            const dt = new Date(day.timestamp);
+            const dayNames = t('dayNames') || [];
+            const name = dayNames[dt.getDay()] || '';
+            const dateLabel = `${name} ${dt.getDate()}.${dt.getMonth() + 1}.`;
+            const color = pointColors[idx] || '#ff9500';
+            const drillable = day.entries.length > 1;
+            el.innerHTML = `
+              <div class="history-tooltip-time">${dateLabel}</div>
+              <div class="history-tooltip-price" style="color:${color}">${formatPrice(day.min_price)}</div>
+              <div class="history-tooltip-meta">
+                <span>${t('historyAvgLabel')} ${formatPrice(day.avg_price)}</span>
+                <span>${t('historyHighLabel')} ${formatPrice(day.max_price)}</span>
+              </div>
+              ${drillable ? `<div class="history-tooltip-hint">${t('historyTooltipHint')}</div>` : ''}
+            `;
+            const rect = chartCtx.chart.canvas.getBoundingClientRect();
+            el.style.left = (rect.left + window.scrollX + tt.caretX) + 'px';
+            el.style.top = (rect.top + window.scrollY + tt.caretY) + 'px';
+            el.classList.add('show');
+          }
         }
       },
       scales: {
-        x: { ticks: { color: hintColor.trim() || '#999', font: { size: 11 }, maxTicksLimit: 8 }, grid: { display: false }, border: { display: false } },
-        y: { ticks: { color: hintColor.trim() || '#999', font: { size: 11 }, callback: v => formatPrice(v) }, grid: { color: 'rgba(128,128,128,0.1)' }, border: { display: false } }
+        x: {
+          ticks: {
+            color: hintColor,
+            font: { size: 11, family: '-apple-system, BlinkMacSystemFont, Roboto, sans-serif' },
+            maxTicksLimit: 8,
+          },
+          grid: { display: false },
+          border: { display: false },
+        },
+        y: {
+          ticks: {
+            color: hintColor,
+            font: { size: 11, family: '-apple-system, BlinkMacSystemFont, Roboto, sans-serif' },
+            callback: (v) => formatPrice(v),
+            maxTicksLimit: 4,
+          },
+          grid: { color: sepColor, lineWidth: 0.5 },
+          border: { display: false },
+        }
       }
-    }
+    },
+    plugins: [{
+      id: 'historyCrosshair',
+      afterDatasetsDraw(chart) {
+        const active = chart.getActiveElements();
+        if (!active.length) return;
+        const elPt = active[0].element;
+        if (!elPt) return;
+        const idx = active[0].index;
+        const color = pointColors[idx] || '#ff9500';
+        const { ctx: c, chartArea } = chart;
+        const x = elPt.x, y = elPt.y;
+        c.save();
+        c.strokeStyle = rgbWithAlpha(color, 0.45);
+        c.lineWidth = 1.25;
+        c.setLineDash([4, 5]);
+        c.beginPath();
+        c.moveTo(x, chartArea.top);
+        c.lineTo(x, chartArea.bottom);
+        c.stroke();
+        c.setLineDash([]);
+        c.beginPath();
+        c.arc(x, y, 16, 0, Math.PI * 2);
+        c.fillStyle = rgbWithAlpha(color, 0.12);
+        c.fill();
+        c.beginPath();
+        c.arc(x, y, 10, 0, Math.PI * 2);
+        c.fillStyle = rgbWithAlpha(color, 0.22);
+        c.fill();
+        c.restore();
+      }
+    }, {
+      // Persistent soft halo around the latest "today" point so the eye
+      // lands on where the price is right now.
+      id: 'historyTodayGlow',
+      afterDatasetsDraw(chart) {
+        const meta = chart.getDatasetMeta(0);
+        if (!meta || !meta.data || !meta.data.length) return;
+        const last = meta.data[meta.data.length - 1];
+        if (!last || last.skip) return;
+        const color = pointColors[pointColors.length - 1] || '#ff9500';
+        const { ctx: c } = chart;
+        c.save();
+        c.beginPath();
+        c.arc(last.x, last.y, 14, 0, Math.PI * 2);
+        c.fillStyle = rgbWithAlpha(color, 0.15);
+        c.fill();
+        c.restore();
+      }
+    }]
   });
 
   const summary = document.getElementById('history-summary');
@@ -4458,8 +4565,12 @@ function renderChart(data) {
   const extremes = state.priceExtremes;
   const cheapestName = extremes?.cheapest?.station_name || '';
   const cheapestPrice = extremes?.cheapest?.price;
+  const cheapestId = extremes?.cheapest?.station_id || '';
+  const cheapestBrand = extremes?.cheapest?.station_brand || '';
   const expensiveName = extremes?.mostExpensive?.station_name || '';
   const expensivePrice = extremes?.mostExpensive?.price;
+  const expensiveId = extremes?.mostExpensive?.station_id || '';
+  const expensiveBrand = extremes?.mostExpensive?.station_brand || '';
   // Fallback to aggregated data if no extremes
   const minEntry = filtered.reduce((a, b) => a.min_price < b.min_price ? a : b);
   const maxEntry = filtered.reduce((a, b) => a.max_price > b.max_price ? a : b);
@@ -4467,18 +4578,50 @@ function renderChart(data) {
   const lowestPrice = cheapestPrice != null ? cheapestPrice : minEntry.min_price;
   const highestStation = expensiveName || fixEnc(maxEntry.station) || t('unknown');
   const highestPrice = expensivePrice != null ? expensivePrice : maxEntry.max_price;
+
+  const extremeCard = (kind, label, price, station, id, brand) => {
+    const isLow = kind === 'low';
+    const colorVar = isLow ? 'var(--color-good)' : 'var(--color-bad)';
+    const iconPath = isLow ? ICON_PATHS.trendDown : ICON_PATHS.trendUp;
+    const dataAttrs = id
+      ? `data-station-id="${id}" data-station-name="${fixEnc(station)}" data-station-brand="${fixEnc(brand)}" data-station-price="${price}"`
+      : `data-station-name="${fixEnc(station)}" data-station-price="${price}"`;
+    return `<button type="button" class="history-extreme-card" style="--accent:${colorVar}" ${dataAttrs}>
+      <div class="history-extreme-icon">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">${iconPath}</svg>
+      </div>
+      <div class="history-extreme-body">
+        <div class="history-extreme-label">${label}</div>
+        <div class="history-extreme-value">${formatPrice(price)}</div>
+        <div class="history-extreme-station">${fixEnc(station)}</div>
+      </div>
+    </button>`;
+  };
+
   summary.innerHTML = `
     <div class="section-header">${t('summary')}</div>
-    <div class="extreme-card">
-      <div class="extreme-label">${t('lowestPrice')}</div>
-      <div class="extreme-value good">${formatPrice(lowestPrice)}</div>
-      <div class="extreme-station">${fixEnc(lowestStation)}</div>
-    </div>
-    <div class="extreme-card">
-      <div class="extreme-label">${t('highestPrice')}</div>
-      <div class="extreme-value bad">${formatPrice(highestPrice)}</div>
-      <div class="extreme-station">${fixEnc(highestStation)}</div>
+    <div class="history-extreme-row">
+      ${extremeCard('low', t('lowestPrice'), lowestPrice, lowestStation, cheapestId, cheapestBrand)}
+      ${extremeCard('high', t('highestPrice'), highestPrice, highestStation, expensiveId, expensiveBrand)}
     </div>`;
+
+  // Make the extreme cards open the same centred popup the stats
+  // ranking does. resolveRankedStation handles cache → /api/station/:id
+  // → minimal pseudo fallback.
+  summary.querySelectorAll('.history-extreme-card').forEach((card, i) => {
+    card.style.animationDelay = `${Math.min(i * 60, 120)}ms`;
+    card.classList.add('anim-in');
+    if (card.classList.contains('is-empty')) return;
+    card.addEventListener('click', async () => {
+      haptic('light');
+      const id = card.dataset.stationId;
+      const name = card.dataset.stationName;
+      const brand = card.dataset.stationBrand || '';
+      const price = parseFloat(card.dataset.stationPrice) || null;
+      const station = await resolveRankedStation({ id, name, brand, avg: price });
+      if (station) showStationSheet(station, { centered: true });
+    });
+  });
 }
 
 function renderHistoryStats(data) {
@@ -4495,8 +4638,8 @@ function renderHistoryStats(data) {
     const endTs = now - startDaysAgo * dayMs;
     const vals = [];
     for (const d of data) {
-      const t = new Date(d.timestamp).getTime();
-      if (t >= startTs && t < endTs) vals.push(d.avg_price);
+      const ts = new Date(d.timestamp).getTime();
+      if (ts >= startTs && ts < endTs) vals.push(d.avg_price);
     }
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
   };
@@ -4512,27 +4655,80 @@ function renderHistoryStats(data) {
   const prevMonth = avgInRange(30, 60);
   const deltaMonth = (month != null && prevMonth != null) ? month - prevMonth : null;
 
-  const trendClass = (d) => d == null ? 'flat' : d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
-  const trendArrow = (d) => d == null ? '·' : d > 0 ? '▲' : d < 0 ? '▼' : '·';
+  // Period label sourced from the entire dataset's oldest timestamp so it
+  // reflects how much history is actually available (after retention).
+  const tsList = data.map(d => new Date(d.timestamp).getTime()).filter(ts => !isNaN(ts));
+  let periodLabel = '';
+  if (tsList.length) {
+    const since = Math.min(...tsList);
+    const days = Math.max(1, Math.round((Date.now() - since) / dayMs) + 1);
+    if (days < 2) periodLabel = t('periodToday') || 'Today';
+    else if (days < 90) periodLabel = (t('periodLastDays') || 'Last {n} days').replace('{n}', String(days));
+    else {
+      const locale = state.lang === 'en' ? 'en-US' : 'de-DE';
+      const dateStr = new Date(since).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
+      periodLabel = (t('periodSince') || 'Since {date}').replace('{date}', dateStr);
+    }
+  }
+
+  const trendIconPath = (delta) => {
+    if (delta == null || Math.abs(delta) < 0.005) return ICON_PATHS.chart;
+    return delta < 0 ? ICON_PATHS.trendDown : ICON_PATHS.trendUp;
+  };
+  const trendVar = (delta) => {
+    if (delta == null || Math.abs(delta) < 0.005) return 'var(--color-hint)';
+    return delta < 0 ? 'var(--color-good)' : 'var(--color-bad)';
+  };
+  const trendArrow = (delta) => {
+    if (delta == null || Math.abs(delta) < 0.005) return '→';
+    return delta < 0 ? '↓' : '↑';
+  };
+
+  const renderPill = (delta, label) => {
+    if (delta == null) return '';
+    return `<span class="history-hero-pill" style="--pill-color:${trendVar(delta)}">
+      <span class="history-hero-pill-arrow">${trendArrow(delta)}</span>
+      <span class="history-hero-pill-value">${formatDelta(delta)}</span>
+      <span class="history-hero-pill-label">${label}</span>
+    </span>`;
+  };
 
   el.style.display = '';
   el.innerHTML = `
-    <div class="metric-row">
-      <div class="metric-card">
-        <div class="metric-label">${t('currentAvg')}</div>
-        <div class="metric-value">${currentAvg != null ? formatPrice(currentAvg) : '–'}</div>
+    <div class="history-hero-card">
+      <div class="history-hero-top">
+        <div class="history-hero-headline">
+          <div class="history-hero-label">${t('currentAvg')}</div>
+          <div class="history-hero-value metric-value">${currentAvg != null ? formatPrice(currentAvg) : '–'}</div>
+          ${periodLabel ? `<div class="history-hero-period">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h5v5H7z"/></svg>
+            <span>${periodLabel}</span>
+          </div>` : ''}
+        </div>
+        <div class="history-hero-glyph" style="--glyph-color:${trendVar(deltaWeek)}" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor">${trendIconPath(deltaWeek)}</svg>
+        </div>
       </div>
-      <div class="metric-card">
-        <div class="metric-label">${t('vsLastWeek')}</div>
-        <div class="metric-value" style="color:${deltaColor(deltaWeek)}">${formatDelta(deltaWeek)}</div>
-        <div class="metric-trend ${trendClass(deltaWeek)}">${trendArrow(deltaWeek)} ${week != null ? formatPrice(week) : '–'}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">${t('vsLastMonth')}</div>
-        <div class="metric-value" style="color:${deltaColor(deltaMonth)}">${formatDelta(deltaMonth)}</div>
-        <div class="metric-trend ${trendClass(deltaMonth)}">${trendArrow(deltaMonth)} ${month != null ? formatPrice(month) : '–'}</div>
-      </div>
+      ${(deltaWeek != null || deltaMonth != null) ? `<div class="history-hero-pills">
+        ${renderPill(deltaWeek, t('vsLastWeek'))}
+        ${renderPill(deltaMonth, t('vsLastMonth'))}
+      </div>` : ''}
     </div>`;
+
+  // Slide-in + count-up on the hero just like the stats tab does for
+  // its own headline value. Deferred to the next frame so the DOM write
+  // doesn't compete with the tab-switch animation.
+  requestAnimationFrame(() => {
+    const card = el.querySelector('.history-hero-card');
+    if (card) card.classList.add('anim-in');
+    const cv = el.querySelector('.history-hero-value');
+    if (cv) {
+      const num = parseFloat(cv.textContent.replace(',', '.'));
+      if (!isNaN(num) && num > 0) {
+        countUp(cv, num, 700, (v) => formatPrice(v));
+      }
+    }
+  });
 }
 
 function renderHourChart(entries, dayKey) {
@@ -4541,7 +4737,19 @@ function renderHourChart(entries, dayKey) {
   const dt = new Date(dayKey);
   const dayNames = t('dayNames') || [];
   const dayName = dayNames[dt.getDay()] || '';
-  label.textContent = `${dayName} ${dt.getDate()}.${dt.getMonth() + 1}.${dt.getFullYear()}`;
+  // The section header carries the drilled-down day plus a close button
+  // so the user can collapse the panel without scrolling away.
+  label.innerHTML = `
+    <span class="hour-chart-day">${dayName} ${dt.getDate()}.${dt.getMonth() + 1}.${dt.getFullYear()}</span>
+    <button type="button" class="hour-chart-close" aria-label="${t('closeHourView')}">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+    </button>
+  `;
+  label.querySelector('.hour-chart-close')?.addEventListener('click', () => {
+    haptic('light');
+    section.style.display = 'none';
+    if (state.hourChart) { state.hourChart.destroy(); state.hourChart = null; }
+  });
   section.style.display = '';
 
   const sorted = [...entries].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
@@ -4550,9 +4758,18 @@ function renderHourChart(entries, dayKey) {
     return `${h.getHours()}:${String(h.getMinutes()).padStart(2, '0')}`;
   });
 
-  const textColor = getComputedStyle(document.body).getPropertyValue('--color-text') || '#000';
-  const hintColor = getComputedStyle(document.body).getPropertyValue('--color-hint') || '#999';
-  const btnColor = getComputedStyle(document.body).getPropertyValue('--color-accent') || '#007aff';
+  const styles = getComputedStyle(document.body);
+  const hintColor = styles.getPropertyValue('--color-hint').trim() || '#999';
+  const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
+  const bgSecondary = styles.getPropertyValue('--color-bg-secondary').trim() || '#fff';
+
+  // Rank-based colour per data point — same scheme the day chart uses,
+  // applied here to the intraday min values.
+  const minVals = sorted.map(d => d.min_price);
+  const minLo = Math.min(...minVals);
+  const minHi = Math.max(...minVals);
+  const minRange = Math.max(minHi - minLo, 0.0001);
+  const pointColors = minVals.map(v => rankColor((v - minLo) / minRange));
 
   if (state.hourChart) state.hourChart.destroy();
   const ctx = document.getElementById('hour-chart');
@@ -4561,74 +4778,128 @@ function renderHourChart(entries, dayKey) {
     type: 'line',
     data: {
       labels: hLabels,
-      datasets: [
-        {
-          label: 'Ø',
-          data: sorted.map(d => d.avg_price),
-          borderColor: btnColor.trim() || '#007aff',
-          backgroundColor: 'rgba(0,122,255,0.06)',
-          borderWidth: 2,
-          borderDash: [4, 4],
-          fill: '+1',
-          tension: 0.3,
-          pointRadius: sorted.length < 20 ? 3 : 1,
-          pointBackgroundColor: btnColor.trim() || '#007aff',
-          order: 1,
+      datasets: [{
+        label: 'Min',
+        data: minVals,
+        borderColor: (chartCtx) => {
+          const chart = chartCtx.chart;
+          const { ctx: c, chartArea } = chart;
+          if (!chartArea) return '#ff9500';
+          const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+          g.addColorStop(0,   '#ff3b30');
+          g.addColorStop(0.55, '#ff9500');
+          g.addColorStop(1,   '#34c759');
+          return g;
         },
-        {
-          label: 'Min',
-          data: sorted.map(d => d.min_price),
-          borderColor: '#34c759',
-          backgroundColor: 'rgba(52,199,89,0.1)',
-          borderWidth: 2.5,
-          fill: false,
-          tension: 0.3,
-          pointRadius: sorted.length < 20 ? 4 : 2,
-          pointBackgroundColor: '#34c759',
-          order: 2,
+        backgroundColor: (chartCtx) => {
+          const chart = chartCtx.chart;
+          const { ctx: c, chartArea } = chart;
+          if (!chartArea) return 'rgba(52,199,89,0.08)';
+          const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+          g.addColorStop(0,   'rgba(255, 59, 48, 0.08)');
+          g.addColorStop(0.55, 'rgba(255, 149, 0, 0.06)');
+          g.addColorStop(1,   'rgba(52, 199, 89, 0.20)');
+          return g;
         },
-      ]
+        borderWidth: 2.5,
+        borderCapStyle: 'round',
+        borderJoinStyle: 'round',
+        tension: 0.35,
+        fill: true,
+        pointBackgroundColor: pointColors,
+        pointBorderColor: bgSecondary,
+        pointBorderWidth: 1.5,
+        pointRadius: sorted.length < 30 ? 3 : 1.5,
+        pointHoverRadius: sorted.length < 30 ? 5 : 4,
+        pointHoverBorderWidth: 2,
+        pointHoverBorderColor: bgSecondary,
+      }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: { duration: 900, easing: 'easeOutQuart' },
       interaction: { intersect: false, mode: 'index' },
       plugins: {
-        legend: {
-          display: true,
-          position: 'top',
-          labels: {
-            color: textColor.trim() || '#000',
-            font: { size: 12, family: '-apple-system, BlinkMacSystemFont, Roboto, sans-serif' },
-            boxWidth: 12,
-            padding: 12
-          }
-        },
+        legend: { display: false },
         tooltip: {
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          titleFont: { size: 13 },
-          bodyFont: { size: 13 },
-          callbacks: {
-            title: (items) => {
-              if (!items.length) return '';
-              const d = sorted[items[0].dataIndex];
-              if (!d) return '';
-              const dt = new Date(d.timestamp);
-              const hh = String(dt.getHours()).padStart(2, '0');
-              const mm = String(dt.getMinutes()).padStart(2, '0');
-              const ss = String(dt.getSeconds()).padStart(2, '0');
-              const suffix = t('oclock');
-              return suffix ? `${hh}:${mm}:${ss} ${suffix}` : `${hh}:${mm}:${ss}`;
-            },
-            label: (c) => `${c.dataset.label}: ${formatPrice(c.parsed.y)}`
+          enabled: false,
+          external: (chartCtx) => {
+            const el = ensureHistoryTooltipEl();
+            const tt = chartCtx.tooltip;
+            if (!tt || tt.opacity === 0 || !tt.dataPoints || !tt.dataPoints.length) {
+              el.classList.remove('show');
+              return;
+            }
+            const idx = tt.dataPoints[0].dataIndex;
+            const entry = sorted[idx];
+            if (!entry) { el.classList.remove('show'); return; }
+            const t1 = new Date(entry.timestamp);
+            const hh = String(t1.getHours()).padStart(2, '0');
+            const mm = String(t1.getMinutes()).padStart(2, '0');
+            const suffix = t('oclock');
+            const timeLabel = suffix ? `${hh}:${mm} ${suffix}` : `${hh}:${mm}`;
+            const color = pointColors[idx] || '#ff9500';
+            el.innerHTML = `
+              <div class="history-tooltip-time">${timeLabel}</div>
+              <div class="history-tooltip-price" style="color:${color}">${formatPrice(entry.min_price)}</div>
+              <div class="history-tooltip-meta">
+                <span>${t('historyAvgLabel')} ${formatPrice(entry.avg_price)}</span>
+                <span>${t('historyHighLabel')} ${formatPrice(entry.max_price)}</span>
+              </div>
+            `;
+            const rect = chartCtx.chart.canvas.getBoundingClientRect();
+            el.style.left = (rect.left + window.scrollX + tt.caretX) + 'px';
+            el.style.top = (rect.top + window.scrollY + tt.caretY) + 'px';
+            el.classList.add('show');
           }
         }
       },
       scales: {
-        x: { ticks: { color: hintColor.trim() || '#999', font: { size: 11 }, maxTicksLimit: 12 }, grid: { display: false } },
-        y: { ticks: { color: hintColor.trim() || '#999', font: { size: 11 }, callback: v => formatPrice(v) }, grid: { color: 'rgba(128,128,128,0.1)' } }
+        x: {
+          ticks: { color: hintColor, font: { size: 11 }, maxTicksLimit: 8 },
+          grid: { display: false },
+          border: { display: false },
+        },
+        y: {
+          ticks: {
+            color: hintColor,
+            font: { size: 11 },
+            callback: (v) => formatPrice(v),
+            maxTicksLimit: 4,
+          },
+          grid: { color: sepColor, lineWidth: 0.5 },
+          border: { display: false },
+        }
       }
-    }
+    },
+    plugins: [{
+      id: 'historyHourCrosshair',
+      afterDatasetsDraw(chart) {
+        const active = chart.getActiveElements();
+        if (!active.length) return;
+        const elPt = active[0].element;
+        if (!elPt) return;
+        const idx = active[0].index;
+        const color = pointColors[idx] || '#ff9500';
+        const { ctx: c, chartArea } = chart;
+        const x = elPt.x, y = elPt.y;
+        c.save();
+        c.strokeStyle = rgbWithAlpha(color, 0.4);
+        c.lineWidth = 1.25;
+        c.setLineDash([4, 5]);
+        c.beginPath();
+        c.moveTo(x, chartArea.top);
+        c.lineTo(x, chartArea.bottom);
+        c.stroke();
+        c.setLineDash([]);
+        c.beginPath();
+        c.arc(x, y, 12, 0, Math.PI * 2);
+        c.fillStyle = rgbWithAlpha(color, 0.18);
+        c.fill();
+        c.restore();
+      }
+    }]
   });
 
   // Scroll the hour chart into view
@@ -5031,6 +5302,18 @@ function ensureStatsHourTooltipEl() {
     el = document.createElement('div');
     el.id = 'stats-hour-tooltip';
     el.className = 'stats-hour-tooltip';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+// Same idea for the history tab's chart (min/avg/max for the day).
+function ensureHistoryTooltipEl() {
+  let el = document.getElementById('history-tooltip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'history-tooltip';
+    el.className = 'history-tooltip';
     document.body.appendChild(el);
   }
   return el;
