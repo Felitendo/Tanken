@@ -133,7 +133,7 @@ const i18n = {
     // Location
     locationTitle: 'Standort',
     locationError: 'Konnte Standort nicht ermitteln. Bitte Berechtigung erlauben.',
-    searchPlaceholder: 'Ort suchen…',
+    searchPlaceholder: 'Tankstelle oder Ort suchen…',
     locationBanner: 'Standort konnte nicht ermittelt werden. Bitte suche einen Ort.',
     noSearchResults: 'Keine Ergebnisse',
     // PWA
@@ -372,7 +372,7 @@ const i18n = {
     priceAlertTitle: 'Tanken - Price Alert!',
     locationTitle: 'Location',
     locationError: 'Could not determine location. Please allow permission.',
-    searchPlaceholder: 'Search location…',
+    searchPlaceholder: 'Search station or location…',
     locationBanner: 'Could not determine location. Please search for a location.',
     noSearchResults: 'No results',
     pwaTitle: 'Install Tanken',
@@ -5969,69 +5969,172 @@ function setupMapSearch() {
   });
 }
 
+// Match the user's query against the currently loaded stations. Ranking
+// mirrors renderStationList: open + priced stations sorted by price (with
+// distance as tiebreaker), so the rank badge in the search dropdown is
+// the same number the user would see in the list below.
+function matchStationsByQuery(query) {
+  const stations = Array.isArray(state.stations) ? state.stations : [];
+  const open = stations.filter(s => s.isOpen && s.price != null && s.price > 0);
+  if (!open.length) return [];
+
+  const ranked = [...open].sort((a, b) => (a.price - b.price) || ((a.dist || 999) - (b.dist || 999)));
+  const stationKey = (s) => s.id || `${s.lat},${s.lng}`;
+  const rankByKey = new Map();
+  ranked.forEach((s, i) => rankByKey.set(stationKey(s), i + 1));
+
+  const q = query.toLowerCase();
+  const scored = [];
+  for (const s of open) {
+    const name = (s.name || '').toLowerCase();
+    const brand = (s.brand || '').toLowerCase();
+    const street = (s.street || '').toLowerCase();
+    const place = (s.place || '').toLowerCase();
+    let score = 0;
+    if (brand && brand.startsWith(q)) score = 100;
+    else if (name && name.startsWith(q)) score = 90;
+    else if (brand && brand.includes(q)) score = 80;
+    else if (name && name.includes(q)) score = 70;
+    else if (street.includes(q)) score = 50;
+    else if (place.includes(q)) score = 40;
+    if (!score) continue;
+    scored.push({ station: s, rank: rankByKey.get(stationKey(s)) || null, score });
+  }
+  scored.sort((a, b) => (b.score - a.score) || (a.station.price - b.station.price));
+  return scored.slice(0, 6);
+}
+
+function renderStationSearchResultsHtml(matches) {
+  if (!matches.length) return '';
+  return matches.map((m, i) => {
+    const s = m.station;
+    const color = priceColorStable(s.price, s._locationId, s.lat, s.lng);
+    const priceParts = formatPriceParts(s.price);
+    const distLabel = s.dist ? `${s.distApprox ? '~' : ''}${s.dist.toFixed(1)} km` : '';
+    const addrParts = [
+      [fixEnc(s.street || ''), s.houseNumber || ''].filter(Boolean).join(' ').trim(),
+      fixEnc(s.place || ''),
+    ].filter(Boolean).join(', ');
+    const meta = [distLabel, addrParts].filter(Boolean).join(' · ');
+    return `
+      <div class="map-search-result-item map-search-station-item" data-station-idx="${i}">
+        <div class="map-search-station-rank" style="background:${color}">${m.rank ?? '–'}</div>
+        <div class="map-search-station-info">
+          <div class="map-search-station-name">${fixEnc(s.brand || s.name || '')}</div>
+          <div class="map-search-station-addr">${meta}</div>
+        </div>
+        <div class="map-search-station-price" style="color:${color}">${priceParts.main}${priceParts.decimal ? `<sup>${priceParts.decimal}</sup>` : ''}</div>
+      </div>`;
+  }).join('');
+}
+
+function renderLocationSearchResultsHtml(items) {
+  if (!items.length) return '';
+  return items.map(item => `
+    <div class="map-search-result-item" data-lat="${item.lat}" data-lng="${item.lon}">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--color-hint)" style="flex-shrink:0"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+      <span>${item.display_name}</span>
+    </div>
+  `).join('');
+}
+
+function attachStationSearchHandlers(resultsEl, matches) {
+  const input = document.getElementById('map-search-input');
+  const clearBtn = document.getElementById('map-search-clear');
+  resultsEl.querySelectorAll('.map-search-station-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = parseInt(el.dataset.stationIdx, 10);
+      const station = matches[idx]?.station;
+      if (!station) return;
+      haptic('light');
+      input.value = station.brand || station.name || '';
+      clearBtn.classList.remove('hidden');
+      resultsEl.classList.add('hidden');
+      document.getElementById('map-location-banner')?.classList.add('hidden');
+      if (Number.isFinite(station.lat) && Number.isFinite(station.lng) && state.map) {
+        state.map.flyTo([station.lat, station.lng], 15, { duration: 0.6 });
+      }
+      showStationSheet(station);
+    });
+  });
+}
+
+function attachLocationSearchHandlers(resultsEl) {
+  resultsEl.querySelectorAll('.map-search-result-item:not(.map-search-station-item)').forEach(el => {
+    el.addEventListener('click', async () => {
+      const lat = parseFloat(el.dataset.lat);
+      const lng = parseFloat(el.dataset.lng);
+      document.getElementById('map-search-input').value = el.querySelector('span').textContent;
+      document.getElementById('map-search-clear').classList.remove('hidden');
+      resultsEl.classList.add('hidden');
+      // Hide location banner since user picked a location
+      document.getElementById('map-location-banner')?.classList.add('hidden');
+      // Tear down any open picker so the ripple is the only overlay
+      if (state._scanPicker) exitScanPickerMode();
+      state.loaded.map = true;
+
+      // Austria has live E-Control coverage everywhere — no scan, no queue,
+      // no cooldown. Just fly to the spot and load prices directly. Same
+      // applies for German locations that already sit inside (or within
+      // 25 km of) an existing scan location's radius — manually scanning
+      // there would be wasted, the data is already in the cache.
+      // The user's pin (state.userLat/Lng) is NOT moved by a search — the
+      // search only changes the map view, not the user's actual location.
+      const covered = await isLocationAlreadyCovered(lat, lng);
+      if (covered) {
+        applyCountryUi();
+        if (state.map) state.map.flyTo([lat, lng], 13, { duration: 0.6 });
+        await new Promise(r => setTimeout(r, 650));
+        // viewport refresh fires from the moveend hook after flyTo finishes.
+        return;
+      }
+
+      // Germany flow: queue if a scan is running or the cooldown is still ticking.
+      if (isScanBusy()) {
+        enqueueScan(lat, lng);
+        return;
+      }
+
+      const flyDuration = 0.6;
+      if (state.map) state.map.flyTo([lat, lng], 13, { duration: flyDuration });
+      await new Promise(r => setTimeout(r, flyDuration * 1000 + 50));
+      await runScanAt(lat, lng);
+    });
+  });
+}
+
 async function searchLocation(query) {
   const resultsEl = document.getElementById('map-search-results');
+  const stationMatches = matchStationsByQuery(query);
+  const stationHtml = renderStationSearchResultsHtml(stationMatches);
+
+  // Render station hits immediately so the user gets feedback before the
+  // Nominatim request resolves. Locations are appended once they arrive.
+  if (stationHtml) {
+    resultsEl.innerHTML = stationHtml;
+    resultsEl.classList.remove('hidden');
+    attachStationSearchHandlers(resultsEl, stationMatches);
+  }
+
+  let locationItems = [];
   try {
     const resp = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&accept-language=${state.lang || 'de'}`);
-    const data = await resp.json();
-    if (!data.length) {
-      resultsEl.innerHTML = `<div class="map-search-no-results">${t('noSearchResults')}</div>`;
-      resultsEl.classList.remove('hidden');
-      return;
-    }
-    resultsEl.innerHTML = data.map(item => `
-      <div class="map-search-result-item" data-lat="${item.lat}" data-lng="${item.lon}">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--color-hint)" style="flex-shrink:0"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-        <span>${item.display_name}</span>
-      </div>
-    `).join('');
-    resultsEl.classList.remove('hidden');
-
-    resultsEl.querySelectorAll('.map-search-result-item').forEach(el => {
-      el.addEventListener('click', async () => {
-        const lat = parseFloat(el.dataset.lat);
-        const lng = parseFloat(el.dataset.lng);
-        document.getElementById('map-search-input').value = el.querySelector('span').textContent;
-        document.getElementById('map-search-clear').classList.remove('hidden');
-        resultsEl.classList.add('hidden');
-        // Hide location banner since user picked a location
-        document.getElementById('map-location-banner')?.classList.add('hidden');
-        // Tear down any open picker so the ripple is the only overlay
-        if (state._scanPicker) exitScanPickerMode();
-        state.loaded.map = true;
-
-        // Austria has live E-Control coverage everywhere — no scan, no queue,
-        // no cooldown. Just fly to the spot and load prices directly. Same
-        // applies for German locations that already sit inside (or within
-        // 25 km of) an existing scan location's radius — manually scanning
-        // there would be wasted, the data is already in the cache.
-        // The user's pin (state.userLat/Lng) is NOT moved by a search — the
-        // search only changes the map view, not the user's actual location.
-        const covered = await isLocationAlreadyCovered(lat, lng);
-        if (covered) {
-          applyCountryUi();
-          if (state.map) state.map.flyTo([lat, lng], 13, { duration: 0.6 });
-          await new Promise(r => setTimeout(r, 650));
-          // viewport refresh fires from the moveend hook after flyTo finishes.
-          return;
-        }
-
-        // Germany flow: queue if a scan is running or the cooldown is still ticking.
-        if (isScanBusy()) {
-          enqueueScan(lat, lng);
-          return;
-        }
-
-        const flyDuration = 0.6;
-        if (state.map) state.map.flyTo([lat, lng], 13, { duration: flyDuration });
-        await new Promise(r => setTimeout(r, flyDuration * 1000 + 50));
-        await runScanAt(lat, lng);
-      });
-    });
+    locationItems = await resp.json();
   } catch {
+    locationItems = [];
+  }
+
+  const locationHtml = renderLocationSearchResultsHtml(locationItems);
+  if (!stationHtml && !locationHtml) {
     resultsEl.innerHTML = `<div class="map-search-no-results">${t('noSearchResults')}</div>`;
     resultsEl.classList.remove('hidden');
+    return;
   }
+
+  resultsEl.innerHTML = stationHtml + locationHtml;
+  resultsEl.classList.remove('hidden');
+  attachStationSearchHandlers(resultsEl, stationMatches);
+  attachLocationSearchHandlers(resultsEl);
 }
 
 // ─── Route planner ────────────────────────────────────────────────
