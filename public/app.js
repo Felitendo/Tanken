@@ -1304,6 +1304,12 @@ function switchTab(tab, { initial = false } = {}) {
   if (!initial && tab === state.currentTab) return;
   if (!initial) haptic('light');
 
+  // Drop any hover state from the previous tab's charts — the custom
+  // tooltip divs live on document.body and would otherwise hang over
+  // the new tab.
+  clearChartHover(state.chart, document.getElementById('history-tooltip'));
+  clearChartHover(state.statsHourChart, document.getElementById('stats-hour-tooltip'));
+
   // Cancel any in-flight tab data load
   _tabLoadId++;
 
@@ -4928,6 +4934,18 @@ function renderChart(data) {
     }]
   });
 
+  // Clear tooltip + crosshair when the finger leaves the canvas. Listeners
+  // are bound once per <canvas> — the same element survives Chart.destroy(),
+  // and the callback resolves state.chart at fire time so re-renders stay
+  // wired correctly.
+  if (!ctx.__hoverListenersBound) {
+    ctx.__hoverListenersBound = true;
+    const clear = () => clearChartHover(state.chart, document.getElementById('history-tooltip'));
+    ctx.addEventListener('touchend', clear);
+    ctx.addEventListener('touchcancel', clear);
+    ctx.addEventListener('pointerleave', clear);
+  }
+
   const summary = document.getElementById('history-summary');
   // Use actual per-station extremes from station_prices if available
   const extremes = state.priceExtremes;
@@ -5653,6 +5671,20 @@ function ensureHistoryTooltipEl() {
   return el;
 }
 
+// Clear a chart's hover state — used on touchend / pointerleave and on
+// tab switch so the custom tooltip + crosshair don't stick around after
+// the finger lifts. Chart.js' default events don't include touchend, so
+// without this the last-hovered point stays "active" forever on mobile.
+function clearChartHover(chart, tooltipEl) {
+  if (tooltipEl) tooltipEl.classList.remove('show');
+  if (!chart) return;
+  try {
+    chart.setActiveElements([]);
+    if (chart.tooltip) chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+    chart.update('none');
+  } catch {}
+}
+
 // Helper: convert an "rgb(r, g, b)" string to "rgba(r, g, b, a)".
 function rgbWithAlpha(rgbString, alpha) {
   const m = rgbString.match(/\d+/g);
@@ -5861,6 +5893,14 @@ function renderStatsHourChart(stats) {
       }
     }]
   });
+
+  if (!canvas.__hoverListenersBound) {
+    canvas.__hoverListenersBound = true;
+    const clear = () => clearChartHover(state.statsHourChart, document.getElementById('stats-hour-tooltip'));
+    canvas.addEventListener('touchend', clear);
+    canvas.addEventListener('touchcancel', clear);
+    canvas.addEventListener('pointerleave', clear);
+  }
 }
 
 function setupSettings() {
