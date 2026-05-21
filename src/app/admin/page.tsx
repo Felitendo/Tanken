@@ -149,7 +149,7 @@ const defaultConfig: AdminConfig = {
   fuelType: 'diesel',
   radiusKm: 25,
   refreshIntervalMinutes: 60,
-  scanTimes: ['05:00', '11:55', '12:05', '17:00', '20:00', '22:00'],
+  scanTimes: ['00:00', '05:00', '11:55', '12:05', '17:00', '20:00', '22:00'],
   sessionSecret: '',
   thresholds: { goodBelowAvgCents: 3, okayBelowAvgCents: 1 },
   oidc: { issuerUrl: '', clientId: '', clientSecret: '', scope: 'openid profile email', usernameClaim: 'preferred_username', pictureClaim: 'picture', name: '' },

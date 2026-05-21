@@ -10,7 +10,7 @@ const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const EXAMPLE_CONFIG_FILE = path.join(ROOT_DIR, 'config.example.json');
 
 const SCAN_TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
-const DEFAULT_SCAN_TIMES = ['05:00', '11:55', '12:05', '17:00', '20:00', '22:00'];
+const DEFAULT_SCAN_TIMES = ['00:00', '05:00', '11:55', '12:05', '17:00', '20:00', '22:00'];
 
 const DEFAULT_REPO_CONFIG: RepoConfig = {
   api_key: '',

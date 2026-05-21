@@ -4,7 +4,7 @@
   "session_secret": "CHANGE_ME_LONG_RANDOM_SECRET",
   "fuel_type": "diesel",
   "radius_km": 25,
-  "scan_times": ["05:00", "11:55", "12:05", "17:00", "20:00", "22:00"],
+  "scan_times": ["00:00", "05:00", "11:55", "12:05", "17:00", "20:00", "22:00"],
   "thresholds": { "good_below_avg_cents": 3, "okay_below_avg_cents": 1 },
   "auth": {
     "oidc": {
