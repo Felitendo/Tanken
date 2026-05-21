@@ -673,11 +673,12 @@ const state = {
   locationPickerTouched: false,
   availableLocations: [],
   priceExtremes: null,
-  // Country-wide 24h percentile band per fuel: { fuel, at: {p10,p50,p90}|null, de: {...}|null }.
-  // Loaded from /api/price-band at boot and on fuel switch. Single source of
-  // truth for heatmap colors — when no band is available, stations render
-  // in a neutral gray rather than against a misleading session anchor.
-  priceBand: { fuel: null, at: null, de: null },
+  // Regional 24h percentile band: { fuel, band: {p10,p50,p90,samples}|null, key }.
+  // `key` is the snapped-anchor cache key so loadPriceBand can short-circuit
+  // when the map only pans within the same cell. Single source of truth for
+  // heatmap colors — when no band is available, stations render in a neutral
+  // gray rather than against a misleading anchor.
+  priceBand: { fuel: null, band: null, key: null },
   favourites: [],
   // ── Route planner ────────────────────────────────────────────────
   routeMode: false,         // true while a route is being displayed
@@ -935,10 +936,8 @@ async function init() {
   state.radiusKm = 25;
   state.smtpConfigured = !!state.config.smtpConfigured;
 
-  // Kick off the country-wide 24h price-band fetch. Non-blocking so boot
-  // isn't delayed; the band lands a beat later and recolors whatever has
-  // already rendered.
-  loadPriceBand();
+  // The regional band needs a map centre to anchor against, so the first
+  // fetch is triggered by loadStationsAroundCenter once the map is up.
 
   await refreshMe();
   await loadSettings();
@@ -2157,6 +2156,10 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
   const lng = c.lng;
   const isAt = isInAustria(lat, lng);
 
+  // Refresh the regional price band against the new centre. No-ops when the
+  // snapped anchor matches the last fetch, so pans within a cell don't churn.
+  loadPriceBand(lat, lng);
+
   // Coalesce concurrent in-flight requests so the latest move wins.
   if (_viewportInflight) { try { await _viewportInflight; } catch {} }
   const loader = document.getElementById('map-loading');
@@ -2951,28 +2954,46 @@ function setupStationSort() {
   });
 }
 
-// Shown when no country band is available (cold start, API failure,
+// Shown when no band is available (cold start, API failure, sparse area,
 // degenerate spread). Deliberately a flat neutral so it can't be mistaken
 // for a heatmap signal — the price is shown, but uncoloured.
 const PRICE_COLOR_NEUTRAL = 'hsl(0, 0%, 72%)';
 
-// Minimum spread used by bandRatio so that a tight cluster (e.g. 1,82–1,85)
-// doesn't slam the most expensive station to full red just because it sits
-// at P90. Effectively caps "how dramatic" a small absolute delta can look.
-const MIN_BAND_SPREAD = 0.10;
+// Floor on the band's P10→P90 span used by bandRatio. With a 100 km regional
+// band a 3-cent local spread is meaningful, so this only kicks in for truly
+// degenerate clusters where every nearby station sits within a cent or two.
+const MIN_BAND_SPREAD = 0.03;
 
-// Fetch the country-wide 24h price band for the current fuel and re-render
-// open views once it lands. There is no fallback: until the band arrives,
-// markers stay neutral grey rather than against a misleading session anchor.
-async function loadPriceBand() {
+// Radius (km) and snap step (deg) used to anchor the regional band. The
+// snap step must match the server's REGIONAL_SNAP_DEG so the client only
+// refetches when crossing a real cache-cell boundary.
+const PRICE_BAND_RADIUS_KM = 100;
+const PRICE_BAND_SNAP_DEG = 0.5;
+
+function priceBandKey(fuel, lat, lng) {
+  const snapLat = Math.round(lat / PRICE_BAND_SNAP_DEG) * PRICE_BAND_SNAP_DEG;
+  const snapLng = Math.round(lng / PRICE_BAND_SNAP_DEG) * PRICE_BAND_SNAP_DEG;
+  return `${fuel}:${snapLat.toFixed(2)}:${snapLng.toFixed(2)}`;
+}
+
+// Fetch the regional 24h price band around (lat, lng) for the current fuel
+// and re-render open views once it lands. Short-circuits when the anchor
+// snaps into the same cache cell as the previous fetch so pans within a
+// ~55 km cell don't trigger network or recolouring churn.
+async function loadPriceBand(lat, lng) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
   const fuel = state.fuelType;
+  const key = priceBandKey(fuel, lat, lng);
+  if (state.priceBand && state.priceBand.key === key && state.priceBand.band) return;
   try {
-    const res = await fetch(`/api/price-band?fuel=${encodeURIComponent(fuel)}`);
+    const url = `/api/price-band?fuel=${encodeURIComponent(fuel)}`
+      + `&lat=${lat.toFixed(4)}&lng=${lng.toFixed(4)}&radius=${PRICE_BAND_RADIUS_KM}`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     // Ignore late responses for a fuel the user has since switched away from.
     if (state.fuelType !== fuel) return;
-    state.priceBand = { fuel, at: data.at || null, de: data.de || null };
+    state.priceBand = { fuel, band: data.band || null, key };
     if (state.stations && state.stations.length) {
       if (state.map) renderStationsOnMap(state.stations, { skipFitBounds: true, skipRadiusFilter: true });
       renderStationList(state.stations);
@@ -2993,23 +3014,10 @@ function priceColor3(t) {
   return `rgb(${r},${g},${b})`;
 }
 
-function countryFromLocation(locationId, lat, lng) {
-  if (locationId === '__at__') return 'at';
-  if (locationId === '__de__') return 'de';
-  if (typeof locationId === 'string') {
-    if (locationId.startsWith('at-')) return 'at';
-    if (locationId.startsWith('de-')) return 'de';
-  }
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
-    return isInAustria(lat, lng) ? 'at' : 'de';
-  }
-  return null;
-}
-
 // Map a price to t∈[0,1] linearly across the band [P10, P90], but never
-// using less than MIN_BAND_SPREAD as the divisor. A 3c real spread therefore
-// only consumes 30% of the gradient instead of the whole green→red range —
-// so tight clusters stay mostly green even at P90.
+// using less than MIN_BAND_SPREAD as the divisor. With the regional band
+// the spread is already meaningful, so MIN_BAND_SPREAD only damps truly
+// degenerate clusters (every nearby station within ~1 cent of each other).
 function bandRatio(price, band) {
   const { p10, p90 } = band;
   if (!(p90 > p10)) return 0;
@@ -3019,22 +3027,21 @@ function bandRatio(price, band) {
   return r >= 1 ? 1 : r;
 }
 
-// Ratio for a single station anchored to the country band (AT/DE 24h P10/P90).
-// Deliberately NOT viewport-relative: a station should keep the same colour
-// when the user pans, instead of being recoloured against whatever subset
-// happens to be on screen. bandRatio's MIN_BAND_SPREAD floor already prevents
-// small absolute deltas from spanning the gradient. Returns null when no
-// country band is available — callers render neutral grey.
-function stationBandRatio(price, locationId, lat, lng) {
+// Ratio for a single station anchored to the regional band (P10/P90 of all
+// open stations within PRICE_BAND_RADIUS_KM of the map centre). The server
+// snaps the anchor so small pans don't shift the band; the cheapest local
+// station maps to green, the most expensive to red, regardless of how that
+// region compares to the national distribution. Returns null when no band is
+// available — callers render neutral grey.
+function stationBandRatio(price) {
   if (!price) return null;
-  const country = countryFromLocation(locationId, lat, lng);
-  const band = country && state.priceBand && state.priceBand[country];
+  const band = state.priceBand && state.priceBand.band;
   if (!band || band.p10 == null || band.p90 == null) return null;
   return bandRatio(price, band);
 }
 
-function priceColorStable(price, locationId, lat, lng) {
-  const r = stationBandRatio(price, locationId, lat, lng);
+function priceColorStable(price /* , locationId, lat, lng — kept for call-site stability */) {
+  const r = stationBandRatio(price);
   return r == null ? PRICE_COLOR_NEUTRAL : priceColor3(r);
 }
 
@@ -5868,8 +5875,11 @@ function setupSettings() {
       state.loaded.map = false;
       // Different fuel ⇒ different price band; refetch and drop the old one
       // so the heatmap stays neutral until the new band lands.
-      state.priceBand = { fuel: null, at: null, de: null };
-      loadPriceBand();
+      state.priceBand = { fuel: null, band: null, key: null };
+      if (state.map) {
+        const c = state.map.getCenter();
+        loadPriceBand(c.lat, c.lng);
+      }
       persistStateSettings({ fuelType: state.fuelType });
       if (state.currentTab === 'map') loadMapTab();
       // If the station sheet is open, reload its chart so it tracks the

@@ -228,21 +228,24 @@ function isInAustria(lat: number, lng: number): boolean {
   return lat >= 46.3 && lat <= 49.1 && lng >= 9.4 && lng <= 17.2;
 }
 
+function quantiles(sorted: number[]): { p10: number; p50: number; p90: number } {
+  const quantile = (p: number) => {
+    const idx = (sorted.length - 1) * p;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+  };
+  return { p10: quantile(0.1), p50: quantile(0.5), p90: quantile(0.9) };
+}
+
 /**
  * P10/P50/P90 of currently cached open-station prices, split by country and
- * fuel. Drives the heatmap colors: with the median at t=0.5, a 2-cent
- * delta near the median lands as ~10% of the way to red instead of as
- * "knallgrün vs braun".
- *
- * Reads from the in-memory station cache rather than station_prices history
- * so colors appear immediately after a deploy — no waiting for 24 h of
- * fuel-tagged rows to accumulate.
- *
- * Returns null when too few stations are cached for one country/fuel — the
- * frontend then renders neutral grey instead of a wobbly gradient.
+ * fuel. Kept for callers that still want a national band; the heatmap
+ * itself now uses {@link getRegionalPriceBand} so colours track local
+ * market spreads instead of the national distribution.
  */
 export async function getCountryPriceBand(country: HistoryCountry, fuel: string): Promise<PriceBand | null> {
-  const key = `${country}:${fuel}`;
+  const key = `country:${country}:${fuel}`;
   const cached = priceBandCache.get(key);
   const now = Date.now();
   if (cached && cached.expiresAt > now) return cached.value;
@@ -259,16 +262,57 @@ export async function getCountryPriceBand(country: HistoryCountry, fuel: string)
 
   let band: PriceBand | null = null;
   if (prices.length >= PRICE_BAND_MIN_SAMPLES) {
-    const quantile = (p: number) => {
-      const idx = (prices.length - 1) * p;
-      const lo = Math.floor(idx);
-      const hi = Math.ceil(idx);
-      return prices[lo] + (prices[hi] - prices[lo]) * (idx - lo);
-    };
-    const p10 = quantile(0.1);
-    const p50 = quantile(0.5);
-    const p90 = quantile(0.9);
+    const { p10, p50, p90 } = quantiles(prices);
     if (p90 - p10 >= 0.02) band = { p10, p50, p90, samples: prices.length };
+  }
+  priceBandCache.set(key, { value: band, expiresAt: now + PRICE_BAND_CACHE_TTL_MS });
+  return band;
+}
+
+// 50 km / 111 ≈ 0.45; round to 0.5° so widely-spaced clients in the same
+// rough area share a cache slot but a real city-to-city move invalidates.
+const REGIONAL_SNAP_DEG = 0.5;
+const REGIONAL_MIN_SAMPLES = 25;
+const EARTH_RADIUS_KM = 6371;
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/**
+ * P10/P50/P90 of open-station prices within `radiusKm` of (lat, lng) for
+ * `fuel`. Anchor is snapped to {@link REGIONAL_SNAP_DEG} so adjacent map
+ * positions hit the same cache slot and colour-jumps between nearby pans
+ * are damped. Returns null if fewer than {@link REGIONAL_MIN_SAMPLES}
+ * stations fall in the circle — frontend then renders neutral grey.
+ */
+export async function getRegionalPriceBand(lat: number, lng: number, radiusKm: number, fuel: string): Promise<PriceBand | null> {
+  const snapLat = Math.round(lat / REGIONAL_SNAP_DEG) * REGIONAL_SNAP_DEG;
+  const snapLng = Math.round(lng / REGIONAL_SNAP_DEG) * REGIONAL_SNAP_DEG;
+  const r = Math.round(radiusKm);
+  const key = `regional:${snapLat.toFixed(2)}:${snapLng.toFixed(2)}:${r}:${fuel}`;
+  const cached = priceBandCache.get(key);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) return cached.value;
+
+  const prices: number[] = [];
+  for (const s of getAllUniqueStationsForFuel(fuel)) {
+    if (!s.isOpen || s.price == null || s.price <= 0) continue;
+    if (!Number.isFinite(s.lat) || !Number.isFinite(s.lng)) continue;
+    if (haversineKm(snapLat, snapLng, s.lat, s.lng) > radiusKm) continue;
+    prices.push(s.price);
+  }
+  prices.sort((a, b) => a - b);
+
+  let band: PriceBand | null = null;
+  if (prices.length >= REGIONAL_MIN_SAMPLES) {
+    const { p10, p50, p90 } = quantiles(prices);
+    if (p90 - p10 >= 0.01) band = { p10, p50, p90, samples: prices.length };
   }
   priceBandCache.set(key, { value: band, expiresAt: now + PRICE_BAND_CACHE_TTL_MS });
   return band;
