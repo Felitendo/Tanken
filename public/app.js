@@ -4427,24 +4427,62 @@ async function loadSheetChart(stationName, days = 1, stationId) {
 
     const hintColor = getComputedStyle(document.body).getPropertyValue('--color-hint') || '#999';
 
-    // Feed Chart.js {x,y} points with a linear time x-axis so ticks land at
-    // even time intervals, not even data-index intervals. Avoids duplicate
-    // tick labels when many rows cluster in the same minute.
+    // Anchor the x-axis to a stable "last 24 h" / "last 7 d" window — without
+    // an explicit min/max the linear scale spans only the data range, and
+    // Chart.js's nice-numbers algorithm picks ticks in raw-ms space, which
+    // strips down to chaotic HH:MM labels like "06:06 / 09:53 / 20:00".
+    const HOUR_MS = 60 * 60 * 1000;
+    const DAY_MS = 24 * HOUR_MS;
+    const xMax = Date.now();
+    const xMin = xMax - (days <= 1 ? DAY_MS : 7 * DAY_MS);
+
     const points = chartData.map(d => ({ x: new Date(d.timestamp).getTime(), y: d.min_price }));
     const prices = chartData.map(d => d.min_price);
     const minP = Math.min(...prices);
     const maxP = Math.max(...prices);
-    const spread = maxP - minP;
-    const minSpread = 0.06;
-    const padding = spread < minSpread ? (minSpread - spread) / 2 + 0.01 : (spread * 0.15);
-    const yMin = Math.max(0, Math.floor((minP - padding) * 100) / 100);
-    const yMax = Math.ceil((maxP + padding) * 100) / 100;
+
+    // Step-aligned y-axis so ticks fall on round 0.01–0.20€ values. The old
+    // forced min/max + maxTicksLimit combo let Chart.js insert the raw
+    // bounds as ticks alongside "nice" intermediates (e.g. 1.84 next to
+    // 1.85), which read as noise. yMin/yMax must be step multiples so
+    // Chart.js's stepSize lays ticks at clean boundaries.
+    const yRange = Math.max(maxP - minP, 0.01);
+    const Y_STEPS = [0.01, 0.02, 0.05, 0.10, 0.20];
+    const yStep = Y_STEPS.find(s => yRange / s <= 3) || 0.20;
+    const yEps = yStep * 0.15;
+    const yMin = Math.max(0, Math.floor((minP - yEps) / yStep) * yStep);
+    const yMax = Math.ceil((maxP + yEps) / yStep) * yStep;
 
     const pad2 = (n) => String(n).padStart(2, '0');
     const formatX = (ms) => {
       const dt = new Date(ms);
       if (days <= 1) return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
       return `${dt.getDate()}.${dt.getMonth() + 1}`;
+    };
+
+    // Manually computed evenly spaced ticks aligned to clock boundaries.
+    // 24h → 5 ticks every 6h ending at the most recent local-hour boundary.
+    // 7d  → one tick per local midnight inside the window.
+    const buildXTicks = () => {
+      const out = [];
+      if (days <= 1) {
+        const anchor = new Date(xMax);
+        anchor.setMinutes(0, 0, 0);
+        const end = anchor.getTime();
+        for (let k = 4; k >= 0; k--) {
+          const t = end - k * 6 * HOUR_MS;
+          if (t >= xMin && t <= xMax) out.push({ value: t });
+        }
+      } else {
+        const anchor = new Date(xMax);
+        anchor.setHours(0, 0, 0, 0);
+        const end = anchor.getTime();
+        for (let k = 7; k >= 0; k--) {
+          const t = end - k * DAY_MS;
+          if (t >= xMin && t <= xMax) out.push({ value: t });
+        }
+      }
+      return out;
     };
 
     loading.style.display = 'none';
@@ -4497,11 +4535,13 @@ async function loadSheetChart(stationName, days = 1, stationId) {
         scales: {
           x: {
             type: 'linear',
+            min: xMin,
+            max: xMax,
+            afterBuildTicks: (axis) => { axis.ticks = buildXTicks(); },
             ticks: {
               color: hintColor.trim() || '#999',
               font: { size: 10 },
-              maxTicksLimit: state.sheetExpanded ? 8 : 5,
-              autoSkip: true,
+              autoSkip: false,
               callback: (val) => formatX(val),
             },
             grid: { display: false }
@@ -4509,7 +4549,12 @@ async function loadSheetChart(stationName, days = 1, stationId) {
           y: {
             min: yMin,
             max: yMax,
-            ticks: { color: hintColor.trim() || '#999', font: { size: 10 }, callback: v => formatPrice(v), maxTicksLimit: state.sheetExpanded ? 10 : 4 },
+            ticks: {
+              color: hintColor.trim() || '#999',
+              font: { size: 10 },
+              stepSize: yStep,
+              callback: v => formatPrice(v),
+            },
             grid: { color: 'rgba(128,128,128,0.08)' }
           }
         }
