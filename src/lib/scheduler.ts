@@ -88,6 +88,51 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Resolve a Berlin wall-clock (h, m) on the calendar day that `referenceUtc`
+ * lands on *in Europe/Berlin*. Returns a Date pointing at that exact instant,
+ * regardless of the server's local timezone.
+ */
+function berlinWallClockToDate(referenceUtc: Date, hour: number, minute: number): Date {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Berlin',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(referenceUtc);
+  const year = Number(parts.find(p => p.type === 'year')?.value);
+  const month = Number(parts.find(p => p.type === 'month')?.value);
+  const day = Number(parts.find(p => p.type === 'day')?.value);
+  // Probe the timezone offset for that local wall-clock by sampling the
+  // offset at the same date in UTC. DST cutovers shift the offset by ±1h,
+  // but the probe lands on the same calendar day so the result is correct
+  // except inside the skipped/duplicated DST hour — which we don't schedule.
+  const probeUtc = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+  const offsetMin = berlinOffsetMinutes(new Date(probeUtc));
+  return new Date(probeUtc - offsetMin * 60_000);
+}
+
+/** Europe/Berlin offset from UTC in minutes at the given instant (positive in summer). */
+function berlinOffsetMinutes(at: Date): number {
+  const tzParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Berlin', timeZoneName: 'shortOffset',
+  }).formatToParts(at);
+  const raw = tzParts.find(p => p.type === 'timeZoneName')?.value ?? 'GMT';
+  // raw is e.g. "GMT+2" or "GMT+1" or "GMT".
+  const m = /GMT([+-]\d{1,2})(?::(\d{2}))?/.exec(raw);
+  if (!m) return 0;
+  const hours = Number(m[1]);
+  const mins = m[2] ? Number(m[2]) : 0;
+  return hours * 60 + (hours < 0 ? -mins : mins);
+}
+
+/** Format a positive ms duration as "Xh YYmin" (or "YYmin" if <1h). */
+function formatWait(ms: number): string {
+  const totalMin = Math.max(0, Math.round(ms / 60_000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h <= 0) return `${m}min`;
+  return `${h}h ${m.toString().padStart(2, '0')}min`;
+}
+
 /** Cancellable sleep — resolves immediately when cancel() is called. */
 function cancellableSleep(ms: number): { promise: Promise<void>; cancel: () => void } {
   let timer: ReturnType<typeof setTimeout>;
@@ -341,15 +386,15 @@ class ScanScheduler {
         // catch the afternoon/evening drops.
         const next = this.nextScanTime();
         const waitMs = Math.max(0, next.at.getTime() - Date.now());
-        const waitH = Math.round(waitMs / 3_600_000 * 10) / 10;
+        const waitStr = formatWait(waitMs);
         // Display the actual configured scan time, not now+waitMs — they
         // would match exactly anyway, but using next.at keeps the UI honest
         // about *which* configured slot we're waiting for.
         this._nextCycleAt = next.at;
-        const logMsg = `Nächster Scan um ${next.hhmm} Uhr (in ${waitH} Std.)`;
+        const logMsg = `Nächster Scan um ${next.hhmm} Uhr (in ${waitStr})`;
         this.de.addLog(logMsg, 'info');
         this.at.addLog(logMsg, 'info');
-        console.log(`[Scheduler] Next scan in ${waitH}h at ${next.hhmm}`);
+        console.log(`[Scheduler] Next scan in ${waitStr} at ${next.hhmm}`);
         const { promise, cancel } = cancellableSleep(waitMs);
         this._waitingCancel = cancel;
         await promise;
@@ -464,6 +509,11 @@ class ScanScheduler {
   /**
    * Pick the next configured scan time (today or tomorrow). Falls back to a
    * single 12:01 entry if the admin config is missing or malformed.
+   *
+   * scan_times are interpreted in Europe/Berlin wall-clock regardless of the
+   * server's local timezone, so a UTC-deployed container still fires at the
+   * Berlin hour the admin configured. DST transitions are handled naturally
+   * by round-tripping through Intl.DateTimeFormat.
    */
   private nextScanTime(): { at: Date; hhmm: string } {
     const config = loadRepoConfig();
@@ -477,21 +527,21 @@ class ScanScheduler {
       const h = Number.parseInt(hStr, 10);
       const m = Number.parseInt(mStr, 10);
       if (!Number.isFinite(h) || !Number.isFinite(m)) continue;
-      const candidate = new Date(now);
-      candidate.setHours(h, m, 0, 0);
+      let candidate = berlinWallClockToDate(now, h, m);
       // Treat anything within the next 60s as "already past" so a slow
       // cycle doesn't immediately re-fire on its own configured time.
       if (candidate.getTime() <= now.getTime() + 60_000) {
-        candidate.setDate(candidate.getDate() + 1);
+        candidate = berlinWallClockToDate(new Date(now.getTime() + 24 * 60 * 60 * 1000), h, m);
       }
       if (!best || candidate.getTime() < best.at.getTime()) {
         best = { at: candidate, hhmm };
       }
     }
     if (!best) {
-      const fallback = new Date(now);
-      fallback.setHours(12, 1, 0, 0);
-      if (fallback.getTime() <= now.getTime()) fallback.setDate(fallback.getDate() + 1);
+      let fallback = berlinWallClockToDate(now, 12, 1);
+      if (fallback.getTime() <= now.getTime()) {
+        fallback = berlinWallClockToDate(new Date(now.getTime() + 24 * 60 * 60 * 1000), 12, 1);
+      }
       best = { at: fallback, hhmm: '12:01' };
     }
     return best;
