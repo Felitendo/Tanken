@@ -540,12 +540,16 @@ function DenyDialog({
             Begründung wird dem Nutzer angezeigt. Pflichtfeld.
           </DialogDescription>
         </DialogHeader>
+        <label htmlFor="deny-reason" className="sr-only">Ablehnungsgrund</label>
         <textarea
+          id="deny-reason"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
           rows={4}
           maxLength={1000}
+          required
+          aria-required="true"
           placeholder="z.B. Zu nah an einem bestehenden Standort."
         />
         <DialogFooter>
