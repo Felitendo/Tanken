@@ -3984,8 +3984,8 @@ body.logged-in .station-fav-sync.synced {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 7px 0;
+  gap: 6px;
+  padding: 8px 0;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -3993,14 +3993,17 @@ body.logged-in .station-fav-sync.synced {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  transition: background 0.18s, color 0.18s;
   -webkit-user-select: none;
   user-select: none;
 }
+.alert-ch-seg:hover:not(.active) {
+  color: var(--color-text-2);
+}
 .alert-ch-seg.active {
-  background: rgba(127,127,127,0.25);
-  color: var(--color-text);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 .alert-ch-seg:active { transform: scale(0.97); }
 .alert-ch-seg svg { flex-shrink: 0; }
@@ -4080,37 +4083,34 @@ body.logged-in .station-fav-sync.synced {
   letter-spacing: 0.5px;
 }
 
-/* Threshold hero — big tappable +/- around the price */
+/* Threshold hero — integrated into the card body, no competing inner panel */
 .alert-threshold {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
-  padding: var(--sp-4) var(--sp-3);
-  border-radius: 14px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-separator);
+  gap: 14px;
+  padding: 4px 0 2px;
 }
 .alert-threshold-head {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-hint);
   text-transform: uppercase;
-  letter-spacing: 0.7px;
+  letter-spacing: 0.6px;
   text-align: center;
 }
 .alert-threshold-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 22px;
 }
 .alert-step-btn {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  border: 1px solid var(--color-separator);
-  background: var(--color-bg-secondary);
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
   color: var(--color-text);
   display: grid;
   place-items: center;
@@ -4119,73 +4119,74 @@ body.logged-in .station-fav-sync.synced {
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s, transform 0.12s, border-color 0.15s;
+  transition: background 0.15s, transform 0.12s, color 0.15s;
 }
 .alert-step-btn:hover {
-  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg-secondary));
-  border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-separator));
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
   color: var(--color-accent);
 }
 .alert-step-btn:active { transform: scale(0.92); }
+.alert-step-btn svg { width: 18px; height: 18px; }
 .alert-threshold-display {
-  font-size: 36px;
-  font-weight: 800;
+  font-size: 42px;
+  font-weight: 700;
   color: var(--color-text);
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
-  min-width: 120px;
+  min-width: 132px;
   text-align: center;
+  line-height: 1;
 }
 
 .alert-threshold-bar {
   position: relative;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .alert-threshold-bar[hidden] { display: none; }
 .alert-threshold-bar-track {
-  height: 4px;
+  height: 5px;
   border-radius: 999px;
-  background: var(--color-separator);
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
 }
 .alert-threshold-bar-current,
 .alert-threshold-bar-marker {
   position: absolute;
-  top: 50%;
+  top: 2.5px; /* center of the 5px-tall track, regardless of label height below */
   transform: translate(-50%, -50%);
 }
 .alert-threshold-bar-current {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--color-hint);
-  border: 2px solid var(--color-bg);
-  box-shadow: 0 0 0 1px var(--color-hint);
-  top: 50%;
+  border: 2px solid var(--color-bg-secondary);
 }
 .alert-threshold-bar-marker {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--color-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent),
-              0 2px 6px rgba(0, 0, 0, 0.18);
+  border: 2px solid var(--color-bg-secondary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 22%, transparent),
+              0 2px 8px rgba(0, 0, 0, 0.22);
   transition: left 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .alert-threshold-bar-labels {
   display: flex;
   justify-content: space-between;
-  margin-top: 8px;
-  font-size: 10px;
-  color: var(--color-hint);
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--color-text-2);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.2px;
+  opacity: 0.7;
 }
 
 .alert-ref-price {
   text-align: center;
   font-size: 12px;
   color: var(--color-hint);
-  margin-top: 2px;
+  margin-top: 4px;
   letter-spacing: 0.1px;
 }
 
@@ -4199,8 +4200,7 @@ body.logged-in .station-fav-sync.synced {
 .alert-channel-picker {
   display: flex;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--color-text) 6%, transparent);
-  border: 1px solid var(--color-separator);
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
   padding: 3px;
   gap: 3px;
 }
@@ -4234,10 +4234,9 @@ body.logged-in .station-fav-sync.synced {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--color-good) 7%, var(--color-bg));
-  border: 1px solid color-mix(in srgb, var(--color-good) 22%, var(--color-separator));
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-good) 8%, transparent);
 }
 .alert-status-row {
   display: flex;
@@ -4279,15 +4278,17 @@ body.logged-in .station-fav-sync.synced {
   .alert-status-dot { animation: none; }
 }
 
-/* Action buttons */
+/* Action buttons — clear primary/tertiary hierarchy */
 .alert-actions {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  margin-top: 2px;
 }
 .alert-save-btn {
   width: 100%;
-  padding: 12px;
+  padding: 13px;
   border-radius: 12px;
   border: none;
   background: var(--color-accent);
@@ -4297,30 +4298,32 @@ body.logged-in .station-fav-sync.synced {
   font-family: inherit;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: box-shadow 0.18s ease, transform 0.12s ease;
+  transition: box-shadow 0.18s ease, transform 0.12s ease, filter 0.15s ease;
 }
 .alert-save-btn:hover {
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-accent) 35%, transparent);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-accent) 35%, transparent);
+  filter: brightness(1.05);
 }
 .alert-save-btn:active { transform: scale(0.98); }
 
 .alert-test-btn {
-  width: 100%;
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px solid var(--color-separator);
+  align-self: center;
+  padding: 8px 12px;
+  margin-top: 4px;
+  border-radius: 8px;
+  border: none;
   background: transparent;
-  color: var(--color-text);
-  font-size: 13px;
+  color: var(--color-hint);
+  font-size: 12px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s, border-color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
 .alert-test-btn:hover {
+  color: var(--color-text);
   background: color-mix(in srgb, var(--color-text) 5%, transparent);
-  border-color: var(--color-hint);
 }
 
 .alert-active-info {
