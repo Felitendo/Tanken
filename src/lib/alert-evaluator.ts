@@ -107,10 +107,13 @@ async function sendNotification(alert: PriceAlert, hit: CheapestHit): Promise<bo
 }
 
 function shouldNotify(alert: PriceAlert, currentPrice: number): boolean {
-  const lastAt = alert.lastNotifiedAt ? Date.parse(alert.lastNotifiedAt) : 0;
+  const rawLastAt = alert.lastNotifiedAt ? Date.parse(alert.lastNotifiedAt) : NaN;
   const lastPrice = typeof alert.lastNotifiedPrice === 'number' ? alert.lastNotifiedPrice : null;
-  if (!lastAt) return true;
-  const elapsed = Date.now() - lastAt;
+  // A missing or unparseable lastNotifiedAt (corrupted DB row) is treated
+  // as "no prior notification" — without the explicit guard, NaN flows
+  // through `!lastAt` truthily and silently bypasses the cooldown.
+  if (!Number.isFinite(rawLastAt)) return true;
+  const elapsed = Date.now() - rawLastAt;
   if (elapsed >= NOTIFY_COOLDOWN_MS) return true;
   // Within cooldown — only re-notify if the new low undercuts the last by ≥ 1 cent.
   if (lastPrice != null && currentPrice <= lastPrice - PRICE_DROP_EPSILON) return true;
@@ -176,7 +179,9 @@ export async function evaluatePriceAlerts(): Promise<{ checked: number; notified
     if (local && (local as { enabled?: boolean }).enabled !== false && typeof (local as { threshold?: number }).threshold === 'number') {
       contexts.push({ scope: 'local', alert: local as unknown as PriceAlert });
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    console.error('[AlertEval] local alert read failed:', err instanceof Error ? err.message : err);
+  }
 
   let notified = 0;
   for (const ctx of contexts) {
