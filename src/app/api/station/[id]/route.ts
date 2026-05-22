@@ -64,11 +64,26 @@ function buildFromCache(id: string): DetailResponse | null {
 // station per week instead of once per popup-open.
 interface DetailCacheEntry { detail: unknown; expiresAt: number }
 const DETAIL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const DETAIL_CACHE_MAX = 1000;
 const detailCacheKey = '__tanken_detail_cache' as const;
 const globalDetail = globalThis as unknown as Record<string, Map<string, DetailCacheEntry>>;
 function detailCache(): Map<string, DetailCacheEntry> {
   if (!globalDetail[detailCacheKey]) globalDetail[detailCacheKey] = new Map();
   return globalDetail[detailCacheKey];
+}
+
+// Insert with a soft cap — drop the oldest entry once the cache grows past
+// DETAIL_CACHE_MAX. Map preserves insertion order, so the first key is the
+// oldest. Re-inserting an existing id refreshes its position.
+function setDetailCache(id: string, entry: DetailCacheEntry): void {
+  const cache = detailCache();
+  if (cache.has(id)) cache.delete(id);
+  cache.set(id, entry);
+  while (cache.size > DETAIL_CACHE_MAX) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
 }
 
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
@@ -110,7 +125,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
         const url = `https://creativecommons.tankerkoenig.de/json/detail.php?id=${id}&apikey=${runtimeConfig.apiKey}`;
         const { data } = await fetchJson<{ ok?: boolean; message?: string; station?: unknown }>(url);
         if (data.ok && data.station) {
-          detailCache().set(id, { detail: data.station, expiresAt: Date.now() + DETAIL_TTL_MS });
+          setDetailCache(id, { detail: data.station, expiresAt: Date.now() + DETAIL_TTL_MS });
           // Scan cache wins for live fields (price, isOpen) because the
           // scheduler refreshes it on every cycle. detail.php is only
           // used to enrich with opening hours.
@@ -138,6 +153,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
 
     return NextResponse.json({ error: 'Station not found' }, { status: 404 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
+    console.error('[station/:id] handler failed:', error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: 'internal_error' }, { status: 500 });
   }
 }
