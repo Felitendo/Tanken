@@ -4233,15 +4233,15 @@ body.logged-in .station-fav-sync.synced {
 .alert-status-panel {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 14px 16px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--color-good) 8%, transparent);
 }
 .alert-status-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
   font-size: 13px;
   color: var(--color-text);
   font-weight: 500;
