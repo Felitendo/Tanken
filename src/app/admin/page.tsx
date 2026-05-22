@@ -827,7 +827,9 @@ function LocationsPanel({ showFeedback }: { showFeedback: (msg: string, type: Fe
       try {
         const data = await api<SchedulerStatus>('/api/admin/scheduler');
         if (!cancelled) setSchedStatus(data);
-      } catch { /* ignore */ }
+      } catch (err) {
+        console.error('[admin] scheduler poll failed:', err);
+      }
     }
     load();
     const interval = setInterval(load, 3_000);
@@ -1033,7 +1035,9 @@ function ScannerConsole() {
       try {
         const data = await api<SchedulerStatus>('/api/admin/scheduler');
         if (!cancelled) setStatus(data);
-      } catch { /* ignore */ }
+      } catch (err) {
+        console.error('[admin] scanner poll failed:', err);
+      }
     }
     load();
     const interval = setInterval(load, 3_000);
@@ -1048,7 +1052,10 @@ function ScannerConsole() {
         body: JSON.stringify({ action }),
       });
       setStatus(result.status);
-    } catch { /* ignore */ } finally {
+    } catch (err) {
+      console.error('[admin] scanner action failed:', err);
+      toast.error((err as Error)?.message || 'Aktion fehlgeschlagen.');
+    } finally {
       if (action === 'clearCache') setClearing(false);
     }
   };
