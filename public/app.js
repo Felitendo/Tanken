@@ -7126,6 +7126,9 @@ async function saveAlert() {
       document.getElementById('alert-active-info').textContent = `${t('alertActive')} ${formatPrice(state.alertPrice)}${chLabel}`;
       showPopup(t('saved'), `${t('alertSetMsg')} ${state.fuelType.toUpperCase()} ${t('under')} ${formatPrice(state.alertPrice)}.`);
       await refreshMe();
+      // Pull the saved alert back so the status row flips from
+      // "Noch nicht aktiv" to the green "Aktiv" state without a page reload.
+      await refreshAlertUi();
     }
   } catch (error) {
     if (state.user) setSyncBadgeState('idle', ['alert']);
