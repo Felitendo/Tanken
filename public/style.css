@@ -4134,13 +4134,40 @@ body.logged-in .station-fav-sync.synced {
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
   min-width: 132px;
+  width: 132px;
   text-align: center;
   line-height: 1;
+  font-family: inherit;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  padding: 6px 4px;
+  border-radius: 10px;
+  box-sizing: border-box;
+  caret-color: var(--color-accent);
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background 0.15s;
 }
+.alert-threshold-display:focus {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+.alert-threshold-display::-webkit-outer-spin-button,
+.alert-threshold-display::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 .alert-threshold-bar {
   position: relative;
   margin-top: 2px;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.alert-threshold-bar:focus { outline: none; }
+.alert-threshold-bar:focus-visible .alert-threshold-bar-marker {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 22%, transparent),
+              0 0 0 7px color-mix(in srgb, var(--color-accent) 36%, transparent),
+              0 2px 8px rgba(0, 0, 0, 0.22);
 }
 .alert-threshold-bar[hidden] { display: none; }
 .alert-threshold-bar-track {
@@ -4170,6 +4197,12 @@ body.logged-in .station-fav-sync.synced {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 22%, transparent),
               0 2px 8px rgba(0, 0, 0, 0.22);
   transition: left 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  cursor: grab;
+}
+.alert-threshold-bar.is-dragging { cursor: grabbing; }
+.alert-threshold-bar.is-dragging .alert-threshold-bar-marker {
+  transition: none;
+  cursor: grabbing;
 }
 .alert-threshold-bar-labels {
   display: flex;

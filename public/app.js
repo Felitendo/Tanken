@@ -6789,6 +6789,87 @@ function initAlertUI() {
     updateAlertDisplay();
   });
 
+  // Direct numeric entry — user can type the threshold instead of stepping.
+  const priceInput = document.getElementById('alert-price-display');
+  if (priceInput) {
+    const commit = () => {
+      const raw = (priceInput.value || '').replace(/[€\s]/g, '').replace(',', '.');
+      const n = parseFloat(raw);
+      if (Number.isFinite(n)) {
+        state.alertPrice = Math.max(1.00, Math.min(3.00, Math.round(n * 100) / 100));
+      }
+      updateAlertDisplay();
+    };
+    priceInput.addEventListener('focus', () => {
+      // Strip the € while editing so the user types a clean number.
+      priceInput.value = (state.alertPrice || 2.0).toFixed(2).replace('.', ',');
+      requestAnimationFrame(() => priceInput.select());
+    });
+    priceInput.addEventListener('blur', commit);
+    priceInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); priceInput.blur(); }
+      else if (e.key === 'Escape') { e.preventDefault(); priceInput.blur(); }
+    });
+  }
+
+  // Draggable threshold bar — click or drag the marker to set the price.
+  const bar = document.getElementById('alert-threshold-bar');
+  const track = bar?.querySelector('.alert-threshold-bar-track');
+  if (bar && track) {
+    const priceFromX = (clientX) => {
+      const lowText = document.getElementById('alert-bar-low')?.textContent || '';
+      const highText = document.getElementById('alert-bar-high')?.textContent || '';
+      const low = parseFloat(lowText.replace(',', '.'));
+      const high = parseFloat(highText.replace(',', '.'));
+      if (!Number.isFinite(low) || !Number.isFinite(high) || high <= low) return null;
+      const rect = track.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      return Math.round((low + pct * (high - low)) * 100) / 100;
+    };
+    const apply = (clientX) => {
+      const price = priceFromX(clientX);
+      if (price == null) return;
+      state.alertPrice = Math.max(1.00, Math.min(3.00, price));
+      updateAlertDisplay();
+    };
+    let dragging = false;
+    bar.addEventListener('pointerdown', (e) => {
+      if (bar.hidden) return;
+      e.preventDefault();
+      dragging = true;
+      bar.classList.add('is-dragging');
+      try { bar.setPointerCapture(e.pointerId); } catch {}
+      haptic('light');
+      apply(e.clientX);
+    });
+    bar.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      apply(e.clientX);
+    });
+    const endDrag = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      bar.classList.remove('is-dragging');
+      try { bar.releasePointerCapture(e.pointerId); } catch {}
+    };
+    bar.addEventListener('pointerup', endDrag);
+    bar.addEventListener('pointercancel', endDrag);
+    bar.addEventListener('keydown', (e) => {
+      if (bar.hidden) return;
+      const cur = state.alertPrice || 2.0;
+      let next = null;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = cur - 0.01;
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = cur + 0.01;
+      else if (e.key === 'PageDown') next = cur - 0.05;
+      else if (e.key === 'PageUp') next = cur + 0.05;
+      if (next != null) {
+        e.preventDefault();
+        state.alertPrice = Math.max(1.00, Math.min(3.00, Math.round(next * 100) / 100));
+        updateAlertDisplay();
+      }
+    });
+  }
+
   document.getElementById('alert-save').addEventListener('click', saveAlert);
   document.getElementById('alert-test').addEventListener('click', testAlert);
 
@@ -6969,7 +7050,9 @@ async function refreshAlertUi() {
 
 function updateAlertDisplay() {
   const display = document.getElementById('alert-price-display');
-  if (display) display.textContent = formatPrice(state.alertPrice || 2.0);
+  if (display && document.activeElement !== display) {
+    display.value = formatPrice(state.alertPrice || 2.0);
+  }
   // Slide the threshold marker on the visual bar as the user steps the
   // price. Keep the marker inside the visible track.
   const barEl = document.getElementById('alert-threshold-bar');
@@ -6983,6 +7066,7 @@ function updateAlertDisplay() {
       const pct = Math.max(0, Math.min(1, ((state.alertPrice || 0) - low) / (high - low)));
       marker.style.left = `${pct * 100}%`;
     }
+    barEl.setAttribute('aria-valuenow', String((state.alertPrice || 0).toFixed(2)));
   }
 }
 

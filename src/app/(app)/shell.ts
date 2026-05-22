@@ -215,13 +215,22 @@ export const APP_SHELL = `
               <button id="alert-minus" type="button" class="alert-step-btn" aria-label="Schwellenwert verringern">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M19 13H5v-2h14v2z"/></svg>
               </button>
-              <div class="alert-threshold-display" id="alert-price-display" aria-live="polite">2,00€</div>
+              <input
+                type="text"
+                inputmode="decimal"
+                class="alert-threshold-display"
+                id="alert-price-display"
+                aria-label="Schwellenwert"
+                autocomplete="off"
+                spellcheck="false"
+                value="2,00€"
+              />
               <button id="alert-plus" type="button" class="alert-step-btn" aria-label="Schwellenwert erhöhen">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
               </button>
             </div>
             <!-- Threshold-vs-current-cheapest visualisation -->
-            <div class="alert-threshold-bar" id="alert-threshold-bar" hidden>
+            <div class="alert-threshold-bar" id="alert-threshold-bar" hidden role="slider" tabindex="0" aria-label="Schwellenwert" aria-valuemin="1" aria-valuemax="3" aria-valuenow="2">
               <div class="alert-threshold-bar-track"></div>
               <div class="alert-threshold-bar-current" id="alert-bar-current"></div>
               <div class="alert-threshold-bar-marker" id="alert-bar-marker"></div>
