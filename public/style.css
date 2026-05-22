@@ -4269,7 +4269,14 @@ body.logged-in .station-fav-sync.synced {
   gap: 8px;
   padding: 14px 16px;
   border-radius: 10px;
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+  transition: background 0.2s;
+}
+.alert-status-panel.is-armed {
   background: color-mix(in srgb, var(--color-good) 8%, transparent);
+}
+.alert-status-panel.is-below {
+  background: color-mix(in srgb, var(--color-accent) 9%, transparent);
 }
 .alert-status-row {
   display: flex;
@@ -4291,6 +4298,10 @@ body.logged-in .station-fav-sync.synced {
   width: 9px;
   height: 9px;
   border-radius: 50%;
+  background: var(--color-hint);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-hint) 18%, transparent);
+}
+.alert-status-row.is-armed .alert-status-dot {
   background: var(--color-good);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-good) 22%, transparent);
   animation: alert-status-pulse 2.6s ease-in-out infinite;
@@ -4298,6 +4309,7 @@ body.logged-in .station-fav-sync.synced {
 .alert-status-row.is-below .alert-status-dot {
   background: var(--color-accent);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 26%, transparent);
+  animation: none;
 }
 .alert-status-icon {
   flex-shrink: 0;
@@ -4316,8 +4328,8 @@ body.logged-in .station-fav-sync.synced {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 2px;
-  margin-top: 2px;
+  gap: 14px;
+  margin-top: 8px;
 }
 .alert-save-btn {
   width: 100%;
@@ -4342,7 +4354,6 @@ body.logged-in .station-fav-sync.synced {
 .alert-test-btn {
   align-self: center;
   padding: 8px 12px;
-  margin-top: 4px;
   border-radius: 8px;
   border: none;
   background: transparent;

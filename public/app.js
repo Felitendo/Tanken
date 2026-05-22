@@ -6988,11 +6988,17 @@ async function refreshAlertUi() {
     // only when the website is open.
     const statusLabel = document.getElementById('alert-status-label');
     const statusState = document.getElementById('alert-status-state');
+    const statusPanel = document.getElementById('alert-status-panel');
     const lastRow = document.getElementById('alert-status-last');
     const lastText = document.getElementById('alert-status-last-text');
     if (statusLabel && statusState) {
       const isBelow = cheapestInRadius && cheapestInRadius.min < alert.threshold;
       statusState.classList.toggle('is-below', !!isBelow);
+      statusState.classList.toggle('is-armed', !isBelow);
+      if (statusPanel) {
+        statusPanel.classList.toggle('is-below', !!isBelow);
+        statusPanel.classList.toggle('is-armed', !isBelow);
+      }
       statusLabel.textContent = isBelow
         ? t('alertStatusBelow') || 'Currently below threshold'
         : t('alertStatusArmed') || 'Active · monitoring in the background';
@@ -7018,6 +7024,16 @@ async function refreshAlertUi() {
     if (card) card.classList.remove('is-armed');
     activeInfo.style.display = 'none';
     activeInfo.textContent = '';
+    // Reset the status row to the neutral "not yet active" look so the
+    // green dot doesn't lie if the user re-opens the panel without saving.
+    const statusState = document.getElementById('alert-status-state');
+    const statusPanel = document.getElementById('alert-status-panel');
+    const statusLabel = document.getElementById('alert-status-label');
+    const lastRow = document.getElementById('alert-status-last');
+    statusState?.classList.remove('is-armed', 'is-below');
+    statusPanel?.classList.remove('is-armed', 'is-below');
+    if (statusLabel) statusLabel.textContent = t('alertStatusInactive') || 'Noch nicht aktiv';
+    if (lastRow) lastRow.hidden = true;
   }
 
   // Threshold-vs-current-cheapest bar. The threshold marker slides along
