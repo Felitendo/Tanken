@@ -362,7 +362,7 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
             {showLog && (
               <div className="mt-2 max-h-44 overflow-y-auto rounded-md border bg-muted/30">
                 {cs.log.slice().reverse().map((entry, i) => (
-                  <div key={i} className="flex items-start gap-2 border-b px-3 py-1.5 last:border-0">
+                  <div key={`${entry.time}-${i}`} className="flex items-start gap-2 border-b px-3 py-1.5 last:border-0">
                     <div className={'mt-1.5 size-1.5 shrink-0 rounded-full ' + (logTypeDots[entry.type] || 'bg-muted-foreground')} />
                     <span className="shrink-0 pt-px font-mono text-[10px] text-muted-foreground">
                       {new Date(entry.time).toLocaleTimeString('de-DE')}
@@ -383,7 +383,7 @@ function CountryScannerCard({ cs, flag, label, api: apiLabel }: {
               <p className="text-xs font-medium text-destructive">Fehler ({cs.errors.length})</p>
             </div>
             {cs.errors.slice().reverse().map((err, i) => (
-              <p key={i} className="break-all border-b border-destructive/5 px-3 py-1 font-mono text-[11px] text-muted-foreground last:border-0">{err}</p>
+              <p key={`${err}-${i}`} className="break-all border-b border-destructive/5 px-3 py-1 font-mono text-[11px] text-muted-foreground last:border-0">{err}</p>
             ))}
           </div>
         )}

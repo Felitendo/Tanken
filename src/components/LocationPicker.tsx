@@ -193,6 +193,8 @@ export function LocationPicker({
               placeholder="Adresse oder Ort suchen…"
               aria-label="Adresse oder Ort suchen"
               aria-autocomplete="list"
+              aria-haspopup="listbox"
+              aria-expanded={results.length > 0}
               aria-controls="location-picker-results"
               className="w-full rounded-md border border-border bg-background pl-9 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
@@ -222,8 +224,8 @@ export function LocationPicker({
               aria-label="Suchergebnisse"
               className="absolute left-0 right-0 top-full z-[2000] mt-1 max-h-60 overflow-auto rounded-md border border-border bg-background text-sm shadow-lg"
             >
-              {results.map((r, i) => (
-                <li key={i} role="option" aria-selected="false">
+              {results.map((r) => (
+                <li key={`${r.lat.toFixed(5)}|${r.lng.toFixed(5)}|${r.name}`} role="option" aria-selected="false">
                   <button
                     type="button"
                     onClick={() => pickResult(r)}
