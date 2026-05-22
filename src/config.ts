@@ -117,7 +117,9 @@ export function normalizeRepoConfig(value: Partial<RepoConfig>, fallback: RepoCo
     api_key: String(value.api_key ?? fallback.api_key ?? DEFAULT_REPO_CONFIG.api_key),
     ors_api_key: String(value.ors_api_key ?? fallback.ors_api_key ?? ''),
     fuel_type: normalizeFuelType(value.fuel_type ?? fallback.fuel_type ?? DEFAULT_REPO_CONFIG.fuel_type),
-    radius_km: 25,
+    radius_km: Math.max(1, Math.min(50, Math.round(
+      normalizeNumber(value.radius_km, fallback.radius_km ?? DEFAULT_REPO_CONFIG.radius_km)
+    ))),
     refresh_interval_minutes: Math.max(1, Math.round(normalizeNumber(value.refresh_interval_minutes, fallback.refresh_interval_minutes ?? DEFAULT_REPO_CONFIG.refresh_interval_minutes))),
     scan_times: normalizeScanTimes(value.scan_times, fallback.scan_times ?? DEFAULT_SCAN_TIMES),
     thresholds: {

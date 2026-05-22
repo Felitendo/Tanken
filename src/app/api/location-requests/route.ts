@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     name: parsed.data.name,
     lat: parsed.data.lat,
     lng: parsed.data.lng,
-    radiusKm: 25,
+    radiusKm: parsed.data.radiusKm ?? 25,
     note: parsed.data.note ?? null,
   });
   return NextResponse.json({ request: created }, { status: 201 });
