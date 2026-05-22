@@ -130,7 +130,13 @@ export function createStores(config: RuntimeConfig): {
 
       updater(user);
       user.updatedAt = new Date().toISOString();
-      await this.upsertUser(userId, user);
+      // Direct write — upsertUser's shallow-merge would silently undo key removals (e.g. `delete user.alerts.price`).
+      await db.query(
+        `
+          UPDATE users SET data_json = $2::jsonb, updated_at = NOW() WHERE id = $1
+        `,
+        [userId, JSON.stringify(user)]
+      );
       return user;
     },
     getEffectiveUserProfile(user) {

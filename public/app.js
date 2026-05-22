@@ -971,7 +971,6 @@ async function init() {
   setupPullToRefresh();
   setupUserRequests();
   initLocation();
-  refreshAlertUi();
   renderUserRequests();
   renderHistoryLocations();
   fetchAppVersion();
@@ -7083,11 +7082,19 @@ async function deleteAlert() {
     await api(state.user ? '/api/alert' : '/api/alert/local', { method: 'DELETE' });
     document.getElementById('alert-config').style.display = 'none';
     document.getElementById('alert-active-info').style.display = 'none';
+    const card = document.getElementById('alert-card');
+    if (card) card.classList.remove('is-armed');
     haptic('success');
-    if (state.user) setSyncBadgeState('synced', ['alert']);
+    if (state.user) {
+      setSyncBadgeState('synced', ['alert']);
+      // Keep state.user.alerts in sync with the server so any later reader
+      // (or another refreshAlertUi pass) doesn't see the just-deleted alert.
+      await refreshMe();
+    }
   } catch (error) {
     if (state.user) setSyncBadgeState('idle', ['alert']);
     showPopup(t('deleteFailed'), error.message || t('deleteError'));
+    throw error;
   }
 }
 
