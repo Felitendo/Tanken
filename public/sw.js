@@ -1,5 +1,5 @@
-const CACHE = 'tanken-v3';
-const STATIC = ['/', '/style.css', '/app.js', '/web-haptics.js'];
+const CACHE = 'tanken-v4';
+const STATIC = ['/', '/style.css', '/app.js', '/admin.js', '/coverage-outlines.js', '/web-haptics.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(STATIC)));

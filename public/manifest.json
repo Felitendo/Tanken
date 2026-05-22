@@ -1,7 +1,7 @@
 {
   "name": "Tanken",
   "short_name": "Tanken",
-  "description": "Diesel- und Spritpreise in deiner Naehe",
+  "description": "Diesel- und Spritpreise in deiner Nähe",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
