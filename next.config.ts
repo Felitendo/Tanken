@@ -11,6 +11,19 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
+  async rewrites() {
+    // The four tabs live on a single client-rendered shell ("/"). These
+    // rewrites let deep links / reloads on /map, /history, /stats and
+    // /settings serve that same shell while keeping the visible URL — the
+    // client then opens the matching tab. Only the exact tab paths are
+    // listed, so /api/* and /admin are untouched.
+    return [
+      { source: '/map', destination: '/' },
+      { source: '/history', destination: '/' },
+      { source: '/stats', destination: '/' },
+      { source: '/settings', destination: '/' },
+    ];
+  },
   async headers() {
     return [
       {

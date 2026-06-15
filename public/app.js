@@ -1286,6 +1286,17 @@ async function api(url, options = {}) {
 
 
 
+// Each tab owns a URL so it can be deep-linked, reloaded and shared. The map
+// tab is the home page ("/"); the others get their own path. Server-side
+// rewrites (next.config.ts) map these paths back to the single app shell.
+const TAB_TO_PATH = { map: '/', history: '/history', stats: '/stats', settings: '/settings' };
+function pathToTab(pathname) {
+  const clean = (pathname || '/').replace(/\/+$/, '') || '/';
+  if (clean === '/' || clean === '/map') return 'map';
+  const tab = clean.slice(1);
+  return TAB_TO_PATH[tab] ? tab : null;
+}
+
 function setupTabs() {
   document.querySelectorAll('.tab-item').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1293,15 +1304,21 @@ function setupTabs() {
     });
   });
 
-  var sessionTab = sessionStorage.getItem('currentTab') || 'map';
-  switchTab(sessionTab, { initial: true });
+  // Back/forward navigation switches tabs without pushing a new entry.
+  window.addEventListener('popstate', () => {
+    switchTab(pathToTab(location.pathname) || 'map', { fromPop: true });
+  });
+
+  // Prefer the URL (deep link / reload), then the last session tab, then map.
+  var initialTab = pathToTab(location.pathname) || sessionStorage.getItem('currentTab') || 'map';
+  switchTab(initialTab, { initial: true });
 }
 
 let _tabLoadId = 0;
 
-function switchTab(tab, { initial = false } = {}) {
-  if (!initial && tab === state.currentTab) return;
-  if (!initial) haptic('light');
+function switchTab(tab, { initial = false, fromPop = false } = {}) {
+  if (!initial && !fromPop && tab === state.currentTab) return;
+  if (!initial && !fromPop) haptic('light');
 
   // Drop any hover state from the previous tab's charts — the custom
   // tooltip divs live on document.body and would otherwise hang over
@@ -1323,6 +1340,17 @@ function switchTab(tab, { initial = false } = {}) {
 
   state.currentTab = tab;
   sessionStorage.setItem('currentTab', tab);
+
+  // Keep the URL in sync with the active tab. popstate-driven switches must
+  // not push again (the entry already exists); the initial render replaces
+  // so /map normalises to / without leaving a junk history entry.
+  if (!fromPop) {
+    const path = TAB_TO_PATH[tab] || '/';
+    if (path !== location.pathname) {
+      if (initial) history.replaceState({ tab }, '', path);
+      else history.pushState({ tab }, '', path);
+    }
+  }
 
   // Fire data loading in background — never blocks UI
   loadTabData(tab, _tabLoadId);
@@ -2011,10 +2039,18 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
         renderStationsOnMap(state.stations || [], { skipFitBounds: true, skipRadiusFilter: true });
         return;
       }
-      if (state.map.getZoom() < MIN_ZOOM_FOR_STATIONS) {
+      const zoom = state.map.getZoom();
+      if (zoom < MIN_ZOOM_FOR_STATIONS) {
         if (state.clusterGroup) { state.map.removeLayer(state.clusterGroup); state.clusterGroup = null; }
         state.markers.forEach(m => state.map.removeLayer(m));
         state.markers = [];
+      } else if (!state.clusterGroup && (state.stations || []).length) {
+        // Back in station-display range, but the cluster was torn down by an
+        // earlier zoom-out below MIN_ZOOM_FOR_STATIONS. Re-render the cached
+        // stations immediately so the user never sees an empty map while the
+        // debounced network refresh below catches up — and so a rapid zoom
+        // that cancels that refresh can't strand the map empty.
+        renderStationsOnMap(state.stations, { skipFitBounds: true, skipRadiusFilter: true });
       }
       // Refresh on zoom — the visible viewport (and therefore the bounds
       // query / scan-location selection) changes drastically, and skipping
@@ -2022,7 +2058,7 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
       // ~400 ms so MarkerCluster's own merge/split animation can play out
       // before renderStationsOnMap tears down state.clusterGroup. A fast
       // double-zoom resets the timer via _viewportTimer instead of stacking.
-      if (state.map.getZoom() >= VIEWPORT_MIN_ZOOM) {
+      if (zoom >= VIEWPORT_MIN_ZOOM) {
         if (_viewportTimer) clearTimeout(_viewportTimer);
         _viewportTimer = setTimeout(() => {
           _viewportTimer = null;
@@ -2225,6 +2261,23 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
       // centre, not the search-bar pick). When GPS is unknown the dist
       // field is stripped so no misleading "X km entfernt" appears.
       stations = withDistanceFromUser(stations);
+
+      // Guard against a transient empty result wiping the map. If the fetch
+      // came back with zero stations while we still have some and the centre
+      // barely moved (a zoom keeps the centre fixed), it's almost certainly a
+      // hiccup — a timeout or a momentary backend gap — not a genuinely empty
+      // area. Keep the existing markers/list and let the next refresh correct
+      // it. A real pan into empty territory moves the centre and still clears.
+      if (!stations.length && (state.stations || []).length) {
+        const prev = state._lastViewportCenter;
+        const movedKm = prev ? distanceKm(lat, lng, prev.lat, prev.lng) : Infinity;
+        if (movedKm < VIEWPORT_MIN_MOVE_KM) {
+          state._lastViewportCenter = { lat, lng };
+          if (loader) loader.classList.add('hidden');
+          return;
+        }
+      }
+
       // Skip rebuilding the cluster if the station set is bit-for-bit
       // identical to what's already on the map. The MarkerCluster plugin
       // has its own smooth merge/split animation on zoom — destroying and
@@ -2524,7 +2577,11 @@ function enterScanPickerMode() {
     state.map.fitBounds(circle.getBounds(), { padding: [40, 40], animate: true });
   } catch { /* fitBounds can throw on a not-yet-projected map; ignore */ }
 
-  // Toggle button into confirm mode + insert cancel pill alongside it
+  // Toggle button into confirm mode + insert cancel pill alongside it.
+  // The confirm + cancel pills now share the top row with the search box, so
+  // hide the box while picking — the row then centres (see CSS rule on
+  // #map-search-top-row:has(#map-search-box.hidden)).
+  document.getElementById('map-search-box')?.classList.add('hidden');
   const btn = document.getElementById('btn-search-here');
   setSearchBtnConfirm(btn);
   if (btn && !document.getElementById('btn-scan-cancel')) {
@@ -2548,6 +2605,7 @@ function exitScanPickerMode() {
     state._scanPicker = null;
   }
   document.getElementById('btn-scan-cancel')?.remove();
+  document.getElementById('map-search-box')?.classList.remove('hidden');
   setSearchBtnIdle();
 }
 

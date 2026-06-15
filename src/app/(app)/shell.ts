@@ -9,22 +9,24 @@ export const APP_SHELL = `
     <div id="map-container">
       <div id="map"></div>
       <div id="map-search-wrapper">
-        <div id="map-search-box">
-          <svg class="map-search-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-          <input type="text" id="map-search-input" data-i18n-placeholder="searchPlaceholder" data-i18n-aria-label="searchPlaceholder" aria-label="Tankstelle oder Ort suchen" placeholder="Tankstelle oder Ort suchen…" autocomplete="off" />
-          <button id="map-search-clear" class="map-search-clear hidden" type="button" aria-label="Suche löschen" data-i18n-aria-label="clearSearch">&times;</button>
+        <div id="map-search-top-row">
+          <div id="map-search-box">
+            <svg class="map-search-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            <input type="text" id="map-search-input" data-i18n-placeholder="searchPlaceholder" data-i18n-aria-label="searchPlaceholder" aria-label="Tankstelle oder Ort suchen" placeholder="Tankstelle oder Ort suchen…" autocomplete="off" />
+            <button id="map-search-clear" class="map-search-clear hidden" type="button" aria-label="Suche löschen" data-i18n-aria-label="clearSearch">&times;</button>
+          </div>
+          <div class="map-search-here-row">
+            <button id="btn-search-here" class="map-search-here" type="button">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+              <span data-i18n="searchHere">Hier suchen</span>
+            </button>
+          </div>
         </div>
         <div id="map-search-results" class="hidden" role="listbox" aria-label="Suchergebnisse"></div>
         <div id="map-route-chip-row">
           <button id="map-route-chip" class="map-route-chip" type="button" aria-expanded="false" aria-controls="map-route-panel">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M6.5 5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S8.83 7 8 7s-1.5-.67-1.5-1.5zm9 13c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5zM8 9a3.5 3.5 0 110-7 3.5 3.5 0 010 7zm0-2a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm9 15a3.5 3.5 0 110-7 3.5 3.5 0 010 7zm-3.58-4.67l-1.42 1.42A5 5 0 018 12V9.9a3.48 3.48 0 002 0V12a3 3 0 003 3h.42z"/></svg>
             <span data-i18n="routePlan">Entlang Route suchen</span>
-          </button>
-        </div>
-        <div class="map-search-here-row">
-          <button id="btn-search-here" class="map-search-here" type="button">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-            <span data-i18n="searchHere">Hier suchen</span>
           </button>
         </div>
         <div id="map-route-panel" class="map-route-panel hidden" role="region" aria-label="Routenplanung">

@@ -1,4 +1,4 @@
-const CACHE = 'tanken-v4';
+const CACHE = 'tanken-v5';
 const STATIC = ['/', '/style.css', '/app.js', '/admin.js', '/coverage-outlines.js', '/web-haptics.js'];
 
 self.addEventListener('install', (e) => {
@@ -28,6 +28,19 @@ self.addEventListener('fetch', (e) => {
           return res;
         })
         .catch(() => caches.match(e.request))
+    );
+  } else if (e.request.mode === 'navigate') {
+    // Tab deep links (/stats, /history, …) are client-routed on top of the
+    // app shell. Offline, the exact path isn't cached — fall back to the
+    // cached shell ("/") so installed/offline deep links still open.
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(e.request).then((hit) => hit || caches.match('/')))
     );
   } else {
     // Network-first for static assets

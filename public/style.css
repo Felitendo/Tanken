@@ -166,9 +166,9 @@ html, body {
   visibility: visible;
   transform: translateY(0) scale(1);
   pointer-events: auto;
-  /* Incoming: wait for outgoing to clear, then ease in */
-  transition: opacity 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) 0.08s,
-              transform 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) 0.08s,
+  /* Incoming: wait for outgoing to clear, then ease in with a soft decel */
+  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1) 0.08s,
+              transform 0.38s cubic-bezier(0.22, 1, 0.36, 1) 0.08s,
               visibility 0s linear 0s;
 }
 
@@ -1770,7 +1770,23 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   pointer-events: auto;
 }
 
+/* Top row holds the search box (grows) and the "Hier suchen" pill (right,
+   only visible after the map has moved). When the pill is hidden the box
+   takes the full width on its own. */
+#map-search-top-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+/* Scan-picker mode hides the search box — keep the confirm/cancel pills
+   centred in the row instead of stuck to the left. */
+#map-search-top-row:has(#map-search-box.hidden) {
+  justify-content: center;
+}
+
 #map-search-box {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   background: var(--color-bg);
@@ -2195,7 +2211,7 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
 }
 
 @keyframes slide-in-up {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -2209,7 +2225,7 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
 .stats-tile.anim-in,
 .history-hero-card.anim-in,
 .history-extreme-card.anim-in {
-  animation: slide-in-up 0.3s cubic-bezier(0.2, 0, 0, 1) both;
+  animation: slide-in-up 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* Hour bars grow via their inner fill (height transition driven by JS),
@@ -3713,15 +3729,17 @@ body.logged-in .station-fav-sync.synced {
 .map-fab:active { opacity: 0.7; transform: scale(0.92); }
 
 /* Row that holds the "Search here" pill (and, in scan-picker mode, a round
-   cancel button to its left). Lives inside #map-search-wrapper after the
-   route chip, so it naturally flows beneath whatever rows are visible
-   (search box, optional route chip, optional expanded route panel). */
+   cancel button to its left). Lives inside #map-search-top-row, inline to
+   the right of the search box, so it sits on the same line as the search
+   bar. Hidden (display:none below) until the map has moved, at which point
+   the box shrinks to make room. */
 .map-search-here-row {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: 8px;
+  flex: 0 0 auto;
+  margin-top: 0;
   pointer-events: none;
 }
 .map-search-here-row > * {
@@ -3747,7 +3765,7 @@ body.logged-in .station-fav-sync.synced {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  animation: searchHerePopIn 0.22s ease-out;
+  animation: searchHerePopIn 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
   white-space: nowrap;
 }
 .map-search-here:active { opacity: 0.85; transform: scale(0.96); }
@@ -3762,8 +3780,8 @@ body.logged-in .station-fav-sync.synced {
 .map-search-here[disabled]:active { transform: none; opacity: 0.75; }
 
 @keyframes searchHerePopIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: scale(0.8); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 /* "Confirm" state of the search-here pill (during scan-picker mode) */
@@ -3854,6 +3872,7 @@ body.logged-in .station-fav-sync.synced {
    still show the "Hier suchen" pill. Keyed off data-view-country. */
 [data-view-country="at"] .map-search-here,
 [data-view-country="at"] .map-scan-cancel,
+[data-view-country="at"] .map-search-here-row,
 [data-view-country="at"] .scan-queue-pin {
   display: none !important;
 }
@@ -5648,15 +5667,17 @@ html[data-theme="dark"] .pwa-popup-icon img,
     max-width: 400px;
   }
 
-  /* Desktop: tighter top spacing for the search-here row (pill + optional
-     cancel) since the search wrapper sits up at top: 16px. */
+  /* Desktop: the "Hier suchen" pill sits inline to the right of the search
+     box, same as mobile. Widen the wrapper only while the pill is visible so
+     the search input keeps its width. */
   .map-search-here-row {
-    position: fixed;
-    top: 88px;
-    left: calc((100vw - var(--sidebar-w) - var(--panel-w)) / 2);
-    width: max-content;
-    transform: translateX(-50%);
+    position: static;
+    transform: none;
+    width: auto;
     margin-top: 0;
+  }
+  #map-search-wrapper:has(.map-search-here:not(.hidden)) {
+    max-width: 520px;
   }
 
   #map-search-box {
