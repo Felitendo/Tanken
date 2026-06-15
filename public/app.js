@@ -1316,9 +1316,22 @@ function setupTabs() {
 
 let _tabLoadId = 0;
 
+// Close any open station detail surface. The map bottom-sheet and the
+// stats/history detail modal share #bottom-sheet and both close on a
+// backdrop click, which runs the correct per-surface teardown.
+function closeOpenSheet() {
+  const sheet = document.getElementById('bottom-sheet');
+  if (!sheet || sheet.classList.contains('hidden')) return;
+  sheet.querySelector('.bottom-sheet-backdrop')?.click();
+}
+
 function switchTab(tab, { initial = false, fromPop = false } = {}) {
   if (!initial && !fromPop && tab === state.currentTab) return;
   if (!initial && !fromPop) haptic('light');
+
+  // A station detail sheet/modal can sit on top of any tab — close it so it
+  // doesn't linger over the newly selected tab.
+  closeOpenSheet();
 
   // Drop any hover state from the previous tab's charts — the custom
   // tooltip divs live on document.body and would otherwise hang over
