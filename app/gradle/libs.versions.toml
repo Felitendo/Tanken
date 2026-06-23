@@ -1,5 +1,5 @@
 [versions]
-agp = "8.7.3"
+agp = "8.10.1"
 kotlin = "2.2.20"
 compose-multiplatform = "1.11.1"
 androidx-activityCompose = "1.9.3"
@@ -15,8 +15,8 @@ playServicesLocation = "21.3.0"
 androidxBrowser = "1.8.0"
 
 # Android compile/target/min SDK
-android-compileSdk = "35"
-android-targetSdk = "35"
+android-compileSdk = "36"
+android-targetSdk = "36"
 android-minSdk = "26"
 
 [libraries]
