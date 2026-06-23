@@ -34,11 +34,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import gg.felo.tanken.i18n.LocalStrings
+import gg.felo.tanken.i18n.Strings
 import gg.felo.tanken.model.FuelType
 import gg.felo.tanken.model.SanitizedUser
 import gg.felo.tanken.platform.Haptics
 import gg.felo.tanken.state.AlertViewModel
 import gg.felo.tanken.state.AppConfig
+import gg.felo.tanken.state.AppLanguage
 import gg.felo.tanken.state.ThemeMode
 import gg.felo.tanken.state.UserViewModel
 import gg.felo.tanken.ui.components.Card
@@ -63,7 +66,9 @@ fun SettingsScreen() {
     val fuel by config.fuelType.collectAsState()
     val themeName by config.themeMode.collectAsState()
     val user by userVm.state.collectAsState()
+    val language by config.language.collectAsState()
     val colors = TankenTheme.colors
+    val s = LocalStrings.current
 
     var urlField by remember(baseUrl) { mutableStateOf(baseUrl) }
 
@@ -74,11 +79,11 @@ fun SettingsScreen() {
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.l),
         verticalArrangement = Arrangement.spacedBy(Spacing.l),
     ) {
-        Text("Einstellungen", color = colors.textPrimary, style = MaterialTheme.typography.headlineLarge)
+        Text(s.settingsTitle, color = colors.textPrimary, style = MaterialTheme.typography.headlineLarge)
 
         // --- Account ---
         Column {
-            SectionHeader("Konto")
+            SectionHeader(s.account)
             Card {
                 when {
                     user.loading -> Box(Modifier.fillMaxWidth().padding(Spacing.s), contentAlignment = Alignment.Center) {
@@ -89,13 +94,9 @@ fun SettingsScreen() {
                         userVm.logout()
                     }
                     else -> Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                        Text("Nicht angemeldet", color = colors.textPrimary, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Melde dich mit deiner Felo-ID an, um Favoriten und Preisalarme zu synchronisieren.",
-                            color = colors.textHint,
-                            fontSize = 13.sp,
-                        )
-                        Button(onClick = { haptics.medium(); userVm.login() }) { Text("Mit Felo-ID anmelden") }
+                        Text(s.notLoggedIn, color = colors.textPrimary, fontWeight = FontWeight.SemiBold)
+                        Text(s.loginHint, color = colors.textHint, fontSize = 13.sp)
+                        Button(onClick = { haptics.medium(); userVm.login() }) { Text(s.loginButton) }
                     }
                 }
             }
@@ -103,22 +104,22 @@ fun SettingsScreen() {
 
         // --- Price alert ---
         Column {
-            SectionHeader("Preisalarm")
+            SectionHeader(s.priceAlert)
             Card {
                 if (user.loggedIn) {
                     AlertCard(alertVm, haptics)
                 } else {
-                    Text("Melde dich an, um Preisalarme einzurichten.", color = colors.textHint, fontSize = 13.sp)
+                    Text(s.alertLoginRequired, color = colors.textHint, fontSize = 13.sp)
                 }
             }
         }
 
         // --- Server / API base URL ---
         Column {
-            SectionHeader("Server")
+            SectionHeader(s.server)
             Card {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
-                    Text("API-Adresse", color = colors.textPrimary)
+                    Text(s.apiAddress, color = colors.textPrimary)
                     OutlinedTextField(
                         value = urlField,
                         onValueChange = { urlField = it },
@@ -127,18 +128,18 @@ fun SettingsScreen() {
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     )
                     Text(
-                        "Standard: ${AppConfig.DEFAULT_BASE_URL}",
+                        "${s.defaultLabel}: ${AppConfig.DEFAULT_BASE_URL}",
                         color = colors.textHint,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                        Button(onClick = { haptics.success(); config.setBaseUrl(urlField) }) { Text("Speichern") }
+                        Button(onClick = { haptics.success(); config.setBaseUrl(urlField) }) { Text(s.save) }
                         OutlinedButton(onClick = {
                             haptics.selection()
                             config.resetBaseUrl()
                             urlField = AppConfig.DEFAULT_BASE_URL
-                        }) { Text("Zurücksetzen") }
+                        }) { Text(s.reset) }
                     }
                 }
             }
@@ -146,7 +147,7 @@ fun SettingsScreen() {
 
         // --- Fuel type ---
         Column {
-            SectionHeader("Kraftstoff")
+            SectionHeader(s.fuel)
             Card {
                 SegmentedControl(
                     options = FuelType.entries.map { it.label },
@@ -158,13 +159,26 @@ fun SettingsScreen() {
 
         // --- Appearance ---
         Column {
-            SectionHeader("Darstellung")
+            SectionHeader(s.appearance)
             Card {
                 val modes = ThemeMode.entries
                 SegmentedControl(
-                    options = modes.map { it.localized() },
+                    options = modes.map { it.localized(s) },
                     selectedIndex = modes.indexOfFirst { it.name == themeName }.coerceAtLeast(0),
                     onSelect = { idx -> haptics.selection(); config.setThemeMode(modes[idx]) },
+                )
+            }
+        }
+
+        // --- Language ---
+        Column {
+            SectionHeader(s.language)
+            Card {
+                val langs = AppLanguage.entries
+                SegmentedControl(
+                    options = langs.map { it.localized(s) },
+                    selectedIndex = langs.indexOfFirst { it.code == language }.coerceAtLeast(0),
+                    onSelect = { idx -> haptics.selection(); config.setLanguage(langs[idx]) },
                 )
             }
         }
@@ -176,6 +190,7 @@ fun SettingsScreen() {
 @Composable
 private fun AccountRow(user: SanitizedUser, onLogout: () -> Unit) {
     val colors = TankenTheme.colors
+    val s = LocalStrings.current
     val name = user.displayName?.takeIf { it.isNotBlank() } ?: user.username.ifBlank { "Felo ID" }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
         Box(
@@ -188,12 +203,18 @@ private fun AccountRow(user: SanitizedUser, onLogout: () -> Unit) {
             Text(name, color = colors.textPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1)
             if (user.email.isNotBlank()) Text(user.email, color = colors.textHint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        OutlinedButton(onClick = onLogout) { Text("Abmelden") }
+        OutlinedButton(onClick = onLogout) { Text(s.logout) }
     }
 }
 
-private fun ThemeMode.localized(): String = when (this) {
-    ThemeMode.AUTO -> "Automatisch"
-    ThemeMode.LIGHT -> "Hell"
-    ThemeMode.DARK -> "Dunkel"
+private fun ThemeMode.localized(s: Strings): String = when (this) {
+    ThemeMode.AUTO -> s.themeAuto
+    ThemeMode.LIGHT -> s.themeLight
+    ThemeMode.DARK -> s.themeDark
+}
+
+private fun AppLanguage.localized(s: Strings): String = when (this) {
+    AppLanguage.AUTO -> s.langAuto
+    AppLanguage.DE -> s.langGerman
+    AppLanguage.EN -> s.langEnglish
 }

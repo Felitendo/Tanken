@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import gg.felo.tanken.i18n.LocalStrings
 import gg.felo.tanken.model.PriceBand
 import gg.felo.tanken.model.Station
 import gg.felo.tanken.platform.Haptics
@@ -51,6 +52,7 @@ fun StationDetailContent(
     modifier: Modifier = Modifier,
 ) {
     val colors = TankenTheme.colors
+    val s = LocalStrings.current
     val priceColor = PriceColor.forPrice(station.price, band)
     val (main, sup) = priceMainAndSuper(station.price)
 
@@ -107,7 +109,7 @@ fun StationDetailContent(
             )
         }) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(if (station.isOpen) "Geöffnet" else "Geschlossen", color = colors.textPrimary, fontSize = 15.sp)
+                Text(if (station.isOpen) s.open else s.closed, color = colors.textPrimary, fontSize = 15.sp)
                 if (station.dist > 0) {
                     Text(formatDistance(station.dist, station.distApprox), color = colors.textHint, fontSize = 14.sp)
                 }
@@ -124,7 +126,7 @@ fun StationDetailContent(
                 ) {
                     Icon(Icons.Outlined.Directions, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Apple Maps")
+                    Text(s.appleMaps)
                 }
             }
             if (mapsLink.hasGoogleMaps) {
@@ -137,7 +139,7 @@ fun StationDetailContent(
                     ) {
                         Icon(Icons.Outlined.Directions, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Google Maps")
+                        Text(s.googleMaps)
                     }
                 } else {
                     OutlinedButton(

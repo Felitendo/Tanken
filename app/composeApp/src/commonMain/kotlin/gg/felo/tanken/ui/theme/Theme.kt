@@ -64,12 +64,16 @@ private val AppTypography = Typography(
 fun TankenThemeRoot(content: @Composable () -> Unit) {
     val config = koinInject<gg.felo.tanken.state.AppConfig>()
     val themeName by config.themeMode.collectAsState()
+    val langName by config.language.collectAsState()
     val dark = when (themeName) {
         gg.felo.tanken.state.ThemeMode.LIGHT.name -> false
         gg.felo.tanken.state.ThemeMode.DARK.name -> true
         else -> isSystemInDarkTheme()
     }
-    TankenTheme(darkTheme = dark, content = content)
+    val strings = gg.felo.tanken.i18n.stringsFor(langName, gg.felo.tanken.platform.platformLanguageCode())
+    CompositionLocalProvider(gg.felo.tanken.i18n.LocalStrings provides strings) {
+        TankenTheme(darkTheme = dark, content = content)
+    }
 }
 
 @Composable

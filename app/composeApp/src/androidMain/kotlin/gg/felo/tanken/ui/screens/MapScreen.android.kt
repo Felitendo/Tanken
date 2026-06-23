@@ -64,6 +64,7 @@ import com.google.maps.android.compose.MapsComposeExperimentalApi
 import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import gg.felo.tanken.i18n.LocalStrings
 import gg.felo.tanken.net.ApiClient
 import gg.felo.tanken.platform.Haptics
 import gg.felo.tanken.platform.MapsLink
@@ -83,6 +84,7 @@ actual fun MapScreen() {
     val mapsLink = koinInject<MapsLink>()
     val api = koinInject<ApiClient>()
     val state by vm.state.collectAsState()
+    val s = LocalStrings.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
@@ -149,7 +151,7 @@ actual fun MapScreen() {
                 TextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("Ort suchen…") },
+                    placeholder = { Text(s.mapSearchPlaceholder) },
                     leadingIcon = { Icon(Icons.Outlined.Search, null, tint = TankenTheme.colors.textHint) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -174,7 +176,7 @@ actual fun MapScreen() {
             }
 
             Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-                Pill(text = "Hier suchen") {
+                Pill(text = s.searchHere) {
                     haptics.medium()
                     val target = cameraPositionState.position.target
                     vm.searchHere(target.latitude, target.longitude)
@@ -203,7 +205,7 @@ actual fun MapScreen() {
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Outlined.MyLocation, "Mein Standort", tint = TankenTheme.colors.accent)
+            Icon(Icons.Outlined.MyLocation, s.myLocation, tint = TankenTheme.colors.accent)
         }
 
         // Detail sheet

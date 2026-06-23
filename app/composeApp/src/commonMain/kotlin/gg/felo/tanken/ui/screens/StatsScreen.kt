@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import gg.felo.tanken.i18n.LocalStrings
 import gg.felo.tanken.platform.Haptics
 import gg.felo.tanken.state.HistoryViewModel
 import gg.felo.tanken.ui.components.BarFill
@@ -45,6 +46,7 @@ fun StatsScreen() {
     val haptics = koinInject<Haptics>()
     val state by vm.state.collectAsState()
     val colors = TankenTheme.colors
+    val s = LocalStrings.current
 
     LaunchedEffect(Unit) { vm.start() }
 
@@ -52,10 +54,10 @@ fun StatsScreen() {
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.l),
         verticalArrangement = Arrangement.spacedBy(Spacing.l),
     ) {
-        Text("Statistik", color = colors.textPrimary, style = MaterialTheme.typography.headlineLarge)
+        Text(s.statsTitle, color = colors.textPrimary, style = MaterialTheme.typography.headlineLarge)
 
         SegmentedControl(
-            options = listOf("Deutschland", "Österreich"),
+            options = listOf(s.countryDe, s.countryAt),
             selectedIndex = if (state.country == "at") 1 else 0,
             onSelect = {
                 haptics.selection()
@@ -66,19 +68,19 @@ fun StatsScreen() {
         val stats = state.stats
         when {
             state.loading && stats == null -> LoadingBox()
-            stats == null || stats.overall.entries == 0 -> Card { Text("Keine Statistik verfügbar.", color = colors.textHint) }
+            stats == null || stats.overall.entries == 0 -> Card { Text(s.noStats, color = colors.textHint) }
             else -> {
                 // Overall hero
                 Card {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                        Text("Durchschnitt (30 Tage)", color = colors.textHint, fontSize = 13.sp)
+                        Text(s.average30d, color = colors.textHint, fontSize = 13.sp)
                         Row(verticalAlignment = Alignment.Top) {
                             Text(formatPrice3(stats.overall.avg), color = colors.textPrimary, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold)
                             Text(" €/L", color = colors.textHint, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp))
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.l)) {
-                            MiniStat("Tiefstwert", stats.overall.lowestEver, colors.good)
-                            MiniStat("Höchstwert", stats.overall.highestEver, colors.bad)
+                            MiniStat(s.lowest, stats.overall.lowestEver, colors.good)
+                            MiniStat(s.highest, stats.overall.highestEver, colors.bad)
                         }
                     }
                 }
@@ -93,7 +95,7 @@ fun StatsScreen() {
                         val maxAvg = days.maxOf { it.avg }
                         val span = (maxAvg - minAvg).takeIf { it > 1e-6 } ?: 1.0
                         Column {
-                            SectionHeader("Wochentage")
+                            SectionHeader(s.weekdays)
                             Card {
                                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                                     days.forEach { d ->
@@ -116,9 +118,9 @@ fun StatsScreen() {
                 stats.hourAvgs.filter { it.count > 0 }.minByOrNull { it.avg }?.let { best ->
                     Card {
                         Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                            Text("Günstigste Tageszeit", color = colors.textHint, fontSize = 13.sp)
+                            Text(s.cheapestTime, color = colors.textHint, fontSize = 13.sp)
                             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                                Text("${best.hour}:00 Uhr", color = colors.accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                                Text("${best.hour}:00${s.clockSuffix}", color = colors.accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                                 Text("Ø ${formatPrice3(best.avg)} €", color = colors.textHint, fontSize = 13.sp, modifier = Modifier.padding(bottom = 3.dp))
                             }
                         }
@@ -129,7 +131,7 @@ fun StatsScreen() {
                 val ranking = stats.stationRanking.filter { it.count > 0 }.sortedBy { it.avg }.take(10)
                 if (ranking.isNotEmpty()) {
                     Column {
-                        SectionHeader("Günstigste Tankstellen (Ø)")
+                        SectionHeader(s.cheapestStations)
                         Card {
                             Column(verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
                                 ranking.forEachIndexed { index, s ->

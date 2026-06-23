@@ -8,20 +8,21 @@ import ComposeApp
 struct RootTabView: View {
     /// iOS accent blue (#007AFF), matching the website + shared theme.
     private let accent = Color(red: 0.0, green: 122.0 / 255.0, blue: 1.0)
+    private var s: Strings { MainViewControllerKt.currentStrings() }
 
     var body: some View {
         TabView {
             MapTabView()
-                .tabItem { Label("Karte", systemImage: "map") }
+                .tabItem { Label(s.tabMap, systemImage: "map") }
 
             ComposeScreen { MainViewControllerKt.historyViewController() }
-                .tabItem { Label("Verlauf", systemImage: "chart.xyaxis.line") }
+                .tabItem { Label(s.tabHistory, systemImage: "chart.xyaxis.line") }
 
             ComposeScreen { MainViewControllerKt.statsViewController() }
-                .tabItem { Label("Statistik", systemImage: "chart.bar") }
+                .tabItem { Label(s.tabStats, systemImage: "chart.bar") }
 
             ComposeScreen { MainViewControllerKt.settingsViewController() }
-                .tabItem { Label("Einstellungen", systemImage: "gearshape") }
+                .tabItem { Label(s.tabSettings, systemImage: "gearshape") }
         }
         .tint(accent)
     }

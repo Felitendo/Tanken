@@ -23,6 +23,9 @@ class AppConfig(private val settings: Settings) {
     private val _themeMode = MutableStateFlow(settings[KEY_THEME, ThemeMode.AUTO.name])
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
+    private val _language = MutableStateFlow(settings[KEY_LANG, AppLanguage.AUTO.code])
+    val language: StateFlow<String> = _language.asStateFlow()
+
     fun setBaseUrl(raw: String) {
         val normalized = normalizeBaseUrl(raw)
         settings[KEY_BASE_URL] = normalized
@@ -41,11 +44,17 @@ class AppConfig(private val settings: Settings) {
         _themeMode.value = mode.name
     }
 
+    fun setLanguage(lang: AppLanguage) {
+        settings[KEY_LANG] = lang.code
+        _language.value = lang.code
+    }
+
     companion object {
         const val DEFAULT_BASE_URL = "https://tanken.felo.gg"
         private const val KEY_BASE_URL = "base_url"
         private const val KEY_FUEL = "fuel_type"
         private const val KEY_THEME = "theme_mode"
+        private const val KEY_LANG = "language"
 
         /** Trim trailing slashes and whitespace; tolerate a missing scheme. */
         fun normalizeBaseUrl(input: String): String {
@@ -59,3 +68,5 @@ class AppConfig(private val settings: Settings) {
 }
 
 enum class ThemeMode { AUTO, LIGHT, DARK }
+
+enum class AppLanguage(val code: String) { AUTO("auto"), DE("de"), EN("en") }

@@ -5,8 +5,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.window.ComposeUIViewController
 import gg.felo.tanken.di.initKoin
+import gg.felo.tanken.i18n.Strings
+import gg.felo.tanken.i18n.stringsFor
 import gg.felo.tanken.model.PriceBand
 import gg.felo.tanken.model.Station
+import gg.felo.tanken.platform.platformLanguageCode
+import gg.felo.tanken.state.AppConfig
 import gg.felo.tanken.platform.Haptics
 import gg.felo.tanken.platform.MapsLink
 import gg.felo.tanken.state.MapViewModel
@@ -39,6 +43,13 @@ fun settingsViewController(): UIViewController = tabController(AppTab.SETTINGS)
 
 /** The shared Map state — the SwiftUI map observes/feeds this singleton. */
 fun mapViewModelShared(): MapViewModel = koin()
+
+/** Localised strings for the native SwiftUI chrome (tab titles, map search). Reads the in-app
+ *  language setting; native labels refresh on next launch after a language change. */
+fun currentStrings(): Strings {
+    val config = koin<AppConfig>()
+    return stringsFor(config.language.value, platformLanguageCode())
+}
 
 /** Compose station detail, presented in a native SwiftUI `.sheet`; reads the current selection. */
 fun stationDetailController(): UIViewController = ComposeUIViewController {

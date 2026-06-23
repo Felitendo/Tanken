@@ -19,9 +19,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import gg.felo.tanken.i18n.LocalStrings
+import gg.felo.tanken.i18n.Strings
 import gg.felo.tanken.platform.Haptics
-import gg.felo.tanken.state.AppConfig
-import gg.felo.tanken.state.ThemeMode
 import gg.felo.tanken.ui.screens.HistoryScreen
 import gg.felo.tanken.ui.screens.MapScreen
 import gg.felo.tanken.ui.screens.SettingsScreen
@@ -41,6 +41,7 @@ fun App() {
         val haptics = koinInject<Haptics>()
         var current by remember { mutableStateOf(AppTab.MAP) }
         val colors = TankenTheme.colors
+        val s = LocalStrings.current
 
         Scaffold(
             containerColor = colors.bgPrimary,
@@ -56,8 +57,8 @@ fun App() {
                                     current = tab
                                 }
                             },
-                            icon = { Icon(tab.icon, contentDescription = tab.title) },
-                            label = { Text(tab.title) },
+                            icon = { Icon(tab.icon, contentDescription = tabTitle(tab, s)) },
+                            label = { Text(tabTitle(tab, s)) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = colors.accent,
                                 selectedTextColor = colors.accent,
@@ -77,6 +78,14 @@ fun App() {
             }
         }
     }
+}
+
+/** Localised tab title. */
+fun tabTitle(tab: AppTab, s: Strings): String = when (tab) {
+    AppTab.MAP -> s.tabMap
+    AppTab.HISTORY -> s.tabHistory
+    AppTab.STATS -> s.tabStats
+    AppTab.SETTINGS -> s.tabSettings
 }
 
 /** Renders the screen for a single tab. Shared by Android ([App]) and the iOS per-tab controllers. */

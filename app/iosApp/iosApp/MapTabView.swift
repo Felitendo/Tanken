@@ -12,6 +12,7 @@ struct MapTabView: View {
         span: MKCoordinateSpan(latitudeDelta: 2.5, longitudeDelta: 2.5)
     )
     @State private var query: String = ""
+    private var s: Strings { MainViewControllerKt.currentStrings() }
 
     private var annotations: [StationAnnotation] {
         model.stations.compactMap { s in
@@ -50,7 +51,7 @@ struct MapTabView: View {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Ort suchen…", text: $query)
+                    TextField(s.mapSearchPlaceholder, text: $query)
                         .submitLabel(.search)
                         .onSubmit(runSearch)
                 }
@@ -62,7 +63,7 @@ struct MapTabView: View {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     model.searchHere(region.center)
                 } label: {
-                    Text("Hier suchen").font(.subheadline.weight(.semibold))
+                    Text(s.searchHere).font(.subheadline.weight(.semibold))
                 }
                 .buttonStyle(.borderedProminent)
                 .clipShape(Capsule())

@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import gg.felo.tanken.i18n.LocalStrings
 import gg.felo.tanken.model.PriceExtreme
 import gg.felo.tanken.platform.Haptics
 import gg.felo.tanken.state.HistoryViewModel
@@ -40,6 +41,7 @@ fun HistoryScreen() {
     val haptics = koinInject<Haptics>()
     val state by vm.state.collectAsState()
     val colors = TankenTheme.colors
+    val s = LocalStrings.current
 
     LaunchedEffect(Unit) { vm.start() }
 
@@ -47,10 +49,10 @@ fun HistoryScreen() {
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.l),
         verticalArrangement = Arrangement.spacedBy(Spacing.l),
     ) {
-        Text("Preisverlauf", color = colors.textPrimary, style = MaterialTheme.typography.headlineLarge)
+        Text(s.historyTitle, color = colors.textPrimary, style = MaterialTheme.typography.headlineLarge)
 
         SegmentedControl(
-            options = listOf("Deutschland", "Österreich"),
+            options = listOf(s.countryDe, s.countryAt),
             selectedIndex = if (state.country == "at") 1 else 0,
             onSelect = {
                 haptics.selection()
@@ -61,7 +63,7 @@ fun HistoryScreen() {
         val entries = state.entries
         when {
             state.loading && entries.isEmpty() -> LoadingBox()
-            entries.isEmpty() -> Card { Text("Keine Verlaufsdaten verfügbar.", color = colors.textHint) }
+            entries.isEmpty() -> Card { Text(s.noHistory, color = colors.textHint) }
             else -> {
                 val avgNow = entries.last().avgPrice
                 val periodMin = entries.minOf { it.minPrice }
@@ -70,7 +72,7 @@ fun HistoryScreen() {
                 // Hero: current average
                 Card {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                        Text("Aktueller Durchschnitt", color = colors.textHint, fontSize = 13.sp)
+                        Text(s.currentAverage, color = colors.textHint, fontSize = 13.sp)
                         Row(verticalAlignment = Alignment.Top) {
                             Text(
                                 formatPrice3(avgNow),
@@ -86,7 +88,7 @@ fun HistoryScreen() {
                             )
                         }
                         Text(
-                            "Zeitraum: ${formatPrice3(periodMin)} – ${formatPrice3(periodMax)} €",
+                            "${s.periodLabel}: ${formatPrice3(periodMin)} – ${formatPrice3(periodMax)} €",
                             color = colors.textHint,
                             fontSize = 13.sp,
                         )
@@ -95,7 +97,7 @@ fun HistoryScreen() {
 
                 // Trend chart
                 Column {
-                    SectionHeader("Verlauf (Ø)")
+                    SectionHeader(s.trendAverage)
                     Card {
                         LineChart(values = entries.map { it.avgPrice })
                         Row(
@@ -103,7 +105,7 @@ fun HistoryScreen() {
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Text("${formatPrice3(periodMin)} €", color = colors.good, fontSize = 12.sp)
-                            Text("${entries.size} Punkte", color = colors.textHint, fontSize = 12.sp)
+                            Text("${entries.size} ${s.pointsLabel}", color = colors.textHint, fontSize = 12.sp)
                             Text("${formatPrice3(periodMax)} €", color = colors.bad, fontSize = 12.sp)
                         }
                     }
@@ -113,10 +115,10 @@ fun HistoryScreen() {
                 val ex = state.extremes
                 if (ex?.cheapest != null || ex?.mostExpensive != null) {
                     Column {
-                        SectionHeader("Extremwerte")
+                        SectionHeader(s.extremes)
                         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
-                            ex?.cheapest?.let { ExtremeCard("Günstigste", it, colors.good, Modifier.weight(1f)) }
-                            ex?.mostExpensive?.let { ExtremeCard("Teuerste", it, colors.bad, Modifier.weight(1f)) }
+                            ex?.cheapest?.let { ExtremeCard(s.cheapest, it, colors.good, Modifier.weight(1f)) }
+                            ex?.mostExpensive?.let { ExtremeCard(s.mostExpensive, it, colors.bad, Modifier.weight(1f)) }
                         }
                     }
                 }

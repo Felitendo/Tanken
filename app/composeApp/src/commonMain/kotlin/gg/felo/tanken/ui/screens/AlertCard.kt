@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import gg.felo.tanken.i18n.LocalStrings
 import gg.felo.tanken.model.FuelType
 import gg.felo.tanken.platform.Haptics
 import gg.felo.tanken.state.AlertViewModel
@@ -40,14 +41,15 @@ import gg.felo.tanken.util.formatPrice3
 @Composable
 fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
     val colors = TankenTheme.colors
+    val t = LocalStrings.current
     val s by vm.state.collectAsState()
 
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
         // Enable toggle
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Benachrichtigung", color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("Läuft im Hintergrund auf dem Server", color = colors.textHint, fontSize = 12.sp)
+                Text(t.notification, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(t.notificationHint, color = colors.textHint, fontSize = 12.sp)
             }
             Switch(
                 checked = s.enabled,
@@ -57,10 +59,10 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
         }
 
         // Threshold stepper + slider
-        Text("SCHWELLENWERT", color = colors.textHint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Text(t.thresholdUpper, color = colors.textHint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
             IconButton(onClick = { haptics.selection(); vm.setThreshold(s.threshold - 0.01) }) {
-                Icon(Icons.Outlined.Remove, "verringern", tint = colors.accent)
+                Icon(Icons.Outlined.Remove, t.decrease, tint = colors.accent)
             }
             Text(
                 "${formatPrice3(s.threshold)} €",
@@ -70,7 +72,7 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { haptics.selection(); vm.setThreshold(s.threshold + 0.01) }) {
-                Icon(Icons.Outlined.Add, "erhöhen", tint = colors.accent)
+                Icon(Icons.Outlined.Add, t.increase, tint = colors.accent)
             }
         }
         Slider(
@@ -81,7 +83,7 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
         )
 
         // Fuel
-        Text("KRAFTSTOFF", color = colors.textHint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Text(t.fuelUpper, color = colors.textHint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         SegmentedControl(
             options = FuelType.entries.map { it.label },
             selectedIndex = FuelType.entries.indexOf(s.fuel),
@@ -89,9 +91,9 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
         )
 
         // Channel
-        Text("BENACHRICHTIGUNGSKANAL", color = colors.textHint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Text(t.channelUpper, color = colors.textHint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         SegmentedControl(
-            options = listOf("ntfy.sh", "E-Mail"),
+            options = listOf("ntfy.sh", t.channelEmail),
             selectedIndex = if (s.channel == "email") 1 else 0,
             onSelect = { haptics.selection(); vm.setChannel(if (it == 1) "email" else "ntfy") },
         )
@@ -99,7 +101,7 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
             OutlinedTextField(
                 value = s.email,
                 onValueChange = vm::setEmail,
-                placeholder = { Text("name@beispiel.de") },
+                placeholder = { Text(t.emailPlaceholder) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -107,7 +109,7 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
             OutlinedTextField(
                 value = s.ntfyTopic,
                 onValueChange = vm::setNtfyTopic,
-                placeholder = { Text("ntfy-Topic") },
+                placeholder = { Text(t.ntfyPlaceholder) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -124,12 +126,12 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
                 if (s.saving) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = colors.bgElevated)
                 } else {
-                    Text("Alarm speichern")
+                    Text(t.saveAlert)
                 }
             }
             if (s.exists) {
                 OutlinedButton(onClick = { vm.delete { ok -> if (ok) haptics.warning() } }) {
-                    Text("Löschen")
+                    Text(t.delete)
                 }
             }
         }
