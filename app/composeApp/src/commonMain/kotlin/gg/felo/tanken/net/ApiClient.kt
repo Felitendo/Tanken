@@ -121,6 +121,9 @@ class ApiClient(
     suspend fun me(): MeResponse =
         client.get(url("/api/me")) { auth() }.bodyOrThrow()
 
+    suspend fun logout(): Boolean =
+        runCatching { client.post(url("/api/logout")) { auth() }.status.isSuccess() }.getOrDefault(false)
+
     suspend fun getAlert(): PriceAlert? =
         runCatching { client.get(url("/api/alert")) { auth() }.bodyOrThrow<PriceAlert>() }.getOrNull()
 

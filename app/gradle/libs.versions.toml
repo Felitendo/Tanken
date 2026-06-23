@@ -12,6 +12,7 @@ koin = "4.0.0"
 multiplatformSettings = "1.2.0"
 mapsCompose = "6.4.1"
 playServicesLocation = "21.3.0"
+androidxBrowser = "1.8.0"
 
 # Android compile/target/min SDK
 android-compileSdk = "35"
@@ -49,6 +50,7 @@ androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx
 # Google Maps (android target only)
 maps-compose = { module = "com.google.maps.android:maps-compose", version.ref = "mapsCompose" }
 play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
+androidx-browser = { module = "androidx.browser:browser", version.ref = "androidxBrowser" }
 
 # Lifecycle ViewModel (Compose Multiplatform flavour)
 androidx-lifecycle-viewmodel = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel", version.ref = "androidx-lifecycle" }

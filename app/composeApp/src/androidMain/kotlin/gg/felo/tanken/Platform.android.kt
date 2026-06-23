@@ -9,12 +9,14 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.SharedPreferencesSettings
+import gg.felo.tanken.platform.Authenticator
 import gg.felo.tanken.platform.Geolocation
 import gg.felo.tanken.platform.Haptics
 import gg.felo.tanken.platform.LatLng
@@ -33,6 +35,22 @@ fun androidModule(context: Context) = module {
     single<Haptics> { AndroidHaptics(context) }
     single<Geolocation> { AndroidGeolocation(context) }
     single<MapsLink> { AndroidMapsLink(context) }
+    single<Authenticator> { AndroidAuthenticator(context) }
+}
+
+/** Launches OIDC login in a Chrome Custom Tab; the token returns via the tanken://auth deep link. */
+private class AndroidAuthenticator(context: Context) : Authenticator {
+    private val appContext = context.applicationContext
+    override fun login(startUrl: String) {
+        val uri = Uri.parse(startUrl)
+        runCatching {
+            val tabs = CustomTabsIntent.Builder().setShowTitle(true).build()
+            tabs.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            tabs.launchUrl(appContext, uri)
+        }.onFailure {
+            appContext.startActivity(Intent(Intent.ACTION_VIEW, uri).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+        }
+    }
 }
 
 private class AndroidGeolocation(context: Context) : Geolocation {

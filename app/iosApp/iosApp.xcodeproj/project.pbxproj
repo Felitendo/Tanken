@@ -243,6 +243,8 @@
 					"$(inherited)",
 					"-framework",
 					ComposeApp,
+					"-framework",
+					AuthenticationServices,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = gg.felo.tanken;
 				PRODUCT_NAME = Tanken;
@@ -276,6 +278,8 @@
 					"$(inherited)",
 					"-framework",
 					ComposeApp,
+					"-framework",
+					AuthenticationServices,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = gg.felo.tanken;
 				PRODUCT_NAME = Tanken;

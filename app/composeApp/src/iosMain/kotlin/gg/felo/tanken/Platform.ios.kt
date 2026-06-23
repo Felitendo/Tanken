@@ -2,13 +2,21 @@ package gg.felo.tanken
 
 import com.russhwolf.settings.NSUserDefaultsSettings
 import com.russhwolf.settings.Settings
+import gg.felo.tanken.platform.Authenticator
 import gg.felo.tanken.platform.Geolocation
 import gg.felo.tanken.platform.Haptics
 import gg.felo.tanken.platform.LatLng
 import gg.felo.tanken.platform.MapsLink
 import gg.felo.tanken.platform.SecureStore
+import gg.felo.tanken.state.UserViewModel
 import org.koin.dsl.module
+import org.koin.mp.KoinPlatform
+import platform.AuthenticationServices.ASPresentationAnchor
+import platform.AuthenticationServices.ASWebAuthenticationPresentationContextProvidingProtocol
+import platform.AuthenticationServices.ASWebAuthenticationSession
 import platform.Foundation.NSURL
+import platform.Foundation.NSURLComponents
+import platform.Foundation.NSURLQueryItem
 import platform.Foundation.NSUserDefaults
 import platform.UIKit.UIApplication
 import platform.UIKit.UIImpactFeedbackGenerator
@@ -16,6 +24,8 @@ import platform.UIKit.UIImpactFeedbackStyle
 import platform.UIKit.UINotificationFeedbackGenerator
 import platform.UIKit.UINotificationFeedbackType
 import platform.UIKit.UISelectionFeedbackGenerator
+import platform.UIKit.UIWindow
+import platform.darwin.NSObject
 
 /** iOS DI: UIKit haptics, NSUserDefaults-backed settings, token store, maps links. */
 fun iosModule() = module {
@@ -24,6 +34,45 @@ fun iosModule() = module {
     single<Haptics> { IosHaptics() }
     single<Geolocation> { IosGeolocation() }
     single<MapsLink> { IosMapsLink() }
+    single<Authenticator> { IosAuthenticator() }
+}
+
+/**
+ * OIDC login via ASWebAuthenticationSession. The web callback redirects to `tanken://auth?token=…`,
+ * which the session intercepts (callbackURLScheme = "tanken") and hands back here; we extract the
+ * token and forward it to the shared [UserViewModel].
+ */
+private class IosAuthenticator :
+    NSObject(),
+    Authenticator,
+    ASWebAuthenticationPresentationContextProvidingProtocol {
+
+    private var session: ASWebAuthenticationSession? = null
+
+    override fun login(startUrl: String) {
+        val url = NSURL(string = startUrl) ?: return
+        val s = ASWebAuthenticationSession(
+            uRL = url,
+            callbackURLScheme = "tanken",
+        ) { callbackURL, _ ->
+            val token = callbackURL?.let { extractToken(it) }
+            if (!token.isNullOrBlank()) {
+                KoinPlatform.getKoin().get<UserViewModel>().completeLogin(token)
+            }
+        }
+        s.presentationContextProvider = this
+        session = s
+        s.start()
+    }
+
+    override fun presentationAnchorForWebAuthenticationSession(session: ASWebAuthenticationSession): ASPresentationAnchor =
+        UIApplication.sharedApplication.keyWindow ?: UIWindow()
+
+    private fun extractToken(url: NSURL): String? {
+        val components = NSURLComponents(uRL = url, resolvingAgainstBaseURL = false) ?: return null
+        val items = components.queryItems ?: return null
+        return items.filterIsInstance<NSURLQueryItem>().firstOrNull { it.name == "token" }?.value
+    }
 }
 
 /**

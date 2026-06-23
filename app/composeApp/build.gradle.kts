@@ -41,6 +41,7 @@ kotlin {
             implementation(libs.koin.android)
             implementation(libs.maps.compose)
             implementation(libs.play.services.location)
+            implementation(libs.androidx.browser)
         }
         commonMain.dependencies {
             implementation(compose.runtime)
