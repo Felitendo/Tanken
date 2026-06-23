@@ -130,10 +130,18 @@ data class HistoryEntry(
 )
 
 @Serializable
-data class HistoryExtreme(
-    val station: String = "",
+data class PriceExtreme(
+    @SerialName("station_name") val stationName: String = "",
+    @SerialName("station_id") val stationId: String? = null,
+    @SerialName("station_brand") val stationBrand: String? = null,
     val price: Double = 0.0,
-    val id: String? = null,
+    val timestamp: String = "",
+)
+
+@Serializable
+data class HistoryExtremes(
+    val cheapest: PriceExtreme? = null,
+    val mostExpensive: PriceExtreme? = null,
 )
 
 @Serializable
@@ -143,9 +151,43 @@ data class HistoryResponse(
 )
 
 @Serializable
-data class HistoryExtremes(
-    val cheapest: HistoryExtreme? = null,
-    val expensive: HistoryExtreme? = null,
+data class HistoryLocationsResponse(
+    val locations: List<String> = emptyList(),
+)
+
+/** Aggregate statistics (`GET /api/stats`) — buildHistoryStats output. */
+@Serializable
+data class HistoryStats(
+    val dayAvgs: List<DayAvg> = emptyList(),
+    val hourAvgs: List<HourAvg> = emptyList(),
+    val stationRanking: List<StationRank> = emptyList(),
+    val overall: StatsOverall = StatsOverall(),
+)
+
+@Serializable
+data class DayAvg(val day: Int, val name: String = "", val avg: Double = 0.0, val count: Int = 0)
+
+@Serializable
+data class HourAvg(val hour: Int, val avg: Double = 0.0, val count: Int = 0)
+
+@Serializable
+data class StationRank(
+    val station: String = "",
+    val avg: Double = 0.0,
+    val min: Double = 0.0,
+    val count: Int = 0,
+    val id: String? = null,
+    val brand: String? = null,
+)
+
+@Serializable
+data class StatsOverall(
+    @SerialName("lowest_ever") val lowestEver: Double = 0.0,
+    @SerialName("highest_ever") val highestEver: Double = 0.0,
+    val avg: Double = 0.0,
+    val entries: Int = 0,
+    val since: String? = null,
+    val until: String? = null,
 )
 
 /** Admin-curated scan location (`GET /api/scan-locations`). */

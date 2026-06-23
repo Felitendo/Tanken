@@ -3,7 +3,9 @@ package gg.felo.tanken.net
 import gg.felo.tanken.model.AlertResponse
 import gg.felo.tanken.model.FuelType
 import gg.felo.tanken.model.GeocodeResponse
+import gg.felo.tanken.model.HistoryLocationsResponse
 import gg.felo.tanken.model.HistoryResponse
+import gg.felo.tanken.model.HistoryStats
 import gg.felo.tanken.model.MeResponse
 import gg.felo.tanken.model.PriceAlert
 import gg.felo.tanken.model.PriceBandResponse
@@ -92,6 +94,18 @@ class ApiClient(
 
     suspend fun history(location: String? = null, country: String = "de"): HistoryResponse =
         client.get(url("/api/history")) {
+            location?.let { parameter("location", it) }
+            parameter("country", country)
+        }.bodyOrThrow()
+
+    suspend fun historyLocations(country: String = "de"): HistoryLocationsResponse =
+        client.get(url("/api/history")) {
+            parameter("locations", "list")
+            parameter("country", country)
+        }.bodyOrThrow()
+
+    suspend fun stats(location: String? = null, country: String = "de"): HistoryStats =
+        client.get(url("/api/stats")) {
             location?.let { parameter("location", it) }
             parameter("country", country)
         }.bodyOrThrow()
