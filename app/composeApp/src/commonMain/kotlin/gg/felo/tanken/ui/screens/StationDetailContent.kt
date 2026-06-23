@@ -11,10 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Circle
-import androidx.compose.material.icons.outlined.Directions
-import androidx.compose.material.icons.outlined.LocationOn
+import gg.felo.tanken.ui.icons.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -83,7 +80,7 @@ fun StationDetailContent(
 
         // Address
         if (station.addressLine.isNotBlank() || station.cityLine.isNotBlank()) {
-            InfoRow(icon = { Icon(Icons.Outlined.LocationOn, null, tint = colors.textHint, modifier = Modifier.size(18.dp)) }) {
+            InfoRow(icon = { Icon(AppIcons.Place, null, tint = colors.textHint, modifier = Modifier.size(18.dp)) }) {
                 Column {
                     if (station.addressLine.isNotBlank()) Text(station.addressLine, color = colors.textPrimary, fontSize = 15.sp)
                     if (station.cityLine.isNotBlank()) Text(station.cityLine, color = colors.textHint, fontSize = 13.sp)
@@ -93,11 +90,11 @@ fun StationDetailContent(
 
         // Status + distance
         InfoRow(icon = {
-            Icon(
-                Icons.Filled.Circle,
-                null,
-                tint = if (station.isOpen) colors.good else colors.bad,
-                modifier = Modifier.size(12.dp),
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .clip(CircleShape)
+                    .background(if (station.isOpen) colors.good else colors.bad),
             )
         }) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -116,7 +113,7 @@ fun StationDetailContent(
                     colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
                     modifier = Modifier.weight(1f),
                 ) {
-                    Icon(Icons.Outlined.Directions, null, modifier = Modifier.size(18.dp))
+                    Icon(AppIcons.Directions, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(s.appleMaps)
                 }
@@ -129,7 +126,7 @@ fun StationDetailContent(
                         colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
                         modifier = Modifier.weight(1f),
                     ) {
-                        Icon(Icons.Outlined.Directions, null, modifier = Modifier.size(18.dp))
+                        Icon(AppIcons.Directions, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(s.googleMaps)
                     }

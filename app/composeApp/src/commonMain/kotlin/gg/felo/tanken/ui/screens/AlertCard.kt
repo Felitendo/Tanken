@@ -7,9 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Remove
+import gg.felo.tanken.ui.icons.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -62,7 +60,7 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
         Text(t.thresholdUpper, color = colors.textHint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
             IconButton(onClick = { haptics.selection(); vm.setThreshold(s.threshold - 0.01) }) {
-                Icon(Icons.Outlined.Remove, t.decrease, tint = colors.accent)
+                Icon(AppIcons.Remove, t.decrease, tint = colors.accent)
             }
             Text(
                 "${formatPrice(s.threshold)} €",
@@ -72,7 +70,7 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { haptics.selection(); vm.setThreshold(s.threshold + 0.01) }) {
-                Icon(Icons.Outlined.Add, t.increase, tint = colors.accent)
+                Icon(AppIcons.Add, t.increase, tint = colors.accent)
             }
         }
         Slider(

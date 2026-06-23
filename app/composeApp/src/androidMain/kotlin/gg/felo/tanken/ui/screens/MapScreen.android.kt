@@ -23,9 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.MyLocation
-import androidx.compose.material.icons.outlined.Search
+import gg.felo.tanken.ui.icons.AppIcons
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -62,8 +60,8 @@ import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MapsComposeExperimentalApi
 import com.google.maps.android.compose.MarkerComposable
-import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.maps.android.compose.rememberMarkerState
 import gg.felo.tanken.i18n.LocalStrings
 import gg.felo.tanken.net.ApiClient
 import gg.felo.tanken.platform.Haptics
@@ -124,7 +122,7 @@ actual fun MapScreen() {
                     val color = PriceColor.forPrice(s.price, state.band)
                     MarkerComposable(
                         s.id, s.price, color.value,
-                        state = MarkerState(position = GLatLng(s.lat, s.lng)),
+                        state = rememberMarkerState(key = s.id, position = GLatLng(s.lat, s.lng)),
                         onClick = { haptics.light(); vm.select(s); true },
                         anchor = androidx.compose.ui.geometry.Offset(0.5f, 1f),
                     ) {
@@ -152,7 +150,7 @@ actual fun MapScreen() {
                     value = query,
                     onValueChange = { query = it },
                     placeholder = { Text(s.mapSearchPlaceholder) },
-                    leadingIcon = { Icon(Icons.Outlined.Search, null, tint = TankenTheme.colors.textHint) },
+                    leadingIcon = { Icon(AppIcons.Search, null, tint = TankenTheme.colors.textHint) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -205,7 +203,7 @@ actual fun MapScreen() {
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Outlined.MyLocation, s.myLocation, tint = TankenTheme.colors.accent)
+            Icon(AppIcons.MyLocation, s.myLocation, tint = TankenTheme.colors.accent)
         }
 
         // Detail sheet
