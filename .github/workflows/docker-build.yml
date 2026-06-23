@@ -4,8 +4,10 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+    paths-ignore: ["app/**"]
   pull_request:
     branches: [main]
+    paths-ignore: ["app/**"]
 
 env:
   REGISTRY: ghcr.io
