@@ -66,7 +66,7 @@ const stableRel = releases
 const stableIpa = ipaAsset(stableRel);
 if (stableIpa) {
   apps.push(appEntry(
-    'gg.felo.tanken',
+    'de.felitendo.tanken',
     'Tanken',
     'Tankstellenpreise für Deutschland & Österreich – die native Tanken Companion App.',
     stableRel.tag_name.replace(/^app-v/, ''),
@@ -80,7 +80,7 @@ const devRel = releases.find((r) => r.tag_name === 'dev');
 const devIpa = ipaAsset(devRel);
 if (devIpa) {
   apps.push(appEntry(
-    'gg.felo.tanken.dev',
+    'de.felitendo.tanken.dev',
     'Tanken Dev',
     'Automatischer Build des main-Branches – neueste Features, evtl. instabil.',
     `${baseVersion}-dev.${stamp(devIpa.updated)}`,
@@ -91,7 +91,7 @@ if (devIpa) {
 
 const source = {
   name: 'Tanken',
-  identifier: 'gg.felo.tanken.altstore',
+  identifier: 'de.felitendo.tanken.altstore',
   subtitle: 'Tankstellenpreise – Companion App',
   iconURL,
   website: 'https://tanken.felo.gg',

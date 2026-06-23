@@ -110,7 +110,7 @@ jobs:
           chmod +x gradlew
           BUNDLE_ARG=""
           if [ "${{ needs.meta.outputs.channel }}" = "dev" ]; then
-            BUNDLE_ARG="PRODUCT_BUNDLE_IDENTIFIER=gg.felo.tanken.dev"
+            BUNDLE_ARG="PRODUCT_BUNDLE_IDENTIFIER=de.felitendo.tanken.dev"
           fi
           xcodebuild \
             -project iosApp/iosApp.xcodeproj \

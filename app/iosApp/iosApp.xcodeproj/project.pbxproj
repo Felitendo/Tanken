@@ -246,7 +246,7 @@
 					"-framework",
 					AuthenticationServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = gg.felo.tanken;
+				PRODUCT_BUNDLE_IDENTIFIER = de.felitendo.tanken;
 				PRODUCT_NAME = Tanken;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -281,7 +281,7 @@
 					"-framework",
 					AuthenticationServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = gg.felo.tanken;
+				PRODUCT_BUNDLE_IDENTIFIER = de.felitendo.tanken;
 				PRODUCT_NAME = Tanken;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
