@@ -85,7 +85,11 @@ class MapViewModel(
         loadJob = scope.launch {
             _state.update { it.copy(loading = true) }
             val fuel = config.fuelType.value
+            // Cap to the closest N stations — rendering hundreds of custom markers (MarkerComposable
+            // on Android, annotations on iOS) is the source of the map lag.
             val stations = runCatching { repo.nearby(lat, lng, fuel) }.getOrDefault(emptyList())
+                .sortedBy { it.dist }
+                .take(MAX_MARKERS)
             val band = runCatching { repo.priceBand(fuel, lat, lng) }.getOrNull()
             _state.update { it.copy(stations = stations, band = band, loading = false) }
         }
@@ -121,5 +125,6 @@ class MapViewModel(
 
     companion object {
         val GERMANY_CENTER = LatLng(51.1657, 10.4515)
+        const val MAX_MARKERS = 60
     }
 }

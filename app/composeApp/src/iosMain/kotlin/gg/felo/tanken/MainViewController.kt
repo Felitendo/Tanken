@@ -21,6 +21,7 @@ import gg.felo.tanken.ui.theme.PriceColor
 import gg.felo.tanken.ui.theme.Rgb
 import gg.felo.tanken.ui.theme.TankenThemeRoot
 import gg.felo.tanken.util.formatPrice3
+import org.koin.compose.KoinContext
 import org.koin.mp.KoinPlatform
 import platform.UIKit.UIViewController
 
@@ -32,7 +33,9 @@ fun startKoinIos() {
 private inline fun <reified T> koin(): T = KoinPlatform.getKoin().get()
 
 private fun tabController(tab: AppTab): UIViewController = ComposeUIViewController {
-    TankenThemeRoot { TabContent(tab) }
+    // KoinContext binds the global Koin into the composition so koinInject() resolves on iOS
+    // (the native map tab never exercises this, which is why only the Compose tabs crashed).
+    KoinContext { TankenThemeRoot { TabContent(tab) } }
 }
 
 // History/Stats/Settings tabs host shared Compose screens. The Map tab is a native SwiftUI
@@ -53,14 +56,16 @@ fun currentStrings(): Strings {
 
 /** Compose station detail, presented in a native SwiftUI `.sheet`; reads the current selection. */
 fun stationDetailController(): UIViewController = ComposeUIViewController {
-    TankenThemeRoot {
-        val vm = remember { mapViewModelShared() }
-        val state by vm.state.collectAsState()
-        val selected = state.selected
-        val mapsLink = remember { koin<MapsLink>() }
-        val haptics = remember { koin<Haptics>() }
-        if (selected != null) {
-            StationDetailContent(selected, state.band, mapsLink, haptics)
+    KoinContext {
+        TankenThemeRoot {
+            val vm = remember { mapViewModelShared() }
+            val state by vm.state.collectAsState()
+            val selected = state.selected
+            val mapsLink = remember { koin<MapsLink>() }
+            val haptics = remember { koin<Haptics>() }
+            if (selected != null) {
+                StationDetailContent(selected, state.band, mapsLink, haptics)
+            }
         }
     }
 }

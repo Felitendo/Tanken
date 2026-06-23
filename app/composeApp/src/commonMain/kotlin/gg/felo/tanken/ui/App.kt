@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import gg.felo.tanken.i18n.LocalStrings
 import gg.felo.tanken.i18n.Strings
 import gg.felo.tanken.platform.Haptics
+import org.koin.compose.KoinContext
 import gg.felo.tanken.ui.screens.HistoryScreen
 import gg.felo.tanken.ui.screens.MapScreen
 import gg.felo.tanken.ui.screens.SettingsScreen
@@ -37,7 +38,8 @@ import org.koin.compose.koinInject
  */
 @Composable
 fun App() {
-    TankenThemeRoot {
+    KoinContext {
+      TankenThemeRoot {
         val haptics = koinInject<Haptics>()
         var current by remember { mutableStateOf(AppTab.MAP) }
         val colors = TankenTheme.colors
@@ -77,6 +79,7 @@ fun App() {
                 }
             }
         }
+      }
     }
 }
 
