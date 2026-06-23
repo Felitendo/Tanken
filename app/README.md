@@ -45,9 +45,30 @@ phase to produce/link the shared `ComposeApp.framework`.
 
 ## CI / Release
 
-- **`.github/workflows/mobile-ci.yml`** — builds the Android APK + an **unsigned** iOS IPA
-  (AltStore re-signs on device, so no Apple certificates are needed in CI) on every push/PR.
-- Release workflows (rolling **Dev** + tagged **Stable**, AltStore `source.json`) land in Phase 5.
-  App tags use the `app-v*` prefix so they don't trigger the web image build.
+- **`mobile-ci.yml`** — builds the Android APK + an **unsigned** iOS IPA on every push/PR under
+  `app/**` (AltStore re-signs on device, so no Apple certificates are needed in CI).
+- **`mobile-release.yml`**
+  - push to `main` → rolling **`dev`** prerelease — debug-signed APK + unsigned IPA, both with bundle
+    id `gg.felo.tanken.dev` so the Dev build sits next to Stable.
+  - tag `app-vX.Y.Z` → **stable** release — release-signed APK + unsigned IPA.
+  - regenerates the AltStore `source.json` (apps **Tanken** + **Tanken Dev**) from the GitHub
+    releases and attaches it to the `dev` release, giving a stable AltStore URL:
+    `https://github.com/Felitendo/Tanken/releases/download/dev/source.json`
 
-Version is the single source of truth in `gradle.properties` (`app.versionName` / `app.versionCode`).
+App tags use the `app-v*` prefix so they don't trigger the web image build (and `app/**` is excluded
+from the Docker build). Version is the single source of truth in `gradle.properties`
+(`app.versionName` / `app.versionCode`).
+
+### Optional CI secrets
+
+| Secret | Purpose |
+|--------|---------|
+| `MAPS_API_KEY` | Google Maps tiles on Android |
+| `ANDROID_KEYSTORE_BASE64` / `…_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` | release-signing the stable APK (otherwise an ephemeral debug key is used) |
+
+## Login (OIDC / Felo-ID)
+
+The app opens `/auth/oidc/start?mode=app&app_redirect=tanken://auth` in an in-app browser
+(ASWebAuthenticationSession on iOS, Custom Tabs on Android). The server returns the signed session
+token via the `tanken://auth?token=…` deep link, which the app replays as the `tank_session` cookie —
+unlocking synced settings, favourites and server-side price alerts.
