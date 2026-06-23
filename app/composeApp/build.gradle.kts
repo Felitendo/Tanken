@@ -103,6 +103,12 @@ android {
         getByName("release") {
             isMinifyEnabled = false
         }
+        getByName("debug") {
+            // The Dev channel ships the debug APK; a distinct id lets it sit next to the stable
+            // build and appear as a separate "Tanken Dev" app in AltStore.
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
