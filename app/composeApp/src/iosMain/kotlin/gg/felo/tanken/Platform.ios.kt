@@ -2,21 +2,59 @@ package gg.felo.tanken
 
 import com.russhwolf.settings.NSUserDefaultsSettings
 import com.russhwolf.settings.Settings
+import gg.felo.tanken.platform.Geolocation
 import gg.felo.tanken.platform.Haptics
+import gg.felo.tanken.platform.LatLng
+import gg.felo.tanken.platform.MapsLink
 import gg.felo.tanken.platform.SecureStore
 import org.koin.dsl.module
+import platform.Foundation.NSURL
 import platform.Foundation.NSUserDefaults
+import platform.UIKit.UIApplication
 import platform.UIKit.UIImpactFeedbackGenerator
 import platform.UIKit.UIImpactFeedbackStyle
 import platform.UIKit.UINotificationFeedbackGenerator
 import platform.UIKit.UINotificationFeedbackType
 import platform.UIKit.UISelectionFeedbackGenerator
 
-/** iOS DI: UIKit haptics, NSUserDefaults-backed settings, token store. */
+/** iOS DI: UIKit haptics, NSUserDefaults-backed settings, token store, maps links. */
 fun iosModule() = module {
     single<Settings> { NSUserDefaultsSettings(NSUserDefaults.standardUserDefaults) }
     single<SecureStore> { IosSecureStore() }
     single<Haptics> { IosHaptics() }
+    single<Geolocation> { IosGeolocation() }
+    single<MapsLink> { IosMapsLink() }
+}
+
+/**
+ * On iOS the map is a native SwiftUI MapKit view that already shows the user's location and drives
+ * recentering through CLLocationManager in Swift, calling `MapViewModel.searchHere(...)`. So the
+ * Kotlin geolocation is a no-op here.
+ */
+private class IosGeolocation : Geolocation {
+    override suspend fun current(): LatLng? = null
+}
+
+private class IosMapsLink : MapsLink {
+    override val showAppleMaps = true
+
+    override val hasGoogleMaps: Boolean
+        get() = NSURL(string = "comgooglemaps://")?.let { UIApplication.sharedApplication.canOpenURL(it) } ?: false
+
+    override fun openAppleMaps(lat: Double, lng: Double, label: String) {
+        open("http://maps.apple.com/?daddr=$lat,$lng&dirflg=d")
+    }
+
+    override fun openGoogleMaps(lat: Double, lng: Double, label: String) {
+        val app = "comgooglemaps://?daddr=$lat,$lng&directionsmode=driving"
+        val canApp = NSURL(string = "comgooglemaps://")?.let { UIApplication.sharedApplication.canOpenURL(it) } ?: false
+        open(if (canApp) app else "https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
+    }
+
+    private fun open(urlString: String) {
+        val url = NSURL(string = urlString) ?: return
+        UIApplication.sharedApplication.openURL(url, options = emptyMap<Any?, Any?>(), completionHandler = null)
+    }
 }
 
 /**

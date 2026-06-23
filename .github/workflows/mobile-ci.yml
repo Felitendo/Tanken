@@ -31,8 +31,6 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          build-root-directory: app
 
       - name: Build debug APK
         run: |
@@ -68,8 +66,6 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          build-root-directory: app
 
       - name: Archive (unsigned, device SDK)
         run: |

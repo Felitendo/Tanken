@@ -3,13 +3,8 @@ package gg.felo.tanken.ui.screens
 import androidx.compose.runtime.Composable
 import gg.felo.tanken.ui.components.PlaceholderScreen
 
-// Phase 1 stubs. MapScreen → native maps in Phase 2; History/Stats fleshed out in Phase 3.
-
-@Composable
-fun MapScreen() = PlaceholderScreen(
-    title = "Karte",
-    subtitle = "Native Karte (Apple Maps / Google Maps) folgt in Phase 2.",
-)
+// MapScreen is platform-specific (expect/actual): Android renders Google Maps; on iOS the map tab
+// is a native SwiftUI MapKit view, so the actual there is just a fallback. History/Stats: Phase 3.
 
 @Composable
 fun HistoryScreen() = PlaceholderScreen(

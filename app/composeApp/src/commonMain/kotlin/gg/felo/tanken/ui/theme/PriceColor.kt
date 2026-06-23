@@ -6,6 +6,9 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+/** RGB triple in 0..1, used to hand colours to native iOS map annotations. */
+data class Rgb(val r: Double, val g: Double, val b: Double)
+
 /**
  * Direct port of the website's station colouring (public/app.js: priceColor3 / bandRatio).
  * A price is mapped to t∈[0,1] across the regional [P10, P90] band, then a straight-line RGB
@@ -14,15 +17,21 @@ import kotlin.math.roundToInt
  */
 object PriceColor {
     private const val MIN_BAND_SPREAD = 0.03
-    val NEUTRAL = Color(0xFFB7B7B7) // hsl(0,0%,72%)
+    val NEUTRAL_RGB = Rgb(183.0 / 255.0, 183.0 / 255.0, 183.0 / 255.0) // hsl(0,0%,72%)
+    val NEUTRAL = Color(0xFFB7B7B7)
 
-    /** priceColor3(t) from app.js. */
-    fun ofRatio(t: Double): Color {
+    /** priceColor3(t) from app.js, as 0..1 RGB. */
+    fun rgbOfRatio(t: Double): Rgb {
         val x = max(0.0, min(1.0, t))
         val r = (52 + x * 203).roundToInt()
         val g = (199 - x * 140).roundToInt()
         val b = (89 - x * 41).roundToInt()
-        return Color(r, g, b)
+        return Rgb(r / 255.0, g / 255.0, b / 255.0)
+    }
+
+    fun ofRatio(t: Double): Color {
+        val c = rgbOfRatio(t)
+        return Color(c.r.toFloat(), c.g.toFloat(), c.b.toFloat())
     }
 
     /** bandRatio(price, band) from app.js. */
@@ -34,7 +43,13 @@ object PriceColor {
         return if (r >= 1.0) 1.0 else r
     }
 
-    /** Colour for a station price given the active regional band (null band → neutral). */
+    /** Raw RGB for a station price given the active regional band (null band → neutral grey). */
+    fun rgbForPrice(price: Double?, band: PriceBand?): Rgb {
+        if (price == null || price <= 0.0 || band == null) return NEUTRAL_RGB
+        return rgbOfRatio(bandRatio(price, band))
+    }
+
+    /** Compose colour for a station price. */
     fun forPrice(price: Double?, band: PriceBand?): Color {
         if (price == null || price <= 0.0 || band == null) return NEUTRAL
         return ofRatio(bandRatio(price, band))

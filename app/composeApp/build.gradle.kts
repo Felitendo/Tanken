@@ -39,6 +39,8 @@ kotlin {
             implementation(libs.kotlinx.coroutines.android)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.koin.android)
+            implementation(libs.maps.compose)
+            implementation(libs.play.services.location)
         }
         commonMain.dependencies {
             implementation(compose.runtime)
@@ -83,6 +85,13 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = appVersionCode
         versionName = appVersionName
+
+        // Google Maps API key — supplied via -PMAPS_API_KEY=…, local.properties or the MAPS_API_KEY
+        // env var (CI secret). Empty is fine for builds; the map just won't load tiles without it.
+        val mapsKey = providers.gradleProperty("MAPS_API_KEY")
+            .orElse(providers.environmentVariable("MAPS_API_KEY"))
+            .getOrElse("")
+        manifestPlaceholders["MAPS_API_KEY"] = mapsKey
     }
     packaging {
         resources {

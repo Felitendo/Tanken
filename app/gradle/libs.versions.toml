@@ -10,6 +10,8 @@ kotlinx-serialization = "1.7.3"
 ktor = "3.0.2"
 koin = "4.0.0"
 multiplatformSettings = "1.2.0"
+mapsCompose = "6.4.1"
+playServicesLocation = "21.3.0"
 
 # Android compile/target/min SDK
 android-compileSdk = "35"
@@ -43,6 +45,10 @@ multiplatform-settings-coroutines = { module = "com.russhwolf:multiplatform-sett
 # AndroidX (android target only)
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
+
+# Google Maps (android target only)
+maps-compose = { module = "com.google.maps.android:maps-compose", version.ref = "mapsCompose" }
+play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
 
 # Lifecycle ViewModel (Compose Multiplatform flavour)
 androidx-lifecycle-viewmodel = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel", version.ref = "androidx-lifecycle" }

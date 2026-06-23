@@ -11,8 +11,7 @@ struct RootTabView: View {
 
     var body: some View {
         TabView {
-            ComposeScreen { MainViewControllerKt.mapViewController() }
-                .ignoresSafeArea(edges: .top)
+            MapTabView()
                 .tabItem { Label("Karte", systemImage: "map") }
 
             ComposeScreen { MainViewControllerKt.historyViewController() }
