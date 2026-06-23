@@ -20,7 +20,7 @@ import gg.felo.tanken.ui.screens.StationDetailContent
 import gg.felo.tanken.ui.theme.PriceColor
 import gg.felo.tanken.ui.theme.Rgb
 import gg.felo.tanken.ui.theme.TankenThemeRoot
-import gg.felo.tanken.util.formatPrice3
+import gg.felo.tanken.util.formatPrice
 import org.koin.compose.KoinContext
 import org.koin.mp.KoinPlatform
 import platform.UIKit.UIViewController
@@ -76,4 +76,4 @@ fun stationDetailController(): UIViewController = ComposeUIViewController {
 fun markerColor(station: Station, band: PriceBand?): Rgb = PriceColor.rgbForPrice(station.price, band)
 
 /** Formatted price label for a marker bubble (German style, e.g. "1,789"). */
-fun stationPriceLabel(station: Station): String = formatPrice3(station.price)
+fun stationPriceLabel(station: Station): String = formatPrice(station.price)

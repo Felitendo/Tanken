@@ -36,7 +36,7 @@ import gg.felo.tanken.ui.components.SegmentedControl
 import gg.felo.tanken.ui.theme.PriceColor
 import gg.felo.tanken.ui.theme.Spacing
 import gg.felo.tanken.ui.theme.TankenTheme
-import gg.felo.tanken.util.formatPrice3
+import gg.felo.tanken.util.formatPrice
 import org.koin.compose.koinInject
 
 /** Statistik: overall hero, weekday averages, cheapest hour and the station ranking. */
@@ -75,7 +75,7 @@ fun StatsScreen() {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                         Text(s.average30d, color = colors.textHint, fontSize = 13.sp)
                         Row(verticalAlignment = Alignment.Top) {
-                            Text(formatPrice3(stats.overall.avg), color = colors.textPrimary, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(formatPrice(stats.overall.avg), color = colors.textPrimary, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold)
                             Text(" €/L", color = colors.textHint, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp))
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.l)) {
@@ -105,7 +105,7 @@ fun StatsScreen() {
                                             Box(Modifier.weight(1f)) {
                                                 BarFill(fraction = 0.15f + 0.85f * cheapFraction, color = colors.good)
                                             }
-                                            Text("${formatPrice3(d.avg)} €", color = colors.textHint, fontSize = 12.sp, modifier = Modifier.width(64.dp))
+                                            Text("${formatPrice(d.avg)} €", color = colors.textHint, fontSize = 12.sp, modifier = Modifier.width(64.dp))
                                         }
                                     }
                                 }
@@ -121,7 +121,7 @@ fun StatsScreen() {
                             Text(s.cheapestTime, color = colors.textHint, fontSize = 13.sp)
                             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                                 Text("${best.hour}:00${s.clockSuffix}", color = colors.accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                                Text("Ø ${formatPrice3(best.avg)} €", color = colors.textHint, fontSize = 13.sp, modifier = Modifier.padding(bottom = 3.dp))
+                                Text("Ø ${formatPrice(best.avg)} €", color = colors.textHint, fontSize = 13.sp, modifier = Modifier.padding(bottom = 3.dp))
                             }
                         }
                     }
@@ -145,7 +145,7 @@ fun StatsScreen() {
                                             Text(s.station, color = colors.textPrimary, fontSize = 14.sp, maxLines = 1)
                                             if (!s.brand.isNullOrBlank()) Text(s.brand!!, color = colors.textHint, fontSize = 11.sp)
                                         }
-                                        Text("${formatPrice3(s.avg)} €", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("${formatPrice(s.avg)} €", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
@@ -162,7 +162,7 @@ private fun MiniStat(label: String, value: Double, accent: androidx.compose.ui.g
     val colors = TankenTheme.colors
     Column {
         Text(label, color = colors.textHint, fontSize = 11.sp)
-        Text("${formatPrice3(value)} €", color = accent, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Text("${formatPrice(value)} €", color = accent, fontSize = 17.sp, fontWeight = FontWeight.Bold)
     }
 }
 

@@ -36,7 +36,7 @@ import gg.felo.tanken.ui.theme.PriceColor
 import gg.felo.tanken.ui.theme.Spacing
 import gg.felo.tanken.ui.theme.TankenTheme
 import gg.felo.tanken.util.formatDistance
-import gg.felo.tanken.util.priceMainAndSuper
+import gg.felo.tanken.util.formatPrice
 
 /**
  * Shared station detail, rendered inside the Android bottom sheet and the iOS `.sheet`. Shows the
@@ -54,7 +54,6 @@ fun StationDetailContent(
     val colors = TankenTheme.colors
     val s = LocalStrings.current
     val priceColor = PriceColor.forPrice(station.price, band)
-    val (main, sup) = priceMainAndSuper(station.price)
 
     Column(
         modifier = modifier
@@ -76,17 +75,10 @@ fun StationDetailContent(
         }
 
         // Price (big, coloured)
-        Row(verticalAlignment = Alignment.Top) {
-            Text(main, color = priceColor, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold)
-            Text(
-                sup,
-                color = priceColor,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(formatPrice(station.price), color = priceColor, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold)
             Spacer(Modifier.width(6.dp))
-            Text("€/L", color = colors.textHint, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+            Text("€/L", color = colors.textHint, fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
         }
 
         // Address

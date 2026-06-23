@@ -31,7 +31,7 @@ import gg.felo.tanken.ui.components.SectionHeader
 import gg.felo.tanken.ui.components.SegmentedControl
 import gg.felo.tanken.ui.theme.Spacing
 import gg.felo.tanken.ui.theme.TankenTheme
-import gg.felo.tanken.util.formatPrice3
+import gg.felo.tanken.util.formatPrice
 import org.koin.compose.koinInject
 
 /** Preisverlauf: country selector, current-average hero, trend line, and price extremes. */
@@ -75,7 +75,7 @@ fun HistoryScreen() {
                         Text(s.currentAverage, color = colors.textHint, fontSize = 13.sp)
                         Row(verticalAlignment = Alignment.Top) {
                             Text(
-                                formatPrice3(avgNow),
+                                formatPrice(avgNow),
                                 color = colors.textPrimary,
                                 fontSize = 40.sp,
                                 fontWeight = FontWeight.ExtraBold,
@@ -88,7 +88,7 @@ fun HistoryScreen() {
                             )
                         }
                         Text(
-                            "${s.periodLabel}: ${formatPrice3(periodMin)} – ${formatPrice3(periodMax)} €",
+                            "${s.periodLabel}: ${formatPrice(periodMin)} – ${formatPrice(periodMax)} €",
                             color = colors.textHint,
                             fontSize = 13.sp,
                         )
@@ -104,9 +104,9 @@ fun HistoryScreen() {
                             Modifier.fillMaxWidth().padding(top = Spacing.s),
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Text("${formatPrice3(periodMin)} €", color = colors.good, fontSize = 12.sp)
+                            Text("${formatPrice(periodMin)} €", color = colors.good, fontSize = 12.sp)
                             Text("${entries.size} ${s.pointsLabel}", color = colors.textHint, fontSize = 12.sp)
-                            Text("${formatPrice3(periodMax)} €", color = colors.bad, fontSize = 12.sp)
+                            Text("${formatPrice(periodMax)} €", color = colors.bad, fontSize = 12.sp)
                         }
                     }
                 }
@@ -133,7 +133,7 @@ private fun ExtremeCard(label: String, extreme: PriceExtreme, accent: androidx.c
     Card(modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Text(label.uppercase(), color = colors.textHint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            Text(formatPrice3(extreme.price) + " €", color = accent, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            Text(formatPrice(extreme.price) + " €", color = accent, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             Text(
                 extreme.stationBrand?.takeIf { it.isNotBlank() } ?: extreme.stationName,
                 color = colors.textPrimary,

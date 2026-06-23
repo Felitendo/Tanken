@@ -72,7 +72,7 @@ import gg.felo.tanken.state.MapViewModel
 import gg.felo.tanken.ui.theme.PriceColor
 import gg.felo.tanken.ui.theme.Spacing
 import gg.felo.tanken.ui.theme.TankenTheme
-import gg.felo.tanken.util.priceMainAndSuper
+import gg.felo.tanken.util.formatPrice
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -225,7 +225,6 @@ actual fun MapScreen() {
 
 @Composable
 private fun PriceBubble(brand: String, price: Double, color: Color) {
-    val (main, sup) = priceMainAndSuper(price)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -236,10 +235,7 @@ private fun PriceBubble(brand: String, price: Double, color: Color) {
         if (brand.isNotBlank()) {
             Text(brand.take(12), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Medium)
         }
-        Row(verticalAlignment = Alignment.Top) {
-            Text(main, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
-            Text(sup, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold)
-        }
+        Text(formatPrice(price), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
     }
 }
 

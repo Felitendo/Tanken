@@ -35,7 +35,7 @@ import gg.felo.tanken.state.AlertViewModel
 import gg.felo.tanken.ui.components.SegmentedControl
 import gg.felo.tanken.ui.theme.Spacing
 import gg.felo.tanken.ui.theme.TankenTheme
-import gg.felo.tanken.util.formatPrice3
+import gg.felo.tanken.util.formatPrice
 
 /** Price-alert editor: enable toggle, threshold slider/stepper, fuel + channel pickers, save/delete. */
 @Composable
@@ -65,7 +65,7 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
                 Icon(Icons.Outlined.Remove, t.decrease, tint = colors.accent)
             }
             Text(
-                "${formatPrice3(s.threshold)} €",
+                "${formatPrice(s.threshold)} €",
                 color = colors.textPrimary,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
