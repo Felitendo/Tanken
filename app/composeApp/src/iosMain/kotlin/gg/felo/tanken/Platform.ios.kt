@@ -42,12 +42,21 @@ fun iosModule() = module {
  * which the session intercepts (callbackURLScheme = "tanken") and hands back here; we extract the
  * token and forward it to the shared [UserViewModel].
  */
-private class IosAuthenticator :
+/**
+ * Separate NSObject subclass for the ObjC presentation-context protocol. Kotlin/Native forbids a
+ * single class from mixing an ObjC supertype (NSObject) with a Kotlin interface (Authenticator),
+ * so the anchor provider lives here and [IosAuthenticator] stays a pure-Kotlin class.
+ */
+private class PresentationAnchorProvider :
     NSObject(),
-    Authenticator,
     ASWebAuthenticationPresentationContextProvidingProtocol {
+    override fun presentationAnchorForWebAuthenticationSession(session: ASWebAuthenticationSession): ASPresentationAnchor =
+        UIApplication.sharedApplication.keyWindow ?: UIWindow()
+}
 
+private class IosAuthenticator : Authenticator {
     private var session: ASWebAuthenticationSession? = null
+    private val anchorProvider = PresentationAnchorProvider()
 
     override fun login(startUrl: String) {
         val url = NSURL(string = startUrl) ?: return
@@ -60,13 +69,10 @@ private class IosAuthenticator :
                 KoinPlatform.getKoin().get<UserViewModel>().completeLogin(token)
             }
         }
-        s.presentationContextProvider = this
+        s.presentationContextProvider = anchorProvider
         session = s
         s.start()
     }
-
-    override fun presentationAnchorForWebAuthenticationSession(session: ASWebAuthenticationSession): ASPresentationAnchor =
-        UIApplication.sharedApplication.keyWindow ?: UIWindow()
 
     private fun extractToken(url: NSURL): String? {
         val components = NSURLComponents(uRL = url, resolvingAgainstBaseURL = false) ?: return null
