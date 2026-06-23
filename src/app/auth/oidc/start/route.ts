@@ -11,13 +11,23 @@ export async function GET(request: NextRequest) {
 
   const redirectParam = request.nextUrl.searchParams.get('redirect');
   const redirectAfter = redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//') ? redirectParam : '/';
+
+  // Native-app login: companion apps pass `mode=app` + an `app_redirect` custom-scheme URL. The
+  // callback then redirects there with the signed session token instead of setting a cookie.
+  const appRedirectParam = request.nextUrl.searchParams.get('app_redirect');
+  const appRedirect = request.nextUrl.searchParams.get('mode') === 'app' &&
+    appRedirectParam && /^tanken:\/\//.test(appRedirectParam)
+    ? appRedirectParam
+    : undefined;
+
   const discovery = await getOidcDiscovery(runtimeConfig);
   const { state, codeVerifier, codeChallenge } = createPkcePair();
 
   await stores.oidcStateStore.stashOauthState(state, {
     redirectAfter,
     codeVerifier,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    ...(appRedirect ? { appRedirect } : {})
   });
 
   const proto = request.headers.get('x-forwarded-proto') || 'http';

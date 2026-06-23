@@ -25,6 +25,8 @@ export interface SessionStore {
   destroySession(sessionId: string): Promise<void>;
   getSessionFromCookie(rawCookie: string | undefined): Promise<SessionRecord | null>;
   setSessionCookie(sessionId: string): string;
+  /** Signed session token (cookie value) for native apps to replay as a Cookie header. */
+  signSessionToken(sessionId: string): string;
   clearSessionCookie(): string;
 }
 
@@ -303,6 +305,9 @@ export function createStores(config: RuntimeConfig): {
       }
 
       return parts.join('; ');
+    },
+    signSessionToken(sessionId) {
+      return encodeSignedCookie(sessionId);
     },
     clearSessionCookie() {
       return `${config.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;

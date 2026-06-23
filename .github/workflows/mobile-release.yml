@@ -1,0 +1,185 @@
+name: Mobile Release
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", ".github/workflows/mobile-release.yml"]
+    tags: ["app-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mobile-release
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    name: Channel & version
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.c.outputs.channel }}
+      version: ${{ steps.c.outputs.version }}
+    steps:
+      - id: c
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/app-v* ]]; then
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "version=${GITHUB_REF_NAME#app-v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=dev" >> "$GITHUB_OUTPUT"
+            echo "version=dev" >> "$GITHUB_OUTPUT"
+          fi
+
+  android:
+    name: Android APK
+    needs: meta
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        env:
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          if [ "${{ needs.meta.outputs.channel }}" = "dev" ]; then
+            ./gradlew :composeApp:assembleDebug -PMAPS_API_KEY="${MAPS_API_KEY:-}" --stacktrace
+            cp composeApp/build/outputs/apk/debug/composeApp-debug.apk "$GITHUB_WORKSPACE/out/Tanken-dev.apk"
+          else
+            ./gradlew :composeApp:assembleRelease -PMAPS_API_KEY="${MAPS_API_KEY:-}" --stacktrace
+            UNSIGNED=$(ls composeApp/build/outputs/apk/release/*.apk | head -1)
+            KS="$RUNNER_TEMP/ks.jks"
+            if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+              echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KS"
+              STOREPASS="$ANDROID_KEYSTORE_PASSWORD"; ALIAS="$ANDROID_KEY_ALIAS"; KEYPASS="$ANDROID_KEY_PASSWORD"
+            else
+              echo "::warning::No release keystore secret — signing with an ephemeral debug key."
+              STOREPASS=android; ALIAS=tanken; KEYPASS=android
+              keytool -genkeypair -keystore "$KS" -storepass "$STOREPASS" -keypass "$KEYPASS" \
+                -alias "$ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Tanken, O=Felitendo, C=DE"
+            fi
+            BT=$(ls "$ANDROID_HOME/build-tools/" | sort -V | tail -1)
+            "$ANDROID_HOME/build-tools/$BT/zipalign" -f -p 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
+            "$ANDROID_HOME/build-tools/$BT/apksigner" sign --ks "$KS" --ks-pass pass:"$STOREPASS" \
+              --ks-key-alias "$ALIAS" --key-pass pass:"$KEYPASS" \
+              --out "$GITHUB_WORKSPACE/out/Tanken-${{ needs.meta.outputs.version }}.apk" "$RUNNER_TEMP/aligned.apk"
+          fi
+          ls -lh "$GITHUB_WORKSPACE/out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: out/*.apk
+          if-no-files-found: error
+
+  ios:
+    name: iOS IPA (unsigned)
+    needs: meta
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: maxim-lobanov/setup-xcode@v1
+        with: { xcode-version: latest-stable }
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Archive (unsigned, device SDK)
+        run: |
+          chmod +x gradlew
+          BUNDLE_ARG=""
+          if [ "${{ needs.meta.outputs.channel }}" = "dev" ]; then
+            BUNDLE_ARG="PRODUCT_BUNDLE_IDENTIFIER=gg.felo.tanken.dev"
+          fi
+          xcodebuild \
+            -project iosApp/iosApp.xcodeproj \
+            -scheme iosApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Tanken.xcarchive" \
+            archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            $BUNDLE_ARG
+
+      - name: Package unsigned IPA
+        run: |
+          cd "$RUNNER_TEMP"
+          rm -rf Payload && mkdir -p Payload
+          cp -R "Tanken.xcarchive/Products/Applications/Tanken.app" "Payload/"
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          if [ "${{ needs.meta.outputs.channel }}" = "dev" ]; then
+            NAME="Tanken-dev.ipa"
+          else
+            NAME="Tanken-${{ needs.meta.outputs.version }}.ipa"
+          fi
+          zip -qr "$GITHUB_WORKSPACE/out/$NAME" Payload
+          ls -lh "$GITHUB_WORKSPACE/out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: out/*.ipa
+          if-no-files-found: error
+
+  publish:
+    name: Publish release + AltStore source
+    needs: [meta, android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Collect binaries
+        run: |
+          mkdir -p release
+          find dist -type f \( -name '*.apk' -o -name '*.ipa' \) -exec cp {} release/ \;
+          ls -lh release
+
+      - name: Read base app version
+        id: ver
+        run: echo "base=$(grep '^app.versionName' app/gradle.properties | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.channel == 'stable' && github.ref_name || 'dev' }}
+          name: ${{ needs.meta.outputs.channel == 'stable' && github.ref_name || 'Tanken Dev (rolling)' }}
+          prerelease: ${{ needs.meta.outputs.channel != 'stable' }}
+          files: release/*
+          fail_on_unmatched_files: true
+
+      - name: Generate AltStore source.json
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          APP_VERSION: ${{ steps.ver.outputs.base }}
+        run: node app/altstore/generate-source.mjs source.json
+
+      - name: Attach AltStore source.json to the dev release (stable URL)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dev
+          name: Tanken Dev (rolling)
+          prerelease: true
+          files: source.json
