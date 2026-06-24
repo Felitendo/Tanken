@@ -9,6 +9,12 @@
 # or when running outside the remote environment.
 set -euo pipefail
 
+# Always pin the git identity first, before any early exit below. Otherwise sessions without a
+# GPG key (or outside the remote env) keep the container's default git config, which makes commits
+# show up as authored/committed by "Claude". This must run unconditionally in every session.
+git config --global user.name "Felitendo"
+git config --global user.email "felitendoyt@gmail.com"
+
 # Only relevant in the remote (Claude Code on the web) environment; locally you use your own key.
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
