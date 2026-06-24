@@ -14,35 +14,20 @@ struct MapTabView: View {
     @State private var query: String = ""
     private var s: Strings { MainViewControllerKt.currentStrings() }
 
-    private var annotations: [StationAnnotation] {
-        model.stations.compactMap { s in
-            guard let p = s.price, p.doubleValue > 0 else { return nil }
-            return StationAnnotation(
-                id: s.id,
-                station: s,
-                coordinate: CLLocationCoordinate2D(latitude: s.lat, longitude: s.lng)
-            )
-        }
-    }
-
     var body: some View {
         ZStack(alignment: .top) {
             Map(
                 coordinateRegion: $region,
                 interactionModes: .all,
                 showsUserLocation: true,
-                annotationItems: annotations
+                annotationItems: model.annotations
             ) { item in
                 MapAnnotation(coordinate: item.coordinate, anchorPoint: CGPoint(x: 0.5, y: 1.0)) {
-                    PriceBubble(
-                        text: model.priceLabel(item.station),
-                        brand: item.station.displayBrand,
-                        color: model.color(for: item.station)
-                    )
-                    .onTapGesture {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        model.select(item.station)
-                    }
+                    PriceBubble(text: item.price, brand: item.brand, color: item.color)
+                        .onTapGesture {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            model.select(item.id)
+                        }
                 }
             }
             .ignoresSafeArea(edges: .top)
@@ -115,13 +100,6 @@ struct MapTabView: View {
             model.searchHere(c)
         }
     }
-}
-
-/// Identifiable wrapper so a Kotlin `Station` can drive `Map(annotationItems:)`.
-struct StationAnnotation: Identifiable {
-    let id: String
-    let station: Station
-    let coordinate: CLLocationCoordinate2D
 }
 
 /// Price bubble marker matching the website (white text on a price-coloured rounded rect + arrow).
