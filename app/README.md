@@ -52,8 +52,8 @@ phase to produce/link the shared `ComposeApp.framework`.
     id `gg.felo.tanken.dev` so the Dev build sits next to Stable.
   - tag `app-vX.Y.Z` → **stable** release — release-signed APK + unsigned IPA.
   - regenerates the AltStore `source.json` (apps **Tanken** + **Tanken Dev**) from the GitHub
-    releases and attaches it to the `dev` release, giving a stable AltStore URL:
-    `https://github.com/Felitendo/Tanken/releases/download/dev/source.json`
+    releases and commits it to `main`, giving a stable AltStore URL:
+    `https://raw.githubusercontent.com/Felitendo/Tanken/main/source.json`
 
 App tags use the `app-v*` prefix so they don't trigger the web image build (and `app/**` is excluded
 from the Docker build). Version is the single source of truth in `gradle.properties`

@@ -173,17 +173,21 @@ jobs:
           files: release/*
           fail_on_unmatched_files: true
 
-      - name: Generate AltStore source.json
+      - name: Generate & commit AltStore source.json to main (stable URL)
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           APP_VERSION: ${{ steps.ver.outputs.base }}
-        run: node app/altstore/generate-source.mjs source.json
-
-      - name: Attach AltStore source.json to the dev release (stable URL)
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: dev
-          name: Tanken Dev (rolling)
-          prerelease: true
-          files: source.json
+        run: |
+          git config user.name "Felitendo"
+          git config user.email "felitendoyt@gmail.com"
+          git fetch origin main
+          git checkout main
+          node app/altstore/generate-source.mjs source.json
+          if git diff --quiet -- source.json; then
+            echo "source.json unchanged — nothing to commit."
+          else
+            git add source.json
+            git commit -m "chore(altstore): update source.json"
+            git push origin main
+          fi
