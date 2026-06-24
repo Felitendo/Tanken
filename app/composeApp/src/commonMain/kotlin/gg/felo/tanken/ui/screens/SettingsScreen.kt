@@ -13,10 +13,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +43,7 @@ import gg.felo.tanken.state.AppLanguage
 import gg.felo.tanken.state.ThemeMode
 import gg.felo.tanken.state.UserViewModel
 import gg.felo.tanken.ui.components.Card
+import gg.felo.tanken.ui.components.GlassButton
 import gg.felo.tanken.ui.components.SectionHeader
 import gg.felo.tanken.ui.components.SegmentedControl
 import gg.felo.tanken.ui.theme.Spacing
@@ -96,7 +95,7 @@ fun SettingsScreen() {
                     else -> Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                         Text(s.notLoggedIn, color = colors.textPrimary, fontWeight = FontWeight.SemiBold)
                         Text(s.loginHint, color = colors.textHint, fontSize = 13.sp)
-                        Button(onClick = { haptics.medium(); userVm.login() }) { Text(s.loginButton) }
+                        GlassButton(onClick = { haptics.medium(); userVm.login() }) { Text(s.loginButton) }
                     }
                 }
             }
@@ -134,8 +133,8 @@ fun SettingsScreen() {
                         overflow = TextOverflow.Ellipsis,
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                        Button(onClick = { haptics.success(); config.setBaseUrl(urlField) }) { Text(s.save) }
-                        OutlinedButton(onClick = {
+                        GlassButton(onClick = { haptics.success(); config.setBaseUrl(urlField) }) { Text(s.save) }
+                        GlassButton(prominent = false, onClick = {
                             haptics.selection()
                             config.resetBaseUrl()
                             urlField = AppConfig.DEFAULT_BASE_URL
@@ -203,7 +202,7 @@ private fun AccountRow(user: SanitizedUser, onLogout: () -> Unit) {
             Text(name, color = colors.textPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1)
             if (user.email.isNotBlank()) Text(user.email, color = colors.textHint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        OutlinedButton(onClick = onLogout) { Text(s.logout) }
+        GlassButton(prominent = false, onClick = onLogout) { Text(s.logout) }
     }
 }
 

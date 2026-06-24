@@ -12,10 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import gg.felo.tanken.ui.icons.AppIcons
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,6 +26,7 @@ import gg.felo.tanken.model.PriceBand
 import gg.felo.tanken.model.Station
 import gg.felo.tanken.platform.Haptics
 import gg.felo.tanken.platform.MapsLink
+import gg.felo.tanken.ui.components.GlassButton
 import gg.felo.tanken.ui.theme.PriceColor
 import gg.felo.tanken.ui.theme.Spacing
 import gg.felo.tanken.ui.theme.TankenTheme
@@ -108,31 +106,28 @@ fun StationDetailContent(
         // Navigation buttons
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), modifier = Modifier.fillMaxWidth()) {
             if (mapsLink.showAppleMaps) {
-                Button(
+                GlassButton(
                     onClick = { haptics.light(); mapsLink.openAppleMaps(station.lat, station.lng, station.name) },
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(AppIcons.Directions, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
                     Text(s.appleMaps)
                 }
             }
             if (mapsLink.hasGoogleMaps) {
                 val primary = !mapsLink.showAppleMaps
                 if (primary) {
-                    Button(
+                    GlassButton(
                         onClick = { haptics.light(); mapsLink.openGoogleMaps(station.lat, station.lng, station.name) },
-                        colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
                         modifier = Modifier.weight(1f),
                     ) {
                         Icon(AppIcons.Directions, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
                         Text(s.googleMaps)
                     }
                 } else {
-                    OutlinedButton(
+                    GlassButton(
                         onClick = { haptics.light(); mapsLink.openGoogleMaps(station.lat, station.lng, station.name) },
+                        prominent = false,
                         modifier = Modifier.weight(1f),
                     ) { Text("Google Maps") }
                 }

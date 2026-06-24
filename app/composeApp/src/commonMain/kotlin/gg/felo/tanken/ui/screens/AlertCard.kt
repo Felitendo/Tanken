@@ -8,13 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import gg.felo.tanken.ui.icons.AppIcons
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -30,6 +27,8 @@ import gg.felo.tanken.i18n.LocalStrings
 import gg.felo.tanken.model.FuelType
 import gg.felo.tanken.platform.Haptics
 import gg.felo.tanken.state.AlertViewModel
+import gg.felo.tanken.ui.components.GlassButton
+import gg.felo.tanken.ui.components.GlassSlider
 import gg.felo.tanken.ui.components.SegmentedControl
 import gg.felo.tanken.ui.theme.Spacing
 import gg.felo.tanken.ui.theme.TankenTheme
@@ -73,7 +72,7 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
                 Icon(AppIcons.Add, t.increase, tint = colors.accent)
             }
         }
-        Slider(
+        GlassSlider(
             value = s.threshold.toFloat().coerceIn(1.0f, 2.5f),
             onValueChange = { vm.setThreshold(it.toDouble()) },
             onValueChangeFinished = { haptics.selection() },
@@ -115,7 +114,7 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
 
         // Actions
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) {
-            Button(
+            GlassButton(
                 onClick = {
                     vm.save { ok -> if (ok) haptics.success() else haptics.error() }
                 },
@@ -128,7 +127,7 @@ fun AlertCard(vm: AlertViewModel, haptics: Haptics) {
                 }
             }
             if (s.exists) {
-                OutlinedButton(onClick = { vm.delete { ok -> if (ok) haptics.warning() } }) {
+                GlassButton(onClick = { vm.delete { ok -> if (ok) haptics.warning() } }, prominent = false) {
                     Text(t.delete)
                 }
             }

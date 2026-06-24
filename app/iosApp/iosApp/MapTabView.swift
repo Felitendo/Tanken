@@ -42,7 +42,7 @@ struct MapTabView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .glassSurface(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 Button {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -50,7 +50,7 @@ struct MapTabView: View {
                 } label: {
                     Text(s.searchHere).font(.subheadline.weight(.semibold))
                 }
-                .buttonStyle(.borderedProminent)
+                .glassProminentButton()
                 .clipShape(Capsule())
 
                 if model.loading {
@@ -69,7 +69,7 @@ struct MapTabView: View {
                     .font(.system(size: 18, weight: .semibold))
                     .padding(14)
             }
-            .background(.regularMaterial, in: Circle())
+            .interactiveGlassSurface(in: Circle())
             .padding(20)
         }
         .sheet(isPresented: Binding(
