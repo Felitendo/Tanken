@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
 import androidx.compose.runtime.Composable
@@ -18,6 +19,7 @@ import gg.felo.tanken.ui.theme.TankenTheme
  * Liquid-glass styled slider. Thin wrapper over the Material3 [Slider] with fully custom glass
  * track and thumb; value handling is passed straight through.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlassSlider(
     value: Float,
