@@ -23,12 +23,42 @@ import gg.felo.tanken.ui.theme.TankenThemeRoot
 import gg.felo.tanken.util.formatPrice
 import org.koin.compose.KoinContext
 import org.koin.mp.KoinPlatform
+import platform.Foundation.NSUserDefaults
 import platform.UIKit.UIViewController
+import kotlin.native.setUnhandledExceptionHook
 
 /** Called once from the SwiftUI app on launch to start the DI graph. (Swift: `startKoinIos()`) */
 fun startKoinIos() {
+    installCrashLogging()
     initKoin(iosModule())
 }
+
+private const val CRASH_KEY = "tanken_last_crash"
+
+/**
+ * Capture otherwise-invisible Kotlin/Native crashes. An uncaught exception (e.g. on a background
+ * Compose/coroutine queue) aborts the process, and the iOS `.ips` only records raw, unsymbolicated
+ * addresses for our statically-linked framework — so the exception type/message are lost. The hook
+ * persists them so [lastCrashReport] can show the real cause in-app on the next launch.
+ */
+@OptIn(kotlin.experimental.ExperimentalNativeApi::class)
+private fun installCrashLogging() {
+    setUnhandledExceptionHook { throwable ->
+        // `toString()` yields "ClassName: message"; stackTraceToString() adds the Kotlin frames.
+        val report = throwable.toString() + "\n\n" + throwable.stackTraceToString()
+        println("TANKEN_CRASH\n$report")
+        NSUserDefaults.standardUserDefaults.apply {
+            setObject(report, CRASH_KEY)
+            synchronize()
+        }
+    }
+}
+
+/** The last captured crash report (type + message + Kotlin stack), or null. (Swift: `lastCrashReport()`) */
+fun lastCrashReport(): String? = NSUserDefaults.standardUserDefaults.stringForKey(CRASH_KEY)
+
+/** Clear the stored crash report once it has been shown. (Swift: `clearLastCrashReport()`) */
+fun clearLastCrashReport() = NSUserDefaults.standardUserDefaults.removeObjectForKey(CRASH_KEY)
 
 private inline fun <reified T> koin(): T = KoinPlatform.getKoin().get()
 
