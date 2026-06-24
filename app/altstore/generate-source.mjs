@@ -59,9 +59,9 @@ function appEntry(bundleId, name, desc, version, date, ipa) {
 
 const apps = [];
 
-// Stable: newest app-v* release with an IPA.
+// Stable: newest v* release with an IPA.
 const stableRel = releases
-  .filter((r) => /^app-v\d+\.\d+(\.\d+)?$/.test(r.tag_name) && !r.draft)
+  .filter((r) => /^v\d+\.\d+(\.\d+)?$/.test(r.tag_name) && !r.draft)
   .sort((a, b) => new Date(b.published_at || b.created_at) - new Date(a.published_at || a.created_at))[0];
 const stableIpa = ipaAsset(stableRel);
 if (stableIpa) {
@@ -69,7 +69,7 @@ if (stableIpa) {
     'de.felitendo.tanken',
     'Tanken',
     'Tankstellenpreise für Deutschland & Österreich – die native Tanken Companion App.',
-    stableRel.tag_name.replace(/^app-v/, ''),
+    stableRel.tag_name.replace(/^v/, ''),
     dateOnly(stableRel.published_at),
     stableIpa,
   ));
