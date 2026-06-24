@@ -173,6 +173,14 @@ jobs:
           files: release/*
           fail_on_unmatched_files: true
 
+      - name: Import GPG signing key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
       - name: Generate & commit AltStore source.json to main (stable URL)
         env:
           GH_REPO: ${{ github.repository }}
@@ -188,6 +196,6 @@ jobs:
             echo "source.json unchanged — nothing to commit."
           else
             git add source.json
-            git commit -m "chore(altstore): update source.json"
+            git commit -S -m "chore(altstore): update source.json"
             git push origin main
           fi
