@@ -4,6 +4,3 @@ node_modules
 *.md
 .github
 .vscode
-
-# Mobile companion app (Compose Multiplatform / SwiftUI) — not part of the web image
-app
