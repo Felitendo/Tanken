@@ -186,7 +186,19 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           APP_VERSION: ${{ steps.ver.outputs.base }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
+          # CI runner has no TTY, so the default gpg-agent pinentry fails
+          # ("Inappropriate ioctl for device"). Sign via a wrapper that forces
+          # loopback pinentry and feeds the passphrase non-interactively.
+          cat > "$RUNNER_TEMP/gpg-loopback.sh" <<'EOF'
+          #!/usr/bin/env bash
+          exec gpg --batch --no-tty --pinentry-mode loopback \
+            --passphrase "${GPG_PASSPHRASE:-}" "$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/gpg-loopback.sh"
+          git config gpg.program "$RUNNER_TEMP/gpg-loopback.sh"
+
           git config user.name "Felitendo"
           git config user.email "felitendoyt@gmail.com"
           git fetch origin main
