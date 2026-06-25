@@ -173,41 +173,17 @@ jobs:
           files: release/*
           fail_on_unmatched_files: true
 
-      - name: Import GPG signing key
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-          git_user_signingkey: true
-          git_commit_gpgsign: true
-
-      - name: Generate & commit AltStore source.json to main (stable URL)
+      - name: Generate & attach AltStore source.json to the dev release
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           APP_VERSION: ${{ steps.ver.outputs.base }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          # CI runner has no TTY, so the default gpg-agent pinentry fails
-          # ("Inappropriate ioctl for device"). Sign via a wrapper that forces
-          # loopback pinentry and feeds the passphrase non-interactively.
-          cat > "$RUNNER_TEMP/gpg-loopback.sh" <<'EOF'
-          #!/usr/bin/env bash
-          exec gpg --batch --no-tty --pinentry-mode loopback \
-            --passphrase "${GPG_PASSPHRASE:-}" "$@"
-          EOF
-          chmod +x "$RUNNER_TEMP/gpg-loopback.sh"
-          git config gpg.program "$RUNNER_TEMP/gpg-loopback.sh"
-
-          git config user.name "Felitendo"
-          git config user.email "felitendoyt@gmail.com"
-          git fetch origin main
-          git checkout main
           node app/altstore/generate-source.mjs source.json
-          if git diff --quiet -- source.json; then
-            echo "source.json unchanged — nothing to commit."
-          else
-            git add source.json
-            git commit -S -m "chore(altstore): update source.json"
-            git push origin main
+          # Host the AltStore source as a stable-URL asset on the rolling `dev`
+          # release instead of committing it to the repo. Stable URL:
+          #   https://github.com/${GH_REPO}/releases/download/dev/source.json
+          if ! gh release view dev >/dev/null 2>&1; then
+            gh release create dev --prerelease --title "Tanken Dev (rolling)" --notes "Rolling dev build."
           fi
+          gh release upload dev source.json --clobber
