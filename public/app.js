@@ -182,6 +182,9 @@ const i18n = {
     historyLocations: 'STANDORTE MIT VERLAUFSDATEN',
     historyLocationsHint: 'Für diese Standorte sammeln wir täglich Preise für Verlaufscharts. Den aktuellen Preis kannst du jederzeit für jeden beliebigen Ort auf der Karte abrufen.',
     historyLocationsEmpty: 'Noch keine Standorte mit Verlaufsdaten.',
+    historyLocSummary: 'Preise werden an {n} Standorten gesammelt – {parts}.',
+    historyLocRadius: '{n} km Umkreis',
+    historyLocToggleAria: 'Standortliste ein-/ausklappen',
     myRequests: 'MEINE ANFRAGEN',
     requestLocation: 'Standort anfragen',
     requestsLoginHint: 'Mit FeloID anmelden, um neue Scan-Standorte anzufragen.',
@@ -417,6 +420,9 @@ const i18n = {
     historyLocations: 'LOCATIONS WITH HISTORY DATA',
     historyLocationsHint: 'We collect daily prices for these locations so you can see trends on the history charts. For the current price you can search any location on the map at any time.',
     historyLocationsEmpty: 'No locations with history data yet.',
+    historyLocSummary: 'Prices are collected at {n} locations – {parts}.',
+    historyLocRadius: '{n} km radius',
+    historyLocToggleAria: 'Expand/collapse location list',
     myRequests: 'MY REQUESTS',
     requestLocation: 'Request location',
     requestsLoginHint: 'Sign in with FeloID to request new scan locations.',
@@ -1429,6 +1435,20 @@ const COUNTRY_FLAGS = {
   at: '<svg class="country-flag" viewBox="0 0 9 6" width="16" height="11" aria-hidden="true"><rect width="9" height="6" fill="#ed2939"/><rect width="9" height="2" y="2" fill="#fff"/></svg>',
 };
 
+// Jump to the map tab and centre on a coordinate. Used by the "Standorte mit
+// Verlaufsdaten" summary so a scan location can be shown on the map.
+function showLocationOnMap(lat, lng, zoom = 12) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  switchTab('map');
+  document.getElementById('view-map')?.scrollTo({ top: 0 });
+  setTimeout(() => {
+    if (state.map) {
+      state.map.invalidateSize();
+      state.map.flyTo([lat, lng], zoom, { duration: 0.6 });
+    }
+  }, 220);
+}
+
 async function renderHistoryLocations() {
   const list = document.getElementById('history-locations-list');
   if (!list) return;
@@ -1446,23 +1466,69 @@ async function renderHistoryLocations() {
     return;
   }
 
-  const sorted = locations.slice().sort((a, b) => {
-    if (a.country !== b.country) return a.country.localeCompare(b.country);
-    return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
-  });
+  // Group by country so the breakdown and the detail list share one ordering.
+  const byCountry = {};
+  for (const loc of locations) (byCountry[loc.country] || (byCountry[loc.country] = [])).push(loc);
+  const order = ['de', 'at', ...Object.keys(byCountry).filter((c) => c !== 'de' && c !== 'at')]
+    .filter((c) => byCountry[c] && byCountry[c].length);
+  const countryName = (c) => c === 'de' ? t('countryDE') : c === 'at' ? t('countryAT') : String(c).toUpperCase();
 
-  list.innerHTML = sorted.map((loc) => {
-    const flag = COUNTRY_FLAGS[loc.country] || '';
-    const coords = `${Number(loc.lat).toFixed(3)}, ${Number(loc.lng).toFixed(3)}`;
+  // Compact summary sentence: total + per-country counts ("142 in Deutschland …").
+  const parts = order.map((c) => `${byCountry[c].length} in ${countryName(c)}`);
+  const summary = t('historyLocSummary')
+    .replace('{n}', locations.length)
+    .replace('{parts}', parts.join(', '));
+
+  // Collapsible detail list grouped by country. No raw coordinates — name +
+  // scan radius only; tapping a row shows that location on the map.
+  const detailHtml = order.map((c) => {
+    const rows = byCountry[c]
+      .slice()
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }))
+      .map((loc) => `
+        <button type="button" class="history-loc-row" data-lat="${loc.lat}" data-lng="${loc.lng}" style="display:flex;align-items:center;width:100%;text-align:left;border:none;background:transparent;padding:11px 16px;gap:10px;border-top:1px solid var(--color-separator);cursor:pointer">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:500;color:var(--color-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(loc.name || '')}</div>
+            <div style="font-size:11px;color:var(--color-hint);margin-top:2px">${t('historyLocRadius').replace('{n}', Number(loc.radiusKm) || 25)}</div>
+          </div>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--color-hint)" style="flex-shrink:0" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
+        </button>`).join('');
     return `
-      <div class="card-row" style="padding:12px 16px;gap:10px;border-bottom:1px solid var(--color-separator)">
-        <span aria-hidden="true" style="display:inline-flex;align-items:center;line-height:1;flex-shrink:0">${flag}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:15px;font-weight:500;color:var(--color-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(loc.name || '')}</div>
-          <div style="font-size:11px;color:var(--color-hint);margin-top:2px;font-variant-numeric:tabular-nums">${coords}</div>
-        </div>
-      </div>`;
+      <div class="history-loc-group-header" style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-top:1px solid var(--color-separator);background:rgba(127,127,127,0.06)">
+        <span aria-hidden="true" style="display:inline-flex;align-items:center;line-height:1">${COUNTRY_FLAGS[c] || ''}</span>
+        <span style="font-size:12px;font-weight:600;letter-spacing:0.3px;color:var(--color-text)">${escapeHtml(countryName(c))}</span>
+        <span style="font-size:12px;color:var(--color-hint)">· ${byCountry[c].length}</span>
+      </div>
+      ${rows}`;
   }).join('');
+
+  list.innerHTML = `
+    <button type="button" class="history-loc-toggle" id="history-locations-toggle" aria-expanded="false" aria-label="${escapeHtml(t('historyLocToggleAria'))}" style="display:flex;align-items:center;width:100%;text-align:left;border:none;background:transparent;padding:13px 16px;gap:12px;cursor:pointer">
+      <div class="settings-icon-chip settings-icon-accent" aria-hidden="true" style="flex-shrink:0">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
+      </div>
+      <span style="flex:1;min-width:0;font-size:13px;line-height:1.4;color:var(--color-text)">${escapeHtml(summary)}</span>
+      <svg class="history-loc-chevron" viewBox="0 0 24 24" width="18" height="18" fill="var(--color-hint)" style="flex-shrink:0;transition:transform .2s ease" aria-hidden="true"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+    </button>
+    <div id="history-locations-details" hidden>${detailHtml}</div>`;
+
+  const toggle = list.querySelector('#history-locations-toggle');
+  const details = list.querySelector('#history-locations-details');
+  const chevron = list.querySelector('.history-loc-chevron');
+  if (toggle && details) {
+    toggle.addEventListener('click', () => {
+      const open = details.hidden;
+      details.hidden = !open;
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (chevron) chevron.style.transform = open ? 'rotate(90deg)' : '';
+      haptic('light');
+    });
+  }
+  list.querySelectorAll('.history-loc-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      showLocationOnMap(parseFloat(row.dataset.lat), parseFloat(row.dataset.lng));
+    });
+  });
 }
 
 async function renderUserRequests() {
