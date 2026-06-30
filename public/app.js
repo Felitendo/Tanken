@@ -659,6 +659,11 @@ const state = {
   stations: [],
   history: [],
   stats: null,
+  // Signature (country|location) of the params the currently-rendered
+  // history/stats reflect. Lets a plain tab switch reuse the cached render
+  // instead of re-fetching and replaying the entrance animation.
+  statsKey: null,
+  historyKey: null,
   fuelType: 'diesel',
   radiusKm: 25,
   activeLocation: 'gps',
@@ -1593,12 +1598,20 @@ async function loadTabData(tab, loadId) {
     if (_tabLoadId !== loadId) return; // tab changed, abort
     if (tab === 'history') {
       if (!state.loaded.history) await loadHistoryTab();
-      else { state.history = await fetchHistoryData(); if (_tabLoadId === loadId) renderChart(state.history); }
+      // Same caching as stats: only re-fetch when the country/location the
+      // cached chart was built for has actually changed.
+      else if (state.historyKey !== currentDataKey()) {
+        state.history = await fetchHistoryData();
+        if (_tabLoadId === loadId) { renderChart(state.history); state.historyKey = currentDataKey(); }
+      }
     }
     if (_tabLoadId !== loadId) return;
     if (tab === 'stats') {
       if (!state.loaded.stats) await loadStatsTab();
-      else await reloadStats();
+      // Already rendered for the current country/location — reuse the cached
+      // DOM as-is. No re-fetch, no re-render, no animation replay, so flicking
+      // between tabs stays instant and smooth.
+      else if (state.statsKey !== currentDataKey()) await reloadStats();
     }
     if (_tabLoadId !== loadId) return;
     if (tab === 'settings') {
@@ -5109,6 +5122,7 @@ async function loadHistoryTab() {
   await loadLocationPickers();
   state.history = await fetchHistoryData();
   renderChart(state.history);
+  state.historyKey = currentDataKey();
   syncCountryChips();
   wireCountryChips('history-country-chips');
 
@@ -5125,6 +5139,7 @@ async function loadHistoryTab() {
       document.getElementById('stats-location-hint')?.setAttribute('hidden', '');
       state.history = await fetchHistoryData();
       renderChart(state.history);
+      state.historyKey = currentDataKey();
       // Reload stats if already loaded
       if (state.loaded.stats) {
         await reloadStats();
@@ -5803,6 +5818,14 @@ function renderHourChart(entries, dayKey) {
   section.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+// Signature of the inputs the history/stats fetches depend on. When it's
+// unchanged we can skip a re-fetch + re-render on tab switches and keep the
+// cached view (and its already-finished entrance animation).
+function currentDataKey() {
+  const country = state.activeCountry || getActiveCountry();
+  return `${country}|${state.selectedLocation || ''}`;
+}
+
 async function reloadStats() {
   const country = state.activeCountry || getActiveCountry();
   const url = state.selectedLocation
@@ -5811,6 +5834,7 @@ async function reloadStats() {
   const stats = await api(url);
   state.stats = stats;
   renderStats(stats);
+  state.statsKey = currentDataKey();
 }
 
 async function loadStatsTab() {
@@ -5836,6 +5860,7 @@ async function loadStatsTab() {
       if (state.loaded.history) {
         state.history = await fetchHistoryData();
         renderChart(state.history);
+        state.historyKey = currentDataKey();
       }
     });
   }
