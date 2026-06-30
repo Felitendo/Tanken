@@ -6110,3 +6110,93 @@ html[data-theme="dark"] .pwa-popup-icon img,
     -webkit-backdrop-filter: blur(var(--dt-blur));
   }
 }
+
+/* ── History locations (Standorte mit Verlaufsdaten) ───────────────── */
+.hl-summary-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+.hl-summary-top:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+.hl-total-num {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+.hl-total-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--color-hint);
+}
+.hl-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+  font-size: 12px;
+  color: var(--color-text);
+}
+.hl-chip b { font-weight: 700; }
+.hl-chevron { transition: transform 0.2s ease; }
+.hl-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--color-separator);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+.hl-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-separator);
+  transition: background 0.15s;
+}
+.hl-row:hover { background: color-mix(in srgb, var(--color-text) 3%, transparent); }
+.hl-row-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hl-row-sub { font-size: 11px; color: var(--color-hint); margin-top: 2px; }
+.hl-pin-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 122, 255, 0.12);
+  color: #007aff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, transform 0.15s;
+}
+.hl-pin-btn:hover { background: rgba(0, 122, 255, 0.22); transform: scale(1.06); }
+.hl-pin-btn:active { transform: scale(0.94); }
+
+/* "Standort anfragen" reads as the primary action of the locations section. */
+.request-location-btn { color: var(--color-accent); font-weight: 600; }
+.request-location-btn svg { color: var(--color-accent); }

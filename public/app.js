@@ -185,16 +185,16 @@ const i18n = {
     historyLocSummary: 'Preise werden an {n} Standorten gesammelt – {parts}.',
     historyLocRadius: '{n} km Umkreis',
     historyLocToggleAria: 'Standortliste ein-/ausklappen',
+    historyLocTotalLabel: 'Standorte',
+    historyLocShowOnMap: 'Auf Karte anzeigen',
+    historyLocOpenOnMap: 'Auf der Karte öffnen',
+    historyLocClose: 'Schließen',
     shortcuts: 'TASTATURKÜRZEL',
     shortcutsHint: 'Tippe auf ein Kürzel und drücke die gewünschte Tastenkombination. Backspace entfernt es. Gilt nur auf diesem Gerät.',
     shortcutsReset: 'Auf Standard zurücksetzen',
     shortcutRecording: 'Taste drücken…',
     shortcutNone: 'Keine',
     scFocusSearch: 'Suche fokussieren',
-    scTabMap: 'Karte öffnen',
-    scTabHistory: 'Verlauf öffnen',
-    scTabStats: 'Statistik öffnen',
-    scTabSettings: 'Einstellungen öffnen',
     scMyLocation: 'Zu meinem Standort',
     scSearchHere: 'Hier suchen',
     scToggleTheme: 'Design wechseln',
@@ -438,16 +438,16 @@ const i18n = {
     historyLocSummary: 'Prices are collected at {n} locations – {parts}.',
     historyLocRadius: '{n} km radius',
     historyLocToggleAria: 'Expand/collapse location list',
+    historyLocTotalLabel: 'Locations',
+    historyLocShowOnMap: 'Show on map',
+    historyLocOpenOnMap: 'Open on map',
+    historyLocClose: 'Close',
     shortcuts: 'KEYBOARD SHORTCUTS',
     shortcutsHint: 'Tap a shortcut and press the desired key combination. Backspace clears it. Applies on this device only.',
     shortcutsReset: 'Reset to defaults',
     shortcutRecording: 'Press a key…',
     shortcutNone: 'None',
     scFocusSearch: 'Focus search',
-    scTabMap: 'Open map',
-    scTabHistory: 'Open history',
-    scTabStats: 'Open stats',
-    scTabSettings: 'Open settings',
     scMyLocation: 'Go to my location',
     scSearchHere: 'Search here',
     scToggleTheme: 'Toggle theme',
@@ -1272,10 +1272,6 @@ const SHORTCUTS_KEY = 'tank_shortcuts';
 
 const DEFAULT_SHORTCUTS = {
   focusSearch: 'ctrl+k',
-  tabMap: '1',
-  tabHistory: '2',
-  tabStats: '3',
-  tabSettings: '4',
   myLocation: 'l',
   searchHere: 'h',
   toggleTheme: 't',
@@ -1291,10 +1287,6 @@ const SHORTCUT_ACTIONS = [
         if (input) { input.focus(); input.select(); }
       }, 0);
     } },
-  { id: 'tabMap', labelKey: 'scTabMap', run: () => switchTab('map') },
-  { id: 'tabHistory', labelKey: 'scTabHistory', run: () => switchTab('history') },
-  { id: 'tabStats', labelKey: 'scTabStats', run: () => switchTab('stats') },
-  { id: 'tabSettings', labelKey: 'scTabSettings', run: () => switchTab('settings') },
   { id: 'myLocation', labelKey: 'scMyLocation', run: () => document.getElementById('btn-my-location')?.click() },
   { id: 'searchHere', labelKey: 'scSearchHere', run: () => { switchTab('map'); document.getElementById('btn-search-here')?.click(); } },
   { id: 'toggleTheme', labelKey: 'scToggleTheme', run: () => cycleTheme() },
@@ -1690,28 +1682,32 @@ async function renderHistoryLocations() {
     .filter((c) => byCountry[c] && byCountry[c].length);
   const countryName = (c) => c === 'de' ? t('countryDE') : c === 'at' ? t('countryAT') : String(c).toUpperCase();
 
-  // Compact summary sentence: total + per-country counts ("142 in Deutschland …").
-  const parts = order.map((c) => `${byCountry[c].length} in ${countryName(c)}`);
-  const summary = t('historyLocSummary')
-    .replace('{n}', locations.length)
-    .replace('{parts}', parts.join(', '));
+  // Per-country count chips next to the big total.
+  const chips = order.map((c) =>
+    `<span class="hl-chip">${COUNTRY_FLAGS[c] || ''}<span>${escapeHtml(countryName(c))}</span><b>${byCountry[c].length}</b></span>`
+  ).join('');
 
-  // Collapsible detail list grouped by country. No raw coordinates — name +
-  // scan radius only; tapping a row shows that location on the map.
+  // Flat list in display order so each pin button resolves its location by index.
+  const flat = [];
   const detailHtml = order.map((c) => {
     const rows = byCountry[c]
       .slice()
       .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }))
-      .map((loc) => `
-        <button type="button" class="history-loc-row" data-lat="${loc.lat}" data-lng="${loc.lng}" style="display:flex;align-items:center;width:100%;text-align:left;border:none;background:transparent;padding:11px 16px;gap:10px;border-top:1px solid var(--color-separator);cursor:pointer">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:500;color:var(--color-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(loc.name || '')}</div>
-            <div style="font-size:11px;color:var(--color-hint);margin-top:2px">${t('historyLocRadius').replace('{n}', Number(loc.radiusKm) || 25)}</div>
-          </div>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--color-hint)" style="flex-shrink:0" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
-        </button>`).join('');
+      .map((loc) => {
+        const idx = flat.push(loc) - 1;
+        return `
+          <div class="hl-row">
+            <div style="flex:1;min-width:0">
+              <div class="hl-row-name">${escapeHtml(loc.name || '')}</div>
+              <div class="hl-row-sub">${t('historyLocRadius').replace('{n}', Number(loc.radiusKm) || 25)}</div>
+            </div>
+            <button type="button" class="hl-pin-btn" data-idx="${idx}" aria-label="${escapeHtml(t('historyLocShowOnMap'))}" title="${escapeHtml(t('historyLocShowOnMap'))}">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
+            </button>
+          </div>`;
+      }).join('');
     return `
-      <div class="history-loc-group-header" style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-top:1px solid var(--color-separator);background:rgba(127,127,127,0.06)">
+      <div class="hl-group-header">
         <span aria-hidden="true" style="display:inline-flex;align-items:center;line-height:1">${COUNTRY_FLAGS[c] || ''}</span>
         <span style="font-size:12px;font-weight:600;letter-spacing:0.3px;color:var(--color-text)">${escapeHtml(countryName(c))}</span>
         <span style="font-size:12px;color:var(--color-hint)">· ${byCountry[c].length}</span>
@@ -1720,32 +1716,132 @@ async function renderHistoryLocations() {
   }).join('');
 
   list.innerHTML = `
-    <button type="button" class="history-loc-toggle" id="history-locations-toggle" aria-expanded="false" aria-label="${escapeHtml(t('historyLocToggleAria'))}" style="display:flex;align-items:center;width:100%;text-align:left;border:none;background:transparent;padding:13px 16px;gap:12px;cursor:pointer">
+    <div class="hl-summary-top" id="history-locations-toggle" role="button" tabindex="0" aria-expanded="false" aria-label="${escapeHtml(t('historyLocToggleAria'))}">
       <div class="settings-icon-chip settings-icon-accent" aria-hidden="true" style="flex-shrink:0">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
       </div>
-      <span style="flex:1;min-width:0;font-size:13px;line-height:1.4;color:var(--color-text)">${escapeHtml(summary)}</span>
-      <svg class="history-loc-chevron" viewBox="0 0 24 24" width="18" height="18" fill="var(--color-hint)" style="flex-shrink:0;transition:transform .2s ease" aria-hidden="true"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
-    </button>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <span class="hl-total-num">${locations.length}</span>
+          <span class="hl-total-label">${escapeHtml(t('historyLocTotalLabel'))}</span>
+        </div>
+        <div class="hl-chips" style="margin-top:8px">${chips}</div>
+      </div>
+      <svg class="hl-chevron" viewBox="0 0 24 24" width="20" height="20" fill="var(--color-hint)" style="flex-shrink:0;align-self:center" aria-hidden="true"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+    </div>
     <div id="history-locations-details" hidden>${detailHtml}</div>`;
 
   const toggle = list.querySelector('#history-locations-toggle');
   const details = list.querySelector('#history-locations-details');
-  const chevron = list.querySelector('.history-loc-chevron');
+  const chevron = list.querySelector('.hl-chevron');
+  const doToggle = () => {
+    const open = details.hidden;
+    details.hidden = !open;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (chevron) chevron.style.transform = open ? 'rotate(90deg)' : '';
+    haptic('light');
+  };
   if (toggle && details) {
-    toggle.addEventListener('click', () => {
-      const open = details.hidden;
-      details.hidden = !open;
-      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (chevron) chevron.style.transform = open ? 'rotate(90deg)' : '';
-      haptic('light');
+    toggle.addEventListener('click', doToggle);
+    toggle.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doToggle(); }
     });
   }
-  list.querySelectorAll('.history-loc-row').forEach((row) => {
-    row.addEventListener('click', () => {
-      showLocationOnMap(parseFloat(row.dataset.lat), parseFloat(row.dataset.lng));
+  // Tapping the (blue) pin opens a map popup overlay instead of leaving the
+  // settings tab — the user stays where they are.
+  list.querySelectorAll('.hl-pin-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const loc = flat[parseInt(btn.dataset.idx, 10)];
+      if (loc) showLocationMapPopup(loc);
     });
   });
+}
+
+// Map popup for a scan location — opens the bottom sheet with a small Leaflet
+// map (marker + scan radius) so the location can be inspected without being
+// redirected to the map tab. An explicit button still allows that jump.
+function showLocationMapPopup(loc) {
+  const sheet = document.getElementById('bottom-sheet');
+  const body = document.getElementById('bottom-sheet-body');
+  if (!sheet || !body || !loc) return;
+  const lat = Number(loc.lat), lng = Number(loc.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  const radiusKm = Number(loc.radiusKm) || 25;
+  const countryLabel = loc.country === 'de' ? t('countryDE')
+    : loc.country === 'at' ? t('countryAT')
+    : loc.country ? String(loc.country).toUpperCase() : '';
+
+  sheet.classList.remove('detail-modal', 'centered');
+  body.innerHTML = `
+    <div style="padding:4px 4px 16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <div class="settings-icon-chip settings-icon-accent" aria-hidden="true" style="flex-shrink:0">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:17px;font-weight:600;color:var(--color-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(loc.name || '')}</div>
+          <div style="font-size:12px;color:var(--color-hint);margin-top:1px">${t('historyLocRadius').replace('{n}', radiusKm)}${countryLabel ? ' · ' + escapeHtml(countryLabel) : ''}</div>
+        </div>
+      </div>
+      <div id="hl-popup-map" style="width:100%;height:260px;border-radius:12px;overflow:hidden;border:1px solid var(--color-separator);margin-bottom:14px"></div>
+      <div style="display:flex;gap:10px">
+        <button id="hl-popup-close" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--color-separator);background:transparent;color:var(--color-text);font-size:15px;font-weight:500;cursor:pointer">${t('historyLocClose')}</button>
+        <button id="hl-popup-open" style="flex:2;padding:12px;border-radius:10px;border:none;background:var(--color-accent);color:var(--color-accent-text);font-size:15px;font-weight:600;cursor:pointer">${t('historyLocOpenOnMap')}</button>
+      </div>
+    </div>`;
+
+  if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
+  sheet.classList.remove('hidden');
+  sheet.setAttribute('aria-hidden', 'false');
+  const backdrop = sheet.querySelector('.bottom-sheet-backdrop');
+  const content = sheet.querySelector('.bottom-sheet-content');
+  content.style.transform = '';
+  content.classList.remove('dragging', 'snapping', 'expanded');
+  state.sheetExpanded = false;
+  const handleArea = document.getElementById('sheet-handle-area');
+  content.querySelector('.sheet-expand-btn')?.remove();
+
+  let popupMap = null;
+  const closeSheet = () => {
+    if (popupMap) { try { popupMap.remove(); } catch {} popupMap = null; }
+    content.style.transform = '';
+    content.classList.remove('dragging', 'snapping', 'expanded');
+    content.querySelector('.sheet-desktop-close')?.remove();
+    backdrop.style.opacity = '';
+    sheet.classList.add('hidden');
+    sheet.setAttribute('aria-hidden', 'true');
+    backdrop.removeEventListener('click', closeSheet);
+    if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
+  };
+  backdrop.addEventListener('click', closeSheet);
+
+  if (window.matchMedia('(min-width: 900px)').matches) {
+    content.querySelector('.sheet-desktop-close')?.remove();
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'sheet-desktop-close';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.addEventListener('click', closeSheet);
+    content.prepend(closeBtn);
+  }
+  setupSheetDrag(content, handleArea, backdrop, closeSheet);
+
+  document.getElementById('hl-popup-close')?.addEventListener('click', closeSheet);
+  document.getElementById('hl-popup-open')?.addEventListener('click', () => {
+    closeSheet();
+    showLocationOnMap(lat, lng);
+  });
+
+  const mapEl = document.getElementById('hl-popup-map');
+  if (mapEl && window.L) {
+    const L = window.L;
+    popupMap = L.map(mapEl, { zoomControl: true, attributionControl: false, scrollWheelZoom: false }).setView([lat, lng], 11);
+    const cfg = getTileConfig();
+    L.tileLayer(cfg.url, { ...cfg.options, className: cfg.className || '' }).addTo(popupMap);
+    L.circle([lat, lng], { radius: radiusKm * 1000, color: '#007aff', fillColor: '#007aff', fillOpacity: 0.12, weight: 2 }).addTo(popupMap);
+    L.marker([lat, lng]).addTo(popupMap);
+    setTimeout(() => { try { popupMap.invalidateSize(); } catch {} }, 60);
+  }
 }
 
 async function renderUserRequests() {
