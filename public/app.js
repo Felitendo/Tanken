@@ -185,6 +185,21 @@ const i18n = {
     historyLocSummary: 'Preise werden an {n} Standorten gesammelt – {parts}.',
     historyLocRadius: '{n} km Umkreis',
     historyLocToggleAria: 'Standortliste ein-/ausklappen',
+    shortcuts: 'TASTATURKÜRZEL',
+    shortcutsHint: 'Tippe auf ein Kürzel und drücke die gewünschte Tastenkombination. Backspace entfernt es. Gilt nur auf diesem Gerät.',
+    shortcutsReset: 'Auf Standard zurücksetzen',
+    shortcutRecording: 'Taste drücken…',
+    shortcutNone: 'Keine',
+    scFocusSearch: 'Suche fokussieren',
+    scTabMap: 'Karte öffnen',
+    scTabHistory: 'Verlauf öffnen',
+    scTabStats: 'Statistik öffnen',
+    scTabSettings: 'Einstellungen öffnen',
+    scMyLocation: 'Zu meinem Standort',
+    scSearchHere: 'Hier suchen',
+    scToggleTheme: 'Design wechseln',
+    themeLabel: 'Design',
+    themeAuto: 'Auto',
     myRequests: 'MEINE ANFRAGEN',
     requestLocation: 'Standort anfragen',
     requestsLoginHint: 'Mit FeloID anmelden, um neue Scan-Standorte anzufragen.',
@@ -423,6 +438,21 @@ const i18n = {
     historyLocSummary: 'Prices are collected at {n} locations – {parts}.',
     historyLocRadius: '{n} km radius',
     historyLocToggleAria: 'Expand/collapse location list',
+    shortcuts: 'KEYBOARD SHORTCUTS',
+    shortcutsHint: 'Tap a shortcut and press the desired key combination. Backspace clears it. Applies on this device only.',
+    shortcutsReset: 'Reset to defaults',
+    shortcutRecording: 'Press a key…',
+    shortcutNone: 'None',
+    scFocusSearch: 'Focus search',
+    scTabMap: 'Open map',
+    scTabHistory: 'Open history',
+    scTabStats: 'Open stats',
+    scTabSettings: 'Open settings',
+    scMyLocation: 'Go to my location',
+    scSearchHere: 'Search here',
+    scToggleTheme: 'Toggle theme',
+    themeLabel: 'Theme',
+    themeAuto: 'Auto',
     myRequests: 'MY REQUESTS',
     requestLocation: 'Request location',
     requestsLoginHint: 'Sign in with FeloID to request new scan locations.',
@@ -620,6 +650,8 @@ function applyLanguage() {
   }
   const cancelBtn = document.getElementById('btn-scan-cancel');
   if (cancelBtn) cancelBtn.setAttribute('aria-label', t('scanCancel'));
+  // JS-built lists using t() don't carry data-i18n, so refresh them by hand.
+  renderShortcutsList();
 }
 
 const state = {
@@ -969,6 +1001,7 @@ async function init() {
   setupTheme();
   setupLangPicker();
   setupHistoryDefaultPicker();
+  setupShortcuts();
   setupMyLocationBtn();
   setupFavouritesToggle();
   setupGroupByPriceToggle();
@@ -1211,9 +1244,10 @@ function setupSegmentedControl(containerId, initialValue, onChange) {
   return (value) => setActive(value, false);
 }
 
+let _themeSegSetter = null;
 function setupTheme() {
   applyTheme(state.theme);
-  setupSegmentedControl('theme-seg', state.theme || 'auto', (v) => {
+  _themeSegSetter = setupSegmentedControl('theme-seg', state.theme || 'auto', (v) => {
     applyTheme(v);
     // Theme is device-local only — don't trigger cloud sync
     saveSettingsLocal();
@@ -1229,6 +1263,189 @@ function setupHistoryDefaultPicker() {
       persistStateSettings({ historyDefaultDays: num === 7 ? 7 : 1 });
     }
   );
+}
+
+// ─── Keyboard shortcuts ───────────────────────────────────────────────
+// Device-local (two machines never share a keyboard), so they live under their
+// own localStorage key instead of the cloud-synced settings blob.
+const SHORTCUTS_KEY = 'tank_shortcuts';
+
+const DEFAULT_SHORTCUTS = {
+  focusSearch: 'ctrl+k',
+  tabMap: '1',
+  tabHistory: '2',
+  tabStats: '3',
+  tabSettings: '4',
+  myLocation: 'l',
+  searchHere: 'h',
+  toggleTheme: 't',
+};
+
+// Order + label + behaviour for each bindable action. The array order is the
+// order shown in settings; `run` is what the binding triggers.
+const SHORTCUT_ACTIONS = [
+  { id: 'focusSearch', labelKey: 'scFocusSearch', run: () => {
+      switchTab('map');
+      setTimeout(() => {
+        const input = document.getElementById('map-search-input');
+        if (input) { input.focus(); input.select(); }
+      }, 0);
+    } },
+  { id: 'tabMap', labelKey: 'scTabMap', run: () => switchTab('map') },
+  { id: 'tabHistory', labelKey: 'scTabHistory', run: () => switchTab('history') },
+  { id: 'tabStats', labelKey: 'scTabStats', run: () => switchTab('stats') },
+  { id: 'tabSettings', labelKey: 'scTabSettings', run: () => switchTab('settings') },
+  { id: 'myLocation', labelKey: 'scMyLocation', run: () => document.getElementById('btn-my-location')?.click() },
+  { id: 'searchHere', labelKey: 'scSearchHere', run: () => { switchTab('map'); document.getElementById('btn-search-here')?.click(); } },
+  { id: 'toggleTheme', labelKey: 'scToggleTheme', run: () => cycleTheme() },
+];
+
+let _recordingShortcut = null;
+
+function cycleTheme() {
+  const order = ['auto', 'light', 'dark'];
+  const next = order[(order.indexOf(state.theme || 'auto') + 1) % order.length];
+  applyTheme(next);
+  saveSettingsLocal();
+  if (_themeSegSetter) _themeSegSetter(next);
+  const label = next === 'auto' ? t('themeAuto') : next === 'light' ? t('themeLight') : t('themeDark');
+  showToast(`${t('themeLabel')}: ${label}`);
+}
+
+// Normalised combo string from a keyboard event, e.g. "ctrl+k", "1". Ctrl and
+// Cmd collapse into one "ctrl" token so a binding works on both Windows/Linux
+// and macOS without separate setup.
+function comboFromEvent(e) {
+  const key = e.key;
+  if (!key || ['Control', 'Alt', 'Shift', 'Meta', 'Dead', 'OS'].includes(key)) return null;
+  const parts = [];
+  if (e.ctrlKey || e.metaKey) parts.push('ctrl');
+  if (e.altKey) parts.push('alt');
+  if (e.shiftKey) parts.push('shift');
+  let k = key.toLowerCase();
+  if (k === ' ') k = 'space';
+  parts.push(k);
+  return parts.join('+');
+}
+
+const SHORTCUT_KEY_LABELS = {
+  ctrl: { de: 'Strg', en: 'Ctrl' },
+  alt: { de: 'Alt', en: 'Alt' },
+  shift: { de: 'Umschalt', en: 'Shift' },
+  space: { de: 'Leertaste', en: 'Space' },
+  arrowup: { de: '↑', en: '↑' }, arrowdown: { de: '↓', en: '↓' },
+  arrowleft: { de: '←', en: '←' }, arrowright: { de: '→', en: '→' },
+  escape: { de: 'Esc', en: 'Esc' }, enter: { de: 'Enter', en: 'Enter' },
+  tab: { de: 'Tab', en: 'Tab' },
+};
+
+function comboToLabel(combo) {
+  if (!combo) return t('shortcutNone');
+  const lang = state.lang === 'en' ? 'en' : 'de';
+  return combo.split('+').map((tok) => {
+    const m = SHORTCUT_KEY_LABELS[tok];
+    if (m) return m[lang];
+    return tok.length === 1 ? tok.toUpperCase() : tok.charAt(0).toUpperCase() + tok.slice(1);
+  }).join(' + ');
+}
+
+function loadShortcuts() {
+  let stored = {};
+  try { stored = JSON.parse(localStorage.getItem(SHORTCUTS_KEY) || '{}') || {}; } catch {}
+  const merged = {};
+  for (const a of SHORTCUT_ACTIONS) {
+    merged[a.id] = typeof stored[a.id] === 'string' ? stored[a.id] : DEFAULT_SHORTCUTS[a.id];
+  }
+  return merged;
+}
+
+function saveShortcuts() {
+  try { localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(state.shortcuts)); } catch {}
+}
+
+function handleGlobalShortcut(e) {
+  if (_recordingShortcut || !state.shortcuts) return;
+  const combo = comboFromEvent(e);
+  if (!combo) return;
+  const action = SHORTCUT_ACTIONS.find((a) => state.shortcuts[a.id] && state.shortcuts[a.id] === combo);
+  if (!action) return;
+  const hasMod = e.ctrlKey || e.metaKey || e.altKey;
+  const el = e.target;
+  const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+  // Plain-key shortcuts (no modifier) must not fire while the user is typing.
+  if (typing && !hasMod) return;
+  e.preventDefault();
+  action.run();
+}
+
+function setupShortcuts() {
+  state.shortcuts = loadShortcuts();
+  document.addEventListener('keydown', handleGlobalShortcut);
+
+  // The settings section is only useful where there's a real keyboard.
+  const section = document.getElementById('shortcuts-section');
+  const hasKeyboard = !window.matchMedia || window.matchMedia('(any-pointer: fine)').matches;
+  if (section && hasKeyboard) section.hidden = false;
+
+  renderShortcutsList();
+
+  const resetBtn = document.getElementById('shortcuts-reset');
+  if (resetBtn && !resetBtn._wired) {
+    resetBtn._wired = true;
+    resetBtn.addEventListener('click', () => {
+      state.shortcuts = { ...DEFAULT_SHORTCUTS };
+      saveShortcuts();
+      renderShortcutsList();
+      haptic('light');
+    });
+  }
+}
+
+function renderShortcutsList() {
+  const list = document.getElementById('shortcuts-list');
+  if (!list || !state.shortcuts) return;
+  list.innerHTML = SHORTCUT_ACTIONS.map((a, i) => `
+    <div class="shortcut-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;${i ? 'border-top:1px solid var(--color-separator)' : ''}">
+      <span style="font-size:14px;color:var(--color-text)">${escapeHtml(t(a.labelKey))}</span>
+      <button type="button" class="shortcut-key-btn" data-action="${a.id}" style="font:inherit;font-size:12px;font-weight:600;color:var(--color-text);background:rgba(127,127,127,0.14);border:1px solid var(--color-separator);border-radius:8px;padding:5px 10px;min-width:70px;text-align:center;cursor:pointer">${escapeHtml(comboToLabel(state.shortcuts[a.id]))}</button>
+    </div>`).join('');
+  list.querySelectorAll('.shortcut-key-btn').forEach((btn) => {
+    btn.addEventListener('click', () => startShortcutRecording(btn.dataset.action, btn));
+  });
+}
+
+function startShortcutRecording(actionId, btn) {
+  if (_recordingShortcut) return;
+  _recordingShortcut = actionId;
+  btn.textContent = t('shortcutRecording');
+  btn.style.borderColor = 'var(--color-accent, #0a84ff)';
+  btn.style.color = 'var(--color-accent, #0a84ff)';
+
+  const finish = () => {
+    document.removeEventListener('keydown', onRec, true);
+    _recordingShortcut = null;
+  };
+  const onRec = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Wait until a non-modifier key is pressed so combos like Ctrl+K record.
+    if (['Control', 'Alt', 'Shift', 'Meta', 'OS', 'Dead'].includes(e.key)) return;
+    if (e.key === 'Escape') { finish(); renderShortcutsList(); return; } // cancel
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      state.shortcuts[actionId] = ''; // unbind
+    } else {
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      // Keep bindings unique — strip this combo from any other action.
+      for (const a of SHORTCUT_ACTIONS) if (a.id !== actionId && state.shortcuts[a.id] === combo) state.shortcuts[a.id] = '';
+      state.shortcuts[actionId] = combo;
+    }
+    saveShortcuts();
+    finish();
+    renderShortcutsList();
+    haptic('light');
+  };
+  document.addEventListener('keydown', onRec, true);
 }
 
 function setupLangPicker() {

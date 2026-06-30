@@ -383,6 +383,17 @@ export const APP_SHELL = `
       </div>
     </div>
 
+    <div class="section" id="shortcuts-section" hidden>
+      <div class="section-header" data-i18n="shortcuts">TASTATURKÜRZEL</div>
+      <p class="section-hint" data-i18n="shortcutsHint">Tippe auf ein Kürzel und drücke die gewünschte Tastenkombination. Backspace entfernt es. Gilt nur auf diesem Gerät.</p>
+      <div class="card settings-card">
+        <div id="shortcuts-list" aria-live="polite"></div>
+      </div>
+      <button type="button" id="shortcuts-reset" class="shortcuts-reset-btn" style="margin-top:10px;width:100%;padding:11px 16px;border:none;border-radius:12px;background:rgba(127,127,127,0.10);color:var(--color-accent, #0a84ff);font:inherit;font-size:14px;font-weight:500;cursor:pointer">
+        <span data-i18n="shortcutsReset">Auf Standard zurücksetzen</span>
+      </button>
+    </div>
+
     <div class="section">
       <div class="section-header" data-i18n="about">ÜBER</div>
       <div class="about-hero">
