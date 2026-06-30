@@ -3074,6 +3074,8 @@ async function loadPriceBand(lat, lng) {
       if (state.map) renderStationsOnMap(state.stations, { skipFitBounds: true, skipRadiusFilter: true });
       renderStationList(state.stations);
     }
+    // The search dropdown isn't tied to state.stations, so recolour it too.
+    recolorOpenSearchResults();
   } catch (err) {
     console.warn('[priceBand] load failed:', err && err.message || err);
   }
@@ -6263,6 +6265,10 @@ function attachLocationSearchHandlers(resultsEl) {
 // can resolve out of order — without this an old response could clobber a newer.
 let _searchSeq = 0;
 
+// Last rendered dropdown results, kept so the dropdown can be recoloured if the
+// regional price band loads after the results were first drawn.
+let _lastSearchResults = null;
+
 // Places come only from DE/AT — countrycodes keeps Nominatim from returning
 // worldwide noise. Called directly (not via /api/geocode) so search keeps
 // working for anonymous users, same posture as /api/stations.
@@ -6330,6 +6336,12 @@ async function searchLocation(query) {
   if (seq !== _searchSeq) return;
 
   const stationMatches = mergeStationMatches(localMatches, serverStations);
+  _lastSearchResults = { locationItems, stationMatches };
+  renderSearchResultsInto(resultsEl, locationItems, stationMatches);
+}
+
+// Builds the dropdown markup (places first, stations after) and wires handlers.
+function renderSearchResultsInto(resultsEl, locationItems, stationMatches) {
   const stationHtml = renderStationSearchResultsHtml(stationMatches);
   const locationHtml = renderLocationSearchResultsHtml(locationItems);
 
@@ -6344,6 +6356,15 @@ async function searchLocation(query) {
   resultsEl.classList.remove('hidden');
   attachLocationSearchHandlers(resultsEl);
   attachStationSearchHandlers(resultsEl, stationMatches);
+}
+
+// Re-render the open search dropdown so station price colours pick up a price
+// band that loaded after the results were first drawn. Without this the map and
+// station list recolour on band-ready but the dropdown stays neutral grey.
+function recolorOpenSearchResults() {
+  const resultsEl = document.getElementById('map-search-results');
+  if (!resultsEl || resultsEl.classList.contains('hidden') || !_lastSearchResults) return;
+  renderSearchResultsInto(resultsEl, _lastSearchResults.locationItems, _lastSearchResults.stationMatches);
 }
 
 // ─── Route planner ────────────────────────────────────────────────
