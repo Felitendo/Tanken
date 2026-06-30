@@ -6149,7 +6149,13 @@ function renderStats(stats) {
     stats.dayAvgs.forEach((d, idx) => dayRankMap.set(d.day, idx));
     const dayDisplayOrder = [1, 2, 3, 4, 5, 6, 0];
     const dayAbbrev = t('dayAbbr') || [];
-    const dayValuesArr = stats.dayAvgs.map(d => d.avg);
+    // Colour and bar width track the *displayed* (2-decimal) price, not the
+    // raw average or the rank. Two days that show the same number (e.g.
+    // 1,84 €) must look identical — basing the colour on the rank would
+    // spread tied prices across the green→red gradient even though the user
+    // sees the exact same value.
+    const dayDispV = (avg) => Number(Number(avg).toFixed(2));
+    const dayValuesArr = stats.dayAvgs.map(d => dayDispV(d.avg));
     const dayMaxV = Math.max(...dayValuesArr);
     const dayMinV = Math.min(...dayValuesArr);
     const dayRangeV = Math.max(dayMaxV - dayMinV, 0.0001);
@@ -6162,14 +6168,14 @@ function renderStats(stats) {
         continue;
       }
       const rank = dayRankMap.get(dayNum);
-      const ratio = dayCount > 1 ? rank / (dayCount - 1) : 0;
+      // Position in the displayed-price range drives both colour and bar
+      // width, so equal prices map to an identical tint and length: empty +
+      // green for the cheapest, full + red for the priciest. Reads
+      // naturally — less is better, since you want to spend less.
+      const ratio = dayCount > 1 ? (dayDispV(data.avg) - dayMinV) / dayRangeV : 0;
       const color = rankColor(ratio);
       const isBest = rank === 0;
-      // Bar width tracks how *expensive* the day is — empty for the
-      // cheapest, full for the priciest. Reads naturally: less is
-      // better, since you want to spend less.
-      const expensiveness = dayCount > 1 ? (data.avg - dayMinV) / dayRangeV : 0;
-      const barWidth = Math.round(expensiveness * 100);
+      const barWidth = Math.round(ratio * 100);
       const crown = isBest ? '<span class="stats-tile-crown" aria-hidden="true">★</span>' : '';
       const fullDayName = (t('dayNames') || [])[dayNum] || data.name || abbr;
       dayTiles += `<div class="stats-tile${isBest ? ' is-best' : ''}" style="--tile-color:${color}" data-tile-label="${fullDayName} · ${formatPrice(data.avg)}" data-tile-color="${color}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value" style="color:${color}">${formatPrice(data.avg)}</div><div class="stats-tile-bar"><div class="stats-tile-bar-fill" style="width:${barWidth}%"></div></div></div>`;
