@@ -2371,6 +2371,14 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   flex-shrink: 0;
 }
 
+/* Fills the history price-chart box while the first fetch is in flight.
+   Sits over the (still-blank) canvas and is removed once the chart draws. */
+.chart-skeleton {
+  position: absolute;
+  inset: var(--sp-4) var(--sp-2) var(--sp-2);
+  border-radius: 10px;
+}
+
 /* === Station Sort === */
 .station-sort-bar {
   display: grid;

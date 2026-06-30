@@ -5119,6 +5119,7 @@ async function fetchHistoryData() {
 
 async function loadHistoryTab() {
   state.loaded.history = true;
+  showHistorySkeleton();
   await loadLocationPickers();
   state.history = await fetchHistoryData();
   renderChart(state.history);
@@ -5159,7 +5160,59 @@ async function loadHistoryTab() {
 
 }
 
+// History counterpart to showStatsSkeleton: shimmering bones in the hero,
+// the price-chart box and the summary cards while the first fetch runs.
+// The hero (#history-stats) and summary (#history-summary) get overwritten
+// by their render functions; the chart overlay is removed explicitly.
+function showHistorySkeleton() {
+  const bone = (style) => `<div class="skeleton-bone" style="${style}"></div>`;
+  const statsEl = document.getElementById('history-stats');
+  if (statsEl) {
+    statsEl.style.display = '';
+    statsEl.innerHTML = `
+      <div class="history-hero-card" aria-hidden="true">
+        <div class="history-hero-top">
+          <div style="flex:1;min-width:0">
+            ${bone('width:34%;height:11px')}
+            ${bone('width:50%;height:30px;margin-top:11px')}
+            ${bone('width:128px;height:13px;margin-top:12px;border-radius:999px')}
+          </div>
+          ${bone('width:26px;height:26px;border-radius:8px;flex-shrink:0')}
+        </div>
+      </div>`;
+  }
+  const chartContainer = document.querySelector('#view-history .chart-container');
+  if (chartContainer && !chartContainer.querySelector('.chart-skeleton')) {
+    const sk = document.createElement('div');
+    sk.className = 'skeleton-bone chart-skeleton';
+    sk.setAttribute('aria-hidden', 'true');
+    chartContainer.appendChild(sk);
+  }
+  const summary = document.getElementById('history-summary');
+  if (summary) {
+    const card = () => `
+      <div class="history-extreme-card" aria-hidden="true">
+        ${bone('width:34px;height:34px;border-radius:10px;flex-shrink:0')}
+        <div style="flex:1;min-width:0">
+          ${bone('width:55%;height:11px')}
+          ${bone('width:70%;height:18px;margin-top:7px')}
+          ${bone('width:45%;height:11px;margin-top:7px')}
+        </div>
+      </div>`;
+    summary.innerHTML = `
+      <div class="section-header">${t('summary')}</div>
+      <div class="history-extreme-row">${card()}${card()}</div>`;
+  }
+}
+
+// Drop the chart skeleton overlay once we're about to draw (or clear) the
+// chart. Safe to call on every render — it's a no-op when none is present.
+function removeHistoryChartSkeleton() {
+  document.querySelector('#view-history .chart-skeleton')?.remove();
+}
+
 function renderChart(data) {
+  removeHistoryChartSkeleton();
   if (!data.length) {
     if (state.chart) { state.chart.destroy(); state.chart = null; }
     if (state.hourChart) { state.hourChart.destroy(); state.hourChart = null; }
@@ -5839,8 +5892,17 @@ async function reloadStats() {
 
 async function loadStatsTab() {
   state.loaded.stats = true;
+  showStatsSkeleton();
   await loadLocationPickers();
-  await reloadStats();
+  try {
+    await reloadStats();
+  } catch (e) {
+    // A failed first fetch must not leave the skeleton shimmering forever —
+    // swap it for the empty state. statsKey stays unset, so the next tab
+    // switch retries the load.
+    console.error('Stats load error:', e);
+    renderStats(null);
+  }
   syncCountryChips();
   wireCountryChips('stats-country-chips');
 
@@ -5876,6 +5938,74 @@ function countUp(el, target, duration = 700, formatter) {
     if (progress < 1) requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+}
+
+// Structural placeholder dropped into #stats-content on first load so the
+// tab fills in gracefully instead of flashing from blank to a fully built
+// page. Mirrors renderStats' layout — same container classes, so there's no
+// layout shift when the real content swaps in — with shimmering bones where
+// the data will land. renderStats overwrites innerHTML, clearing it.
+function showStatsSkeleton() {
+  const el = document.getElementById('stats-content');
+  if (!el) return;
+  const bone = (style) => `<div class="skeleton-bone" style="${style}"></div>`;
+  const factCard = () => `
+    <div class="stats-fact-card">
+      ${bone('width:30px;height:30px;border-radius:9px;flex-shrink:0')}
+      <div style="flex:1;min-width:0">
+        ${bone('width:60%;height:9px;margin-bottom:7px')}
+        ${bone('width:85%;height:15px')}
+      </div>
+    </div>`;
+  const bestCard = () => `
+    <div class="best-time-card">
+      ${bone('width:50%;height:11px')}
+      ${bone('width:72%;height:20px;margin-top:8px')}
+      ${bone('width:40%;height:15px;margin-top:8px')}
+    </div>`;
+  const tile = () => `
+    <div class="stats-tile">
+      ${bone('width:62%;height:9px')}
+      ${bone('width:84%;height:13px;margin-top:5px')}
+      ${bone('width:calc(100% - 12px);height:3px;margin-top:auto;border-radius:999px')}
+    </div>`;
+  const row = () => `
+    <div class="skeleton-item">
+      ${bone('width:28px;height:28px;border-radius:8px;flex-shrink:0')}
+      <div style="flex:1;min-width:0">${bone('width:55%;height:14px')}</div>
+      ${bone('width:52px;height:18px;margin-left:auto;flex-shrink:0')}
+    </div>`;
+  el.innerHTML = `
+    <div class="section stats-hero-section" aria-hidden="true">
+      <div class="stats-hero-card">
+        <div class="stats-hero-top">
+          <div style="flex:1;min-width:0">
+            ${bone('width:38%;height:11px')}
+            ${bone('width:55%;height:30px;margin-top:11px')}
+          </div>
+          ${bone('width:24px;height:24px;border-radius:7px;flex-shrink:0')}
+        </div>
+        ${bone('width:128px;height:13px;margin-top:14px;border-radius:999px')}
+        ${bone('width:100%;height:6px;margin-top:18px;border-radius:999px')}
+      </div>
+      <div class="stats-facts-row">${factCard()}${factCard()}${factCard()}</div>
+    </div>
+    <div class="section" aria-hidden="true">
+      <div class="section-header">${t('bestTimes')}</div>
+      <div class="best-time-grid">${bestCard()}${bestCard()}</div>
+    </div>
+    <div class="section" aria-hidden="true">
+      <div class="section-header">${t('weekdays')}</div>
+      <div class="stats-tile-grid stats-tile-grid-7">${tile().repeat(7)}</div>
+    </div>
+    <div class="section" aria-hidden="true">
+      <div class="section-header">${t('hourRanking')}</div>
+      <div class="stats-hour-chart-wrap" style="animation:none">${bone('position:absolute;inset:0;border-radius:12px')}</div>
+    </div>
+    <div class="section" aria-hidden="true">
+      <div class="section-header">${t('stationRanking')}</div>
+      <div class="card-list stats-station-list">${row().repeat(5)}</div>
+    </div>`;
 }
 
 function renderStats(stats) {
