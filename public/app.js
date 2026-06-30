@@ -639,7 +639,7 @@ const state = {
   stationSort: 'price',
   historyDays: 7,
   // Default range for the per-station price chart (1 = 24 h, 7 = 7 days).
-  historyDefaultDays: 1,
+  historyDefaultDays: 7,
   theme: 'auto',
   lang: detectLanguage(),
   activeCountry: null,
@@ -1217,7 +1217,7 @@ function setupTheme() {
 function setupHistoryDefaultPicker() {
   setupSegmentedControl(
     'history-default-seg',
-    String(state.historyDefaultDays || 1),
+    String(state.historyDefaultDays || 7),
     (v) => {
       const num = parseInt(v, 10);
       persistStateSettings({ historyDefaultDays: num === 7 ? 7 : 1 });
@@ -3807,7 +3807,7 @@ function showStationSheet(station) {
 
   state.sheetStationName = station.name;
   state.sheetStation = station;
-  loadSheetChart(station.name, state.historyDefaultDays || 1, station.id);
+  loadSheetChart(station.name, state.historyDefaultDays || 7, station.id);
   if (station.id) refreshStationStatus(station);
 
   document.querySelectorAll('.sheet-toggle-btn').forEach(btn => {
@@ -4291,7 +4291,7 @@ async function openStationDetail(seed) {
   // 4. Chart
   state.sheetStation = station;
   state.sheetStationName = station.name;
-  loadSheetChart(station.name, state.historyDefaultDays || 1, station.id);
+  loadSheetChart(station.name, state.historyDefaultDays || 7, station.id);
 }
 
 // Lazy-load admin-curated scan locations once and cache them. Used to
@@ -6041,7 +6041,7 @@ function setupSettings() {
       // new fuel type instead of showing a stale series.
       if (state.sheetStationName) {
         const activeRange = document.querySelector('.sheet-toggle-btn.active');
-        const days = activeRange ? parseInt(activeRange.dataset.range, 10) : (state.historyDefaultDays || 1);
+        const days = activeRange ? parseInt(activeRange.dataset.range, 10) : (state.historyDefaultDays || 7);
         loadSheetChart(state.sheetStationName, days, state.sheetStation?.id);
       }
       refreshAlertUi();
@@ -6258,38 +6258,92 @@ function attachLocationSearchHandlers(resultsEl) {
   });
 }
 
+// Monotonic counter so only the latest search's async results get rendered.
+// Fast typing fires several searchLocation calls and the place/station lookups
+// can resolve out of order — without this an old response could clobber a newer.
+let _searchSeq = 0;
+
+// Places come only from DE/AT — countrycodes keeps Nominatim from returning
+// worldwide noise. Called directly (not via /api/geocode) so search keeps
+// working for anonymous users, same posture as /api/stations.
+async function fetchPlaceResults(query) {
+  try {
+    const resp = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=8&countrycodes=de,at&accept-language=${state.lang || 'de'}`);
+    const data = await resp.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+// Searches every cached station server-side, not just the current viewport,
+// so a station can be found anywhere the scanner has data.
+async function fetchServerStationMatches(query) {
+  const fuel = state.fuelType || 'diesel';
+  let url = `/api/stations/search?q=${encodeURIComponent(query)}&fuel=${encodeURIComponent(fuel)}`;
+  if (state.userLat != null && state.userLng != null) {
+    url += `&lat=${state.userLat}&lng=${state.userLng}`;
+  }
+  try {
+    const data = await api(url);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+// Combine the instant local (viewport) hits with the server-wide hits. Local
+// matches win on dedupe so they keep their list rank; server-only stations are
+// appended without a rank badge.
+function mergeStationMatches(localMatches, serverStations) {
+  const keyOf = (s) => s.id || `${s.lat},${s.lng}`;
+  const seen = new Set(localMatches.map(m => keyOf(m.station)));
+  const merged = [...localMatches];
+  for (const s of serverStations) {
+    const key = keyOf(s);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push({ station: s, rank: null, score: 0 });
+  }
+  return merged.slice(0, 8);
+}
+
 async function searchLocation(query) {
   const resultsEl = document.getElementById('map-search-results');
-  const stationMatches = matchStationsByQuery(query);
-  const stationHtml = renderStationSearchResultsHtml(stationMatches);
+  const seq = ++_searchSeq;
 
-  // Render station hits immediately so the user gets feedback before the
-  // Nominatim request resolves. Locations are appended once they arrive.
-  if (stationHtml) {
-    resultsEl.innerHTML = stationHtml;
+  // Local viewport hits are synchronous — show them at once for instant
+  // feedback while the async place/station lookups are still in flight.
+  const localMatches = matchStationsByQuery(query);
+  if (localMatches.length) {
+    resultsEl.innerHTML = renderStationSearchResultsHtml(localMatches);
     resultsEl.classList.remove('hidden');
-    attachStationSearchHandlers(resultsEl, stationMatches);
+    attachStationSearchHandlers(resultsEl, localMatches);
   }
 
-  let locationItems = [];
-  try {
-    const resp = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&accept-language=${state.lang || 'de'}`);
-    locationItems = await resp.json();
-  } catch {
-    locationItems = [];
-  }
+  const [locationItems, serverStations] = await Promise.all([
+    fetchPlaceResults(query),
+    fetchServerStationMatches(query),
+  ]);
 
+  // A newer keystroke already started — discard these stale results.
+  if (seq !== _searchSeq) return;
+
+  const stationMatches = mergeStationMatches(localMatches, serverStations);
+  const stationHtml = renderStationSearchResultsHtml(stationMatches);
   const locationHtml = renderLocationSearchResultsHtml(locationItems);
+
   if (!stationHtml && !locationHtml) {
     resultsEl.innerHTML = `<div class="map-search-no-results">${t('noSearchResults')}</div>`;
     resultsEl.classList.remove('hidden');
     return;
   }
 
-  resultsEl.innerHTML = stationHtml + locationHtml;
+  // Places first, stations after — places are the preferred result type.
+  resultsEl.innerHTML = locationHtml + stationHtml;
   resultsEl.classList.remove('hidden');
-  attachStationSearchHandlers(resultsEl, stationMatches);
   attachLocationSearchHandlers(resultsEl);
+  attachStationSearchHandlers(resultsEl, stationMatches);
 }
 
 // ─── Route planner ────────────────────────────────────────────────
@@ -6397,7 +6451,7 @@ function bindRouteAutocomplete(input, resultsEl, { allowCurrentLocation }) {
     }
     debounceTimer = setTimeout(async () => {
       try {
-        const resp = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&accept-language=${state.lang || 'de'}`);
+        const resp = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=8&countrycodes=de,at&accept-language=${state.lang || 'de'}`);
         const data = await resp.json();
         renderRouteSuggestions(resultsEl, input, data, { allowCurrentLocation });
       } catch {

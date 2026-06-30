@@ -44,8 +44,11 @@ export async function GET(request: NextRequest) {
   const url = new URL(NOMINATIM_URL);
   url.searchParams.set('q', q);
   url.searchParams.set('format', 'json');
-  url.searchParams.set('limit', '5');
+  url.searchParams.set('limit', '8');
   url.searchParams.set('accept-language', lang);
+  // The app only covers Germany and Austria — restrict geocoding to those
+  // countries so results are relevant instead of worldwide noise.
+  url.searchParams.set('countrycodes', 'de,at');
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);

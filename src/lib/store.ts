@@ -43,7 +43,8 @@ export function createStores(config: RuntimeConfig): {
   const defaultSettings = (): UserSettings => ({
     fuelType: config.repoConfig.fuel_type,
     radiusKm: 25,
-    currentTab: 'map'
+    currentTab: 'map',
+    historyDefaultDays: 7
   });
 
   const userStore: UserStore = {
