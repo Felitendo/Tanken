@@ -230,6 +230,9 @@ export interface OAuthStateRecord {
   redirectAfter: string;
   codeVerifier: string;
   createdAt: number;
+  /** Custom-scheme redirect (e.g. `tanken://auth`) for native-app login; the callback appends the
+   * signed session token to it instead of setting a browser cookie. */
+  appRedirect?: string;
 }
 
 export interface OAuthStateDb {

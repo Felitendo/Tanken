@@ -85,6 +85,14 @@ export async function GET(request: NextRequest) {
 
     const session = await stores.sessionStore.createSession(user.id, 'oidc');
 
+    // Native-app login: hand the signed session token back via the custom-scheme deep link so the
+    // app can replay it as a Cookie header. No browser cookie is set in this flow.
+    if (saved.appRedirect) {
+      const token = stores.sessionStore.signSessionToken(session.id);
+      const sep = saved.appRedirect.includes('?') ? '&' : '?';
+      return NextResponse.redirect(`${saved.appRedirect}${sep}token=${encodeURIComponent(token)}`);
+    }
+
     const origin = `${proto}://${host}`;
     const response = NextResponse.redirect(new URL(saved.redirectAfter || '/', origin));
     response.headers.set('Set-Cookie', stores.sessionStore.setSessionCookie(session.id));
