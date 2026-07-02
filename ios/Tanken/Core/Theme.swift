@@ -60,6 +60,17 @@ enum Theme {
         guard let price, price > 0, let p10, let p90 else { return neutralPrice }
         return priceColor(ratio: priceRatio(price: price, p10: p10, p90: p90))
     }
+
+    // MARK: - Chart domains
+
+    /// Padded y-domain for price charts: [min − pad, max + pad] with a minimum spread, so tightly
+    /// clustered prices still show visible variation instead of a flat line or equal-height bars.
+    static func priceDomain(for values: [Double], pad: Double = 0.03, minSpread: Double = 0.10) -> ClosedRange<Double> {
+        guard let lo = values.min(), let hi = values.max() else { return 0...1 }
+        let spread = max(hi - lo, minSpread)
+        let mid = (lo + hi) / 2
+        return (mid - spread / 2 - pad)...(mid + spread / 2 + pad)
+    }
 }
 
 // MARK: - Liquid Glass helpers

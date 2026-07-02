@@ -141,10 +141,12 @@ struct HistoryTabView: View {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(text: s.hourlyTitle)
                 let avgValues = model.hourPoints.map(\.avg)
+                let domain = Theme.priceDomain(for: avgValues)
                 Chart(model.hourPoints) { point in
                     BarMark(
                         x: .value("Zeit", point.date, unit: .hour),
-                        y: .value("Ø", point.avg)
+                        yStart: .value("Ø", domain.lowerBound),
+                        yEnd: .value("Ø", point.avg)
                     )
                     .foregroundStyle(Theme.priceColor(ratio: ratio(of: point.avg, within: avgValues)))
                     .cornerRadius(2)
@@ -155,7 +157,7 @@ struct HistoryTabView: View {
                         AxisValueLabel(format: .dateTime.hour())
                     }
                 }
-                .chartYScale(domain: .automatic(includesZero: false))
+                .chartYScale(domain: domain)
                 .frame(height: 140)
             }
         }

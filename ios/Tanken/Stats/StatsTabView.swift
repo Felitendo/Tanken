@@ -111,15 +111,20 @@ struct StatsTabView: View {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(text: s.weekdays)
                 let avgValues = model.dayAvgs.map(\.avg)
+                // Bars start at the domain floor instead of 0 — averages cluster within ~0.4 €,
+                // zero-based bars would all look identical. Short labels ("So", "Mo", …) keep the
+                // seven columns from truncating ("Sonnt…").
+                let domain = Theme.priceDomain(for: avgValues)
                 Chart(model.dayAvgs, id: \.day) { day in
                     BarMark(
-                        x: .value("Tag", day.name ?? String(day.day)),
-                        y: .value("Ø", day.avg)
+                        x: .value("Tag", String((day.name ?? String(day.day)).prefix(2))),
+                        yStart: .value("Ø", domain.lowerBound),
+                        yEnd: .value("Ø", day.avg)
                     )
                     .foregroundStyle(Theme.priceColor(ratio: model.ratio(of: day.avg, within: avgValues)))
                     .cornerRadius(4)
                 }
-                .chartYScale(domain: .automatic(includesZero: false))
+                .chartYScale(domain: domain)
                 .frame(height: 160)
             }
         }
@@ -136,15 +141,23 @@ struct StatsTabView: View {
                         .contentTransition(.numericText())
                 }
                 let avgValues = model.hourAvgs.map(\.avg)
+                let domain = Theme.priceDomain(for: avgValues)
                 Chart(model.hourAvgs, id: \.hour) { hour in
                     BarMark(
                         x: .value("Stunde", hour.hour),
-                        y: .value("Ø", hour.avg)
+                        yStart: .value("Ø", domain.lowerBound),
+                        yEnd: .value("Ø", hour.avg)
                     )
                     .foregroundStyle(Theme.priceColor(ratio: model.ratio(of: hour.avg, within: avgValues)))
                     .cornerRadius(2)
                 }
-                .chartYScale(domain: .automatic(includesZero: false))
+                .chartXAxis {
+                    AxisMarks(values: Array(stride(from: 0, through: 23, by: 6))) { _ in
+                        AxisGridLine()
+                        AxisValueLabel()
+                    }
+                }
+                .chartYScale(domain: domain)
                 .frame(height: 140)
             }
         }

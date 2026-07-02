@@ -190,13 +190,24 @@ struct MapTabView: View {
         .interactiveGlass(in: Circle())
         .padding(.trailing, 16)
         .padding(.bottom, 118)
+        // The half/expanded drawer covers the FAB's fixed spot — hide it instead of leaving a
+        // dead button underneath.
+        .opacity(drawerState == .collapsed ? 1 : 0)
+        .scaleEffect(drawerState == .collapsed ? 1 : 0.8)
+        .allowsHitTesting(drawerState == .collapsed)
+        .animation(.spring(duration: 0.3), value: drawerState)
     }
 
     // MARK: - Drawer
 
     private var drawer: some View {
         BottomDrawer(state: $drawerState) {
-            drawerHeader
+            // The sort/count controls only make sense for the list; the detail view brings its
+            // own back header, so only the grabber stays draggable there.
+            if model.selectedStation == nil {
+                drawerHeader
+                    .transition(.opacity)
+            }
         } content: {
             ZStack {
                 if let station = model.selectedStation {
@@ -233,6 +244,7 @@ struct MapTabView: View {
             .animation(.spring(duration: 0.35), value: model.selectedStation)
             .clipped()
         }
+        .animation(.spring(duration: 0.35), value: model.selectedStation == nil)
     }
 
     /// The web's list pipeline, driven by the synced list options in AppState.

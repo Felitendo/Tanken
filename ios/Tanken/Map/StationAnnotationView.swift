@@ -15,9 +15,12 @@ struct StationAnnotationView: View {
         VStack(spacing: 0) {
             VStack(spacing: -1) {
                 if !station.displayBrand.isEmpty {
-                    Text(String(station.displayBrand.prefix(12)))
+                    Text(station.displayBrand)
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 96)
                 }
                 Text(Formatters.priceText(station.price))
                     .font(.system(size: 14, weight: .heavy))

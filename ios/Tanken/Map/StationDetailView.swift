@@ -415,10 +415,14 @@ struct StationDetailView: View {
 
     private var chart: some View {
         let cutoff = Date().addingTimeInterval(-Double(chartDays) * 86_400)
+        // Anchor the area at the domain floor, not at 0 — a zero-anchored AreaMark forces the
+        // y-axis down to 0 and flattens the ~1.6–2.1 € price line.
+        let domain = Theme.priceDomain(for: chartPoints.map(\.value))
         return Chart(chartPoints) { point in
             AreaMark(
                 x: .value("Zeit", point.date),
-                y: .value("Preis", point.value)
+                yStart: .value("Preis", domain.lowerBound),
+                yEnd: .value("Preis", point.value)
             )
             .foregroundStyle(Theme.good.opacity(0.08))
             .interpolationMethod(.monotone)
@@ -441,7 +445,7 @@ struct StationDetailView: View {
             }
         }
         .chartXScale(domain: cutoff...Date())
-        .chartYScale(domain: .automatic(includesZero: false))
+        .chartYScale(domain: domain)
         .frame(height: 120)
         .animation(.spring(duration: 0.4), value: chartDays)
     }

@@ -56,6 +56,9 @@ struct BottomDrawer<Header: View, Content: View>: View {
             .frame(maxWidth: .infinity)
             .frame(height: current, alignment: .top)
             .glassSurface(in: Self.shape)
+            // The glass alone is transparent enough that map annotations bleed through the
+            // expanded drawer as colored blobs — a translucent backdrop keeps content readable.
+            .background(Self.shape.fill(Theme.background).opacity(0.5))
             .clipShape(Self.shape)
             .shadow(color: .black.opacity(0.15), radius: 12, y: -3)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
