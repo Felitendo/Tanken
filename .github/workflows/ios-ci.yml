@@ -17,6 +17,8 @@ jobs:
   ios:
     name: iOS (unsigned IPA)
     runs-on: macos-26
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -55,3 +57,20 @@ jobs:
           name: tanken-ios-unsigned
           path: ${{ runner.temp }}/Tanken.ipa
           if-no-files-found: error
+
+      # Single rolling "dev" prerelease: the tag is moved to the current commit and the IPA asset
+      # is replaced on every push — there is never more than this one release.
+      - name: Update rolling dev release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag -f dev
+          git push origin dev --force
+          NOTES="Rolling development build (commit ${GITHUB_SHA::7}, $(date -u +'%Y-%m-%d %H:%M UTC')). Unsigned IPA — sign with AltStore/SideStore."
+          if gh release view dev --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit dev --repo "$GITHUB_REPOSITORY" --prerelease --title "Tanken iOS Dev" --notes "$NOTES"
+          else
+            gh release create dev --repo "$GITHUB_REPOSITORY" --prerelease --title "Tanken iOS Dev" --notes "$NOTES"
+          fi
+          gh release upload dev "$RUNNER_TEMP/Tanken.ipa" --repo "$GITHUB_REPOSITORY" --clobber
