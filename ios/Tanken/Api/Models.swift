@@ -43,6 +43,8 @@ struct Station: Codable, Identifiable, Hashable {
     var distApprox: Bool?
     var price: Double?
     var isOpen: Bool?
+    /// Distance from the planned route polyline in km (only present on `/api/route` corridor results).
+    var routeDistKm: Double?
 
     /// Brand if present, else the station name (matches the web list rendering).
     var displayBrand: String {
@@ -265,6 +267,8 @@ struct SanitizedUser: Codable {
     var photoUrl: String?
     var settings: UserSettings?
     var favourites: [String]?
+    /// "oidc" for SSO accounts — location requests are limited to those (like the web).
+    var authProvider: String?
 }
 
 struct AuthInfo: Codable {
@@ -326,4 +330,59 @@ struct GeocodeResult: Codable, Hashable {
 
 struct GeocodeResponse: Codable {
     var results: [GeocodeResult]?
+}
+
+// MARK: - Route planner (`POST /api/route`, auth required)
+
+/// Driving route polyline as returned by the ORS proxy.
+/// `coordinates` are `[lng, lat]` pairs (ORS/GeoJSON order) — swap when mapping to CoreLocation.
+struct RoutePolyline: Codable, Hashable {
+    var coordinates: [[Double]]
+    var distanceKm: Double
+    var durationMin: Double
+}
+
+/// A coverage-gap point along the route the client should scan via `/api/route/scan-point`.
+struct RouteScanPoint: Codable, Hashable {
+    var lat: Double
+    var lng: Double
+}
+
+struct RouteResponse: Codable {
+    var route: RoutePolyline?
+    var stations: [Station]?
+    var bufferKm: Double?
+    var scanPoints: [RouteScanPoint]?
+}
+
+/// Result of a single corridor scan (`POST /api/route/scan-point`).
+/// A 429 is mapped to `rateLimited` by the client instead of throwing.
+struct RouteScanResult: Codable {
+    var ok: Bool?
+    var stationsFound: Int?
+    var rateLimited: Bool?
+    var error: String?
+}
+
+// MARK: - Location requests (`/api/location-requests`, auth required)
+
+/// A user-submitted request for a new scan location (src/types.ts LocationRequest).
+struct LocationRequest: Codable, Identifiable, Hashable {
+    let id: String
+    var name: String?
+    var lat: Double
+    var lng: Double
+    var radiusKm: Double?
+    var note: String?
+    var status: String?
+    var adminNote: String?
+    var createdAt: String?
+}
+
+struct LocationRequestsResponse: Codable {
+    var requests: [LocationRequest]?
+}
+
+struct LocationRequestCreateResponse: Codable {
+    var request: LocationRequest?
 }

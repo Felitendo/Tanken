@@ -136,6 +136,65 @@ struct ApiClient {
 
     // MARK: - Authenticated endpoints
 
+    /// Compute a driving route and get stations within a corridor around it.
+    /// 401 = login required, 503 = no ORS key configured, 502 = route not computable.
+    func route(startLat: Double, startLng: Double, destLat: Double, destLng: Double,
+               fuel: FuelType, bufferKm: Double = 3) async throws -> RouteResponse {
+        struct Body: Encodable {
+            let startLat: Double
+            let startLng: Double
+            let destLat: Double
+            let destLng: Double
+            let fuel: FuelType
+            let bufferKm: Double
+        }
+        let data = try await send("/api/route", method: "POST", body: Body(
+            startLat: startLat, startLng: startLng,
+            destLat: destLat, destLng: destLng,
+            fuel: fuel, bufferKm: bufferKm
+        ))
+        return try Self.decoder.decode(RouteResponse.self, from: data)
+    }
+
+    /// Trigger a corridor scan at a coverage gap. A 429 (server cooldown) is
+    /// reported as `rateLimited` instead of thrown — the web maps it to an
+    /// "empty" scan dot, not an error.
+    func routeScanPoint(lat: Double, lng: Double, fuel: FuelType) async throws -> RouteScanResult {
+        struct Body: Encodable {
+            let lat: Double
+            let lng: Double
+            let fuel: FuelType
+        }
+        do {
+            let data = try await send("/api/route/scan-point", method: "POST", body: Body(lat: lat, lng: lng, fuel: fuel))
+            return try Self.decoder.decode(RouteScanResult.self, from: data)
+        } catch let error as ApiError where error.status == 429 {
+            return RouteScanResult(ok: false, stationsFound: nil, rateLimited: true, error: nil)
+        }
+    }
+
+    func locationRequests() async throws -> [LocationRequest] {
+        let response: LocationRequestsResponse = try await get("/api/location-requests")
+        return response.requests ?? []
+    }
+
+    /// Create a new scan-location request (OIDC accounts only; server enforces
+    /// max 5 pending with a German 429 message worth surfacing verbatim).
+    func createLocationRequest(name: String, lat: Double, lng: Double,
+                               radiusKm: Double, note: String?) async throws -> LocationRequest? {
+        struct Body: Encodable {
+            let name: String
+            let lat: Double
+            let lng: Double
+            let radiusKm: Double
+            let note: String?
+        }
+        let data = try await send("/api/location-requests", method: "POST", body: Body(
+            name: name, lat: lat, lng: lng, radiusKm: radiusKm, note: note
+        ))
+        return try Self.decoder.decode(LocationRequestCreateResponse.self, from: data).request
+    }
+
     func me() async throws -> MeResponse {
         try await get("/api/me")
     }
