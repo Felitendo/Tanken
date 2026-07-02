@@ -84,6 +84,25 @@ struct ApiClient {
         return try await get("/api/history", query: query)
     }
 
+    /// Per-station history for the detail chart. With ≥2 points the server returns a raw array;
+    /// otherwise it falls back to the aggregate `{entries, extremes}` object.
+    func stationHistory(name: String, id: String?, fuel: FuelType) async throws -> [HistoryEntry] {
+        var query = [
+            URLQueryItem(name: "station", value: name),
+            URLQueryItem(name: "fuel", value: fuel.rawValue),
+        ]
+        if let id {
+            query.append(URLQueryItem(name: "id", value: id))
+        }
+        let (data, response) = try await Self.session.data(for: request("/api/history", query: query))
+        try Self.check(response, data: data)
+        if let entries = try? Self.decoder.decode([HistoryEntry].self, from: data) {
+            return entries
+        }
+        let fallback = try Self.decoder.decode(HistoryResponse.self, from: data)
+        return fallback.entries ?? []
+    }
+
     func historyLocations(country: Country) async throws -> HistoryLocationsResponse {
         try await get("/api/history", query: [
             URLQueryItem(name: "locations", value: "list"),

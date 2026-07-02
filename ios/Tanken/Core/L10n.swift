@@ -40,6 +40,18 @@ struct Strings {
     let address: String
     let appleMaps: String
     let googleMaps: String
+    let priceHistory: String
+    let range24h: String
+    let noChartData: String
+    let lastUpdatedFormat: String
+    let justNow: String
+    let minutesAgoFormat: String
+    let hoursAgoFormat: String
+    let distanceAwayFormat: String
+    // History default setting
+    let historyDefaultLabel: String
+    let historyDefault24h: String
+    let historyDefault7d: String
     // History
     let historyTitle: String
     let historyDescription: String
@@ -118,12 +130,23 @@ extension Strings {
         maxFavourites: "Maximal 50 Favoriten erlaubt",
         open: "Geöffnet",
         closed: "Geschlossen",
-        wholeDay: "Durchgehend geöffnet",
+        wholeDay: "Rund um die Uhr",
         openingTimes: "Öffnungszeiten",
         prices: "Preise",
         address: "Adresse",
         appleMaps: "Apple Maps",
         googleMaps: "Google Maps",
+        priceHistory: "PREISVERLAUF",
+        range24h: "24h",
+        noChartData: "Keine Verlaufsdaten",
+        lastUpdatedFormat: "Zuletzt aktualisiert: %@",
+        justNow: "Gerade eben",
+        minutesAgoFormat: "vor %d Min.",
+        hoursAgoFormat: "vor %d Std.",
+        distanceAwayFormat: "%@ entfernt",
+        historyDefaultLabel: "Standard-Ansicht",
+        historyDefault24h: "24 Stunden",
+        historyDefault7d: "7 Tage",
         historyTitle: "Preisverlauf",
         historyDescription: "Wie sich die Preise zuletzt entwickelt haben.",
         countryDe: "Deutschland",
@@ -203,6 +226,17 @@ extension Strings {
         address: "Address",
         appleMaps: "Apple Maps",
         googleMaps: "Google Maps",
+        priceHistory: "PRICE HISTORY",
+        range24h: "24h",
+        noChartData: "No history data",
+        lastUpdatedFormat: "Last updated: %@",
+        justNow: "Just now",
+        minutesAgoFormat: "%d min ago",
+        hoursAgoFormat: "%d hrs ago",
+        distanceAwayFormat: "%@ away",
+        historyDefaultLabel: "Default view",
+        historyDefault24h: "24 hours",
+        historyDefault7d: "7 days",
         historyTitle: "Price history",
         historyDescription: "How prices have developed recently.",
         countryDe: "Germany",

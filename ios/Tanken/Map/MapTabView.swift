@@ -178,7 +178,11 @@ struct MapTabView: View {
         } content: {
             ZStack {
                 if let station = model.selectedStation {
-                    StationDetailView(station: station, band: model.band) {
+                    StationDetailView(
+                        station: station,
+                        band: model.band,
+                        dataTimestamp: model.lastDataAt
+                    ) {
                         model.select(nil)
                     }
                     .transition(

@@ -38,6 +38,10 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
     /// True once the camera moved meaningfully away from the last loaded center.
     var showSearchHere = false
 
+    /// When the currently shown station data was fetched — feeds the detail's "Zuletzt
+    /// aktualisiert" row like the web's dataTimestamp.
+    private(set) var lastDataAt: Date?
+
     private(set) var api = ApiClient(baseURL: URL(string: AppState.defaultBaseURL)!, sessionToken: nil)
     private(set) var fuel: FuelType = .diesel
 
@@ -127,6 +131,7 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
             lastLoadedCenter = center
             lastBoundsFetchRegion = nil
             bandCenter = center
+            lastDataAt = Date()
         }
     }
 
@@ -173,6 +178,7 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
                 stations = result
             }
             lastBoundsFetchRegion = region
+            lastDataAt = Date()
             refreshBandIfMoved(center: region.center)
         }
     }

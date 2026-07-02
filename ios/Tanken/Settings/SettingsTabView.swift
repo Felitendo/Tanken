@@ -46,6 +46,20 @@ struct SettingsTabView: View {
                         .sensoryFeedback(.selection, trigger: app.language)
                     }
 
+                    section(s.priceHistory) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(s.historyDefaultLabel)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Picker(s.historyDefaultLabel, selection: $app.historyDefaultDays) {
+                                Text(s.historyDefault24h).tag(1)
+                                Text(s.historyDefault7d).tag(7)
+                            }
+                            .pickerStyle(.segmented)
+                            .sensoryFeedback(.selection, trigger: app.historyDefaultDays)
+                        }
+                    }
+
                     section(s.server) {
                         serverCard
                     }
