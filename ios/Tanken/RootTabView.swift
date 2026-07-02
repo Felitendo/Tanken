@@ -31,6 +31,11 @@ struct RootTabView: View {
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .sensoryFeedback(.selection, trigger: selection)
+        .onChange(of: app.requestedTab) { _, tab in
+            guard let tab else { return }
+            selection = tab
+            app.requestedTab = nil
+        }
         .overlay(alignment: .bottom) {
             toastOverlay
         }

@@ -47,6 +47,13 @@ struct MapTabView: View {
                 }
             }
         }
+        .onChange(of: app.mapJumpTarget) { _, target in
+            guard let target else { return }
+            let coordinate = CLLocationCoordinate2D(latitude: target.lat, longitude: target.lng)
+            model.recenter(to: coordinate)
+            model.loadAround(center: coordinate)
+            app.mapJumpTarget = nil
+        }
         .task {
             model.configure(api: app.api, fuel: app.fuelType)
             model.start()

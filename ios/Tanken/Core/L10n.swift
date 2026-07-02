@@ -154,6 +154,16 @@ struct Strings {
     let stationRanking: String
     let dayAbbr: [String]
     let dayNames: [String]
+    // Settings: history locations + about parity
+    let historyLocations: String
+    let historyLocationsHint: String
+    let historyLocationsEmpty: String
+    let historyLocRadiusFormat: String
+    let historyLocTotalLabel: String
+    let historyLocShowOnMap: String
+    let contributors: String
+    let ownerRole: String
+    let aboutTagline: String
 }
 
 extension Strings {
@@ -285,7 +295,16 @@ extension Strings {
         hourRanking: "UHRZEITEN",
         stationRanking: "TANKSTELLEN RANKING",
         dayAbbr: ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"],
-        dayNames: ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"]
+        dayNames: ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"],
+        historyLocations: "STANDORTE MIT VERLAUFSDATEN",
+        historyLocationsHint: "Für diese Standorte sammeln wir täglich Preise für Verlaufscharts. Den aktuellen Preis kannst du jederzeit für jeden beliebigen Ort auf der Karte abrufen.",
+        historyLocationsEmpty: "Noch keine Standorte mit Verlaufsdaten.",
+        historyLocRadiusFormat: "%d km Umkreis",
+        historyLocTotalLabel: "Standorte",
+        historyLocShowOnMap: "Auf Karte anzeigen",
+        contributors: "Mitwirkende",
+        ownerRole: "Ersteller & Maintainer",
+        aboutTagline: "Spritpreise im Blick."
     )
 
     static let en = Strings(
@@ -416,7 +435,16 @@ extension Strings {
         hourRanking: "HOURS",
         stationRanking: "STATION RANKING",
         dayAbbr: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-        dayNames: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        dayNames: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+        historyLocations: "LOCATIONS WITH HISTORY DATA",
+        historyLocationsHint: "We collect daily prices for these locations so you can see trends on the history charts. For the current price you can search any location on the map at any time.",
+        historyLocationsEmpty: "No locations with history data yet.",
+        historyLocRadiusFormat: "%d km radius",
+        historyLocTotalLabel: "Locations",
+        historyLocShowOnMap: "Show on map",
+        contributors: "Contributors",
+        ownerRole: "Creator & Maintainer",
+        aboutTagline: "Fuel prices at a glance."
     )
 
     /// Resolves the catalogue from the persisted setting and the device language.

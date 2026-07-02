@@ -8,6 +8,7 @@ struct SettingsTabView: View {
 
     @State private var serverDraft = ""
     @State private var loggingIn = false
+    @State private var contributorsExpanded = true
 
     var body: some View {
         @Bindable var app = app
@@ -30,6 +31,8 @@ struct SettingsTabView: View {
                         AlertCard()
                     }
 
+                    ScanLocationsSection()
+
                     section(s.appearance) {
                         Picker(s.appearance, selection: $app.appearance) {
                             Text(s.themeAuto).tag(AppearanceSetting.auto)
@@ -38,16 +41,6 @@ struct SettingsTabView: View {
                         }
                         .pickerStyle(.segmented)
                         .sensoryFeedback(.selection, trigger: app.appearance)
-                    }
-
-                    section(s.language) {
-                        Picker(s.language, selection: $app.language) {
-                            Text(s.langAuto).tag(AppLanguage.auto)
-                            Text("Deutsch").tag(AppLanguage.de)
-                            Text("English").tag(AppLanguage.en)
-                        }
-                        .pickerStyle(.segmented)
-                        .sensoryFeedback(.selection, trigger: app.language)
                     }
 
                     section(s.priceHistory) {
@@ -62,6 +55,16 @@ struct SettingsTabView: View {
                             .pickerStyle(.segmented)
                             .sensoryFeedback(.selection, trigger: app.historyDefaultDays)
                         }
+                    }
+
+                    section(s.language) {
+                        Picker(s.language, selection: $app.language) {
+                            Text(s.langAuto).tag(AppLanguage.auto)
+                            Text("Deutsch").tag(AppLanguage.de)
+                            Text("English").tag(AppLanguage.en)
+                        }
+                        .pickerStyle(.segmented)
+                        .sensoryFeedback(.selection, trigger: app.language)
                     }
 
                     section(s.server) {
@@ -87,8 +90,19 @@ struct SettingsTabView: View {
     // MARK: - Account
 
     private var accountHero: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            heroContent
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .heroCardSurface(cornerRadius: Theme.rLg)
+        .animation(.spring(duration: 0.4), value: app.isLoggedIn)
+        .sensoryFeedback(.success, trigger: app.isLoggedIn)
+    }
+
+    @ViewBuilder
+    private var heroContent: some View {
+        Group {
                 HStack(spacing: 12) {
                     avatar
                     VStack(alignment: .leading, spacing: 2) {
@@ -139,10 +153,7 @@ struct SettingsTabView: View {
                     .buttonStyle(.glassProminent)
                     .disabled(loggingIn)
                 }
-            }
         }
-        .animation(.spring(duration: 0.4), value: app.isLoggedIn)
-        .sensoryFeedback(.success, trigger: app.isLoggedIn)
     }
 
     private var displayName: String {
@@ -166,7 +177,7 @@ struct SettingsTabView: View {
                 avatarPlaceholder
             }
         }
-        .frame(width: 52, height: 52)
+        .frame(width: 60, height: 60)
         .clipShape(Circle())
     }
 
@@ -261,42 +272,121 @@ struct SettingsTabView: View {
 
     // MARK: - About
 
+    /// About hero + links card mirroring the web's `.about-hero` and `.about-links-card`
+    /// (collapsible contributors list, GitHub link).
     private var aboutCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.accentColor.opacity(0.15))
-                            .frame(width: 44, height: 44)
-                        Image(systemName: "fuelpump.fill")
-                            .font(.title3)
-                            .foregroundStyle(Color.accentColor)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Tanken")
-                            .font(.headline)
-                        Text("\(s.version) \(appVersion)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.15))
+                        .frame(width: 68, height: 68)
+                    Image(systemName: "fuelpump.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(Color.accentColor)
                 }
-                .padding(.bottom, 12)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Tanken")
+                        .font(.title3.weight(.bold))
+                    Text("\(s.version) \(appVersion)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(s.aboutTagline)
+                        .font(.caption)
+                        .foregroundStyle(Theme.hint)
+                }
+            }
+            .padding(.horizontal, 2)
+
+            VStack(spacing: 0) {
+                Button {
+                    Haptics.light()
+                    withAnimation(.spring(duration: 0.3)) {
+                        contributorsExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24)
+                        Text(s.contributors)
+                            .font(.subheadline)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(contributorsExpanded ? 90 : 0))
+                    }
+                    .padding(14)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if contributorsExpanded {
+                    contributorRow
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
                 Divider()
+                    .padding(.leading, 14)
                 Link(destination: URL(string: "https://github.com/Felitendo/Tanken")!) {
-                    HStack {
+                    HStack(spacing: 12) {
+                        Image(systemName: "link")
+                            .font(.system(size: 15))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24)
                         Text(s.viewOnGithub)
                             .font(.subheadline)
-                        Spacer()
+                        Spacer(minLength: 0)
                         Image(systemName: "arrow.up.right")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.top, 12)
+                    .padding(14)
                 }
                 .tint(.primary)
             }
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.rMd, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: Theme.rMd, style: .continuous)
+                    .strokeBorder(Theme.separator, lineWidth: 1)
+            }
         }
+    }
+
+    /// Static contributor entry like the web's shell (Felitendo, GitHub avatar, role line).
+    private var contributorRow: some View {
+        Link(destination: URL(string: "https://github.com/Felitendo")!) {
+            HStack(spacing: 12) {
+                AsyncImage(url: URL(string: "https://github.com/Felitendo.png")) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    ZStack {
+                        Circle().fill(Color.accentColor.opacity(0.15))
+                        Text("F")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                .frame(width: 36, height: 36)
+                .clipShape(Circle())
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Felitendo")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text(s.ownerRole)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+        .tint(.primary)
     }
 
     private var appVersion: String {

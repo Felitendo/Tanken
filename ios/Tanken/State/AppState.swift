@@ -28,6 +28,12 @@ struct ToastMessage: Equatable {
     let text: String
 }
 
+/// Target for the settings → map "Auf Karte anzeigen" jump.
+struct MapJumpTarget: Equatable {
+    let lat: Double
+    let lng: Double
+}
+
 /// Central app state: persisted preferences (UserDefaults), the session token (Keychain), the
 /// remote account/config snapshots, favourites and the toast. Injected via `.environment(_:)`.
 @MainActor
@@ -99,6 +105,11 @@ final class AppState {
             scheduleSettingsSync()
         }
     }
+
+    /// Cross-tab navigation request (e.g. settings → map); consumed by RootTabView.
+    var requestedTab: AppTab?
+    /// Coordinate the map tab should center + load on after a tab jump; consumed by MapTabView.
+    var mapJumpTarget: MapJumpTarget?
 
     /// Selected history/stats scan location (nil = "Alle Standorte"); shared by both tabs like
     /// the web's synced pickers. Session-only, not persisted.
