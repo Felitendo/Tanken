@@ -164,6 +164,27 @@ struct Strings {
     let contributors: String
     let ownerRole: String
     let aboutTagline: String
+    // Location requests ("Meine Anfragen")
+    let myRequests: String
+    let requestLocation: String
+    let requestsLoginHint: String
+    let requestsOidcOnly: String
+    let requestPending: String
+    let requestApproved: String
+    let requestDenied: String
+    let requestSent: String
+    let requestSheetTitle: String
+    let requestName: String
+    let requestNamePlaceholder: String
+    let requestAddress: String
+    let requestAddressPlaceholder: String
+    let requestWhy: String
+    let requestWhyPlaceholder: String
+    let requestSubmit: String
+    let requestSending: String
+    let requestFailed: String
+    let requestTooMany: String
+    let requestDeniedReason: String
 }
 
 extension Strings {
@@ -304,7 +325,27 @@ extension Strings {
         historyLocShowOnMap: "Auf Karte anzeigen",
         contributors: "Mitwirkende",
         ownerRole: "Ersteller & Maintainer",
-        aboutTagline: "Spritpreise im Blick."
+        aboutTagline: "Spritpreise im Blick.",
+        myRequests: "MEINE ANFRAGEN",
+        requestLocation: "Standort anfragen",
+        requestsLoginHint: "Mit FeloID anmelden, um neue Scan-Standorte anzufragen.",
+        requestsOidcOnly: "Standort-Anfragen nur mit FeloID-Anmeldung möglich.",
+        requestPending: "Ausstehend",
+        requestApproved: "Genehmigt",
+        requestDenied: "Abgelehnt",
+        requestSent: "Anfrage gesendet",
+        requestSheetTitle: "Neuen Scan-Standort anfragen",
+        requestName: "Name",
+        requestNamePlaceholder: "z.B. Mein Heimatort",
+        requestAddress: "Adresse oder Ort",
+        requestAddressPlaceholder: "Adresse oder Ort suchen…",
+        requestWhy: "Begründung (optional)",
+        requestWhyPlaceholder: "Warum sollte hier gescannt werden?",
+        requestSubmit: "Anfrage senden",
+        requestSending: "Wird gesendet…",
+        requestFailed: "Anfrage fehlgeschlagen",
+        requestTooMany: "Zu viele offene Anfragen. Warte bitte auf Bearbeitung.",
+        requestDeniedReason: "Begründung"
     )
 
     static let en = Strings(
@@ -444,7 +485,27 @@ extension Strings {
         historyLocShowOnMap: "Show on map",
         contributors: "Contributors",
         ownerRole: "Creator & Maintainer",
-        aboutTagline: "Fuel prices at a glance."
+        aboutTagline: "Fuel prices at a glance.",
+        myRequests: "MY REQUESTS",
+        requestLocation: "Request location",
+        requestsLoginHint: "Sign in with FeloID to request new scan locations.",
+        requestsOidcOnly: "Location requests require a FeloID login.",
+        requestPending: "Pending",
+        requestApproved: "Approved",
+        requestDenied: "Denied",
+        requestSent: "Request sent",
+        requestSheetTitle: "Request a new scan location",
+        requestName: "Name",
+        requestNamePlaceholder: "e.g. My hometown",
+        requestAddress: "Address or place",
+        requestAddressPlaceholder: "Search address or place…",
+        requestWhy: "Reason (optional)",
+        requestWhyPlaceholder: "Why should this area be scanned?",
+        requestSubmit: "Send request",
+        requestSending: "Sending…",
+        requestFailed: "Request failed",
+        requestTooMany: "Too many pending requests. Please wait for review.",
+        requestDeniedReason: "Reason"
     )
 
     /// Resolves the catalogue from the persisted setting and the device language.

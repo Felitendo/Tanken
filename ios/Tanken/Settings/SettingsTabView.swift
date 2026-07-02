@@ -33,6 +33,8 @@ struct SettingsTabView: View {
 
                     ScanLocationsSection()
 
+                    LocationRequestsSection()
+
                     section(s.appearance) {
                         Picker(s.appearance, selection: $app.appearance) {
                             Text(s.themeAuto).tag(AppearanceSetting.auto)
