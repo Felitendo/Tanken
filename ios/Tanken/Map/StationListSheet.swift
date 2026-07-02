@@ -18,7 +18,6 @@ struct StationListSheet: View {
                 list
             }
         }
-        .background(Theme.background)
     }
 
     private var header: some View {

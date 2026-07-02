@@ -2,7 +2,8 @@ import SwiftUI
 import MapKit
 
 /// The Karte tab: Apple Maps with price-bubble annotations, Liquid Glass search overlay,
-/// "Hier suchen" pill, locate-me FAB and a persistent bottom drawer (station list → detail).
+/// "Hier suchen" pill, locate-me FAB and an inline bottom drawer (station list → detail).
+/// The drawer is deliberately not a `.sheet` — sheets cover the Liquid Glass tab bar.
 struct MapTabView: View {
     @Environment(AppState.self) private var app
     @Environment(\.strings) private var s
@@ -15,12 +16,55 @@ struct MapTabView: View {
         )
     )
     @State private var query = ""
-    @State private var sheetVisible = false
-    @State private var detent: PresentationDetent = .height(88)
+    @State private var drawerState: DrawerState = .collapsed
     @State private var path: [Station] = []
     @Namespace private var glass
 
     var body: some View {
+        ZStack(alignment: .bottom) {
+            mapLayer
+            drawer
+        }
+        .onChange(of: model.recenterTarget) { _, target in
+            guard let target else { return }
+            withAnimation(.spring(duration: 0.7)) {
+                camera = .region(
+                    MKCoordinateRegion(
+                        center: target.coordinate,
+                        span: MKCoordinateSpan(latitudeDelta: 0.18, longitudeDelta: 0.18)
+                    )
+                )
+            }
+        }
+        .onChange(of: model.selectedStation) { _, station in
+            guard let station else { return }
+            path = [station]
+            if drawerState == .collapsed {
+                withAnimation(.spring(duration: 0.35)) {
+                    drawerState = .half
+                }
+            }
+        }
+        .onChange(of: path) { _, newPath in
+            if newPath.isEmpty {
+                model.select(nil)
+            }
+        }
+        .task {
+            model.configure(api: app.api, fuel: app.fuelType)
+            model.start()
+        }
+        .onChange(of: app.fuelType) {
+            model.configure(api: app.api, fuel: app.fuelType)
+        }
+        .onChange(of: app.baseURLString) {
+            model.configure(api: app.api, fuel: app.fuelType)
+        }
+    }
+
+    // MARK: - Map
+
+    private var mapLayer: some View {
         Map(position: $camera) {
             UserAnnotation()
             ForEach(model.stations.filter { $0.price != nil }) { station in
@@ -48,44 +92,6 @@ struct MapTabView: View {
         }
         .overlay(alignment: .top) { topOverlay }
         .overlay(alignment: .bottomTrailing) { locateFab }
-        .onChange(of: model.recenterTarget) { _, target in
-            guard let target else { return }
-            withAnimation(.spring(duration: 0.7)) {
-                camera = .region(
-                    MKCoordinateRegion(
-                        center: target.coordinate,
-                        span: MKCoordinateSpan(latitudeDelta: 0.18, longitudeDelta: 0.18)
-                    )
-                )
-            }
-        }
-        .onChange(of: model.selectedStation) { _, station in
-            guard let station else { return }
-            path = [station]
-            if detent == .height(88) {
-                withAnimation(.spring(duration: 0.35)) {
-                    detent = .fraction(0.45)
-                }
-            }
-        }
-        .onChange(of: path) { _, newPath in
-            if newPath.isEmpty {
-                model.select(nil)
-            }
-        }
-        .task {
-            model.configure(api: app.api, fuel: app.fuelType)
-            model.start()
-        }
-        .onChange(of: app.fuelType) {
-            model.configure(api: app.api, fuel: app.fuelType)
-        }
-        .onChange(of: app.baseURLString) {
-            model.configure(api: app.api, fuel: app.fuelType)
-        }
-        .onAppear { sheetVisible = true }
-        .onDisappear { sheetVisible = false }
-        .sheet(isPresented: $sheetVisible) { drawer }
     }
 
     // MARK: - Overlays
@@ -174,23 +180,21 @@ struct MapTabView: View {
     // MARK: - Drawer
 
     private var drawer: some View {
-        NavigationStack(path: $path) {
-            StationListSheet(
-                stations: model.sortedStations,
-                band: model.band,
-                loading: model.loading
-            ) { station in
-                Haptics.light()
-                model.select(station)
-            }
-            .navigationDestination(for: Station.self) { station in
-                StationDetailView(station: station, band: model.band)
+        BottomDrawer(state: $drawerState) {
+            NavigationStack(path: $path) {
+                StationListSheet(
+                    stations: model.sortedStations,
+                    band: model.band,
+                    loading: model.loading
+                ) { station in
+                    Haptics.light()
+                    model.select(station)
+                }
+                .navigationDestination(for: Station.self) { station in
+                    StationDetailView(station: station, band: model.band)
+                }
             }
         }
-        .presentationDetents([.height(88), .fraction(0.45), .large], selection: $detent)
-        .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.45)))
-        .presentationDragIndicator(.visible)
-        .interactiveDismissDisabled()
     }
 
     // MARK: - Search
