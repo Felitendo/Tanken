@@ -229,15 +229,15 @@ struct PriceAlert: Codable {
     var fuel: FuelType
     var enabled: Bool
     var channel: String
-    var ntfyTopic: String?
-    var email: String?
-    var lat: Double?
-    var lng: Double?
-    var radiusKm: Double?
-    var lastNotifiedAt: String?
-    var lastNotifiedPrice: Double?
-    var created: String?
-    var updated: String?
+    var ntfyTopic: String? = nil
+    var email: String? = nil
+    var lat: Double? = nil
+    var lng: Double? = nil
+    var radiusKm: Double? = nil
+    var lastNotifiedAt: String? = nil
+    var lastNotifiedPrice: Double? = nil
+    var created: String? = nil
+    var updated: String? = nil
 }
 
 struct AlertResponse: Codable {

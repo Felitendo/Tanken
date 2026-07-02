@@ -182,6 +182,16 @@ struct ApiClient {
         _ = try await send("/api/alert", method: "DELETE")
     }
 
+    /// Fires a test push through the server's ntfy proxy (`POST /api/alert/notify`).
+    func sendTestNotification(topic: String, title: String, message: String) async throws {
+        struct Body: Encodable {
+            let topic: String
+            let title: String
+            let message: String
+        }
+        _ = try await send("/api/alert/notify", method: "POST", body: Body(topic: topic, title: title, message: message))
+    }
+
     // MARK: - Plumbing
 
     private func url(_ path: String, query: [URLQueryItem]) throws -> URL {

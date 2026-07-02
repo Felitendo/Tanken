@@ -26,6 +26,10 @@ struct SettingsTabView: View {
                         }
                     }
 
+                    section(s.priceAlert) {
+                        AlertCard()
+                    }
+
                     section(s.appearance) {
                         Picker(s.appearance, selection: $app.appearance) {
                             Text(s.themeAuto).tag(AppearanceSetting.auto)

@@ -82,6 +82,23 @@ struct Strings {
     let cheapestTime: String
     let clockSuffix: String
     let cheapestStations: String
+    // Price alert
+    let priceAlert: String
+    let notification: String
+    let alertBackgroundHint: String
+    let threshold: String
+    let notificationChannel: String
+    let ntfyTopicPlaceholder: String
+    let ntfyHint: String
+    let emailPlaceholder: String
+    let emailHint: String
+    let saveAlarm: String
+    let sendTestNotification: String
+    let alertStatusInactive: String
+    let alertStatusActive: String
+    let alertLoginRequired: String
+    let alertSaved: String
+    let testSent: String
     // Settings
     let settingsTitle: String
     let settingsDescription: String
@@ -176,6 +193,22 @@ extension Strings {
         cheapestTime: "Günstigste Tageszeit",
         clockSuffix: " Uhr",
         cheapestStations: "Günstigste Tankstellen (Ø)",
+        priceAlert: "PREISALARM",
+        notification: "Benachrichtigung",
+        alertBackgroundHint: "Läuft im Hintergrund, auch wenn die App geschlossen ist.",
+        threshold: "Schwellenwert",
+        notificationChannel: "Benachrichtigungskanal",
+        ntfyTopicPlaceholder: "ntfy Topic (z.B. mein-tankalarm)",
+        ntfyHint: "Installiere die ntfy App und abonniere dein Topic.",
+        emailPlaceholder: "E-Mail-Adresse",
+        emailHint: "Preisalarme werden an diese Adresse gesendet.",
+        saveAlarm: "Alarm speichern",
+        sendTestNotification: "Test-Benachrichtigung senden",
+        alertStatusInactive: "Noch nicht aktiv",
+        alertStatusActive: "Aktiv",
+        alertLoginRequired: "Melde dich an, um Preisalarme einzurichten.",
+        alertSaved: "Alarm gespeichert",
+        testSent: "Test gesendet",
         settingsTitle: "Einstellungen",
         settingsDescription: "Deine App-Einstellungen und dein Konto.",
         feloId: "FELO ID",
@@ -267,6 +300,22 @@ extension Strings {
         cheapestTime: "Cheapest time of day",
         clockSuffix: "",
         cheapestStations: "Cheapest stations (avg)",
+        priceAlert: "PRICE ALERT",
+        notification: "Notification",
+        alertBackgroundHint: "Runs in the background, even when the app is closed.",
+        threshold: "Threshold",
+        notificationChannel: "Notification channel",
+        ntfyTopicPlaceholder: "ntfy topic (e.g. my-fuel-alert)",
+        ntfyHint: "Install the ntfy app and subscribe to your topic.",
+        emailPlaceholder: "Email address",
+        emailHint: "Price alerts are sent to this address.",
+        saveAlarm: "Save alert",
+        sendTestNotification: "Send test notification",
+        alertStatusInactive: "Not active yet",
+        alertStatusActive: "Active",
+        alertLoginRequired: "Sign in to set up price alerts.",
+        alertSaved: "Alert saved",
+        testSent: "Test sent",
         settingsTitle: "Settings",
         settingsDescription: "Your app settings and your account.",
         feloId: "FELO ID",
