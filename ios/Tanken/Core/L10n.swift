@@ -88,6 +88,7 @@ struct Strings {
     let madeWithLove: String
     // Common
     let cancel: String
+    let apply: String
     let retry: String
     let errorGeneric: String
 }
@@ -162,6 +163,7 @@ extension Strings {
         viewOnGithub: "Auf GitHub ansehen",
         madeWithLove: "Gemacht mit ❤️ in Deutschland",
         cancel: "Abbrechen",
+        apply: "Übernehmen",
         retry: "Erneut versuchen",
         errorGeneric: "Etwas ist schiefgelaufen."
     )
@@ -235,6 +237,7 @@ extension Strings {
         viewOnGithub: "View on GitHub",
         madeWithLove: "Made with ❤️ in Germany",
         cancel: "Cancel",
+        apply: "Apply",
         retry: "Retry",
         errorGeneric: "Something went wrong."
     )
