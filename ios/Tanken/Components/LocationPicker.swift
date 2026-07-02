@@ -19,7 +19,7 @@ enum LocationPickerData {
         async let scanLocations = api.scanLocations()
         let ids = (try? await historyIds)?.locations ?? []
         let scans = (try? await scanLocations)?.locations ?? []
-        let byId = Dictionary(uniqueKeysWithValues: scans.map { ($0.id, $0) })
+        let byId = Dictionary(scans.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         // Drop ids that no longer match any admin scan location — legacy/orphan history rows.
         return ids.compactMap { id in
             guard let scan = byId[id], scan.country == country.rawValue else { return nil }
