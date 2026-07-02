@@ -142,6 +142,18 @@ struct Strings {
     let periodToday: String
     let periodLastDaysFormat: String
     let periodSinceFormat: String
+    // Stats parity (web keys: avgPrice, priceSpread, measurements, bestTimes, …)
+    let avgPrice: String
+    let priceSpread: String
+    let measurements: String
+    let bestTimes: String
+    let cheapestDay: String
+    let cheapestHourLabel: String
+    let vsWorst: String
+    let hourRanking: String
+    let stationRanking: String
+    let dayAbbr: [String]
+    let dayNames: [String]
 }
 
 extension Strings {
@@ -262,7 +274,18 @@ extension Strings {
         highestPrice: "Höchster Preis",
         periodToday: "Heute",
         periodLastDaysFormat: "Letzte %d Tage",
-        periodSinceFormat: "Seit %@"
+        periodSinceFormat: "Seit %@",
+        avgPrice: "Durchschnittspreis",
+        priceSpread: "PREISSPANNE",
+        measurements: "Messungen",
+        bestTimes: "BESTE TANKZEITEN",
+        cheapestDay: "Günstigster Wochentag",
+        cheapestHourLabel: "Günstigste Uhrzeit",
+        vsWorst: "gespart",
+        hourRanking: "UHRZEITEN",
+        stationRanking: "TANKSTELLEN RANKING",
+        dayAbbr: ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"],
+        dayNames: ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"]
     )
 
     static let en = Strings(
@@ -382,7 +405,18 @@ extension Strings {
         highestPrice: "Highest Price",
         periodToday: "Today",
         periodLastDaysFormat: "Last %d days",
-        periodSinceFormat: "Since %@"
+        periodSinceFormat: "Since %@",
+        avgPrice: "Average Price",
+        priceSpread: "PRICE SPREAD",
+        measurements: "Measurements",
+        bestTimes: "BEST REFUELING TIMES",
+        cheapestDay: "Cheapest Day",
+        cheapestHourLabel: "Cheapest Hour",
+        vsWorst: "saved",
+        hourRanking: "HOURS",
+        stationRanking: "STATION RANKING",
+        dayAbbr: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+        dayNames: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     )
 
     /// Resolves the catalogue from the persisted setting and the device language.

@@ -61,6 +61,27 @@ enum Theme {
         return priceColor(ratio: priceRatio(price: price, p10: p10, p90: p90))
     }
 
+    /// `rankColor(ratio)` from public/app.js — the stats gradient with an orange midpoint:
+    /// green (#34c759) → orange (#ff9500) → red (#ff3b30). Used by weekday tiles, the hour
+    /// chart points and the station-ranking stripes.
+    static func rankColor(ratio: Double) -> Color {
+        let x = min(max(ratio, 0), 1)
+        if x <= 0.5 {
+            let t = x * 2
+            return Color(
+                red: (52.0 + t * 203.0).rounded() / 255.0,
+                green: (199.0 - t * 50.0).rounded() / 255.0,
+                blue: (89.0 - t * 89.0).rounded() / 255.0
+            )
+        }
+        let t = (x - 0.5) * 2
+        return Color(
+            red: 1.0,
+            green: (149.0 - t * 90.0).rounded() / 255.0,
+            blue: (t * 48.0).rounded() / 255.0
+        )
+    }
+
     // MARK: - Chart domains
 
     /// Padded y-domain for price charts: [min − pad, max + pad] with a minimum spread, so tightly

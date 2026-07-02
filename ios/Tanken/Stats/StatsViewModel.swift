@@ -55,6 +55,16 @@ final class StatsViewModel {
         Array((stats?.stationRanking ?? []).prefix(10))
     }
 
+    /// Days sorted ascending by average price (the server pre-sorts, this is defensive).
+    var dayAvgsByAvg: [DayAvg] {
+        (stats?.dayAvgs ?? []).sorted { $0.avg < $1.avg }
+    }
+
+    /// Hours sorted ascending by average price.
+    var hourAvgsByAvg: [HourAvg] {
+        (stats?.hourAvgs ?? []).sorted { $0.avg < $1.avg }
+    }
+
     /// The cheapest hour of the day, for the headline fact tile.
     var cheapestHour: HourAvg? {
         hourAvgs.min { $0.avg < $1.avg }

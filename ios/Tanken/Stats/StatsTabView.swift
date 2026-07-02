@@ -8,14 +8,18 @@ struct StatsTabView: View {
     @Environment(\.strings) private var s
 
     @State private var model = StatsViewModel()
+    @State private var detailTarget: StationDetailTarget?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(s.statsDescription)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(s.statsDescription)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Divider()
+                    }
 
                     countryChips
                     if !model.locationOptions.isEmpty {
@@ -36,10 +40,11 @@ struct StatsTabView: View {
                     } else if model.stats == nil || model.dayAvgs.isEmpty {
                         emptyState
                     } else {
-                        overallTiles
-                        weekdayCard
-                        hourCard
-                        rankingCard
+                        heroSection
+                        bestTimesSection
+                        weekdaySection
+                        hourSection
+                        rankingSection
                     }
                 }
                 .padding(16)
@@ -51,6 +56,14 @@ struct StatsTabView: View {
                 Haptics.light()
                 await model.load(api: app.api, location: app.historyLocation)
             }
+        }
+        .sheet(item: $detailTarget) { target in
+            StationDetailSheet(
+                stationId: target.id,
+                fallbackName: target.name,
+                fallbackBrand: target.brand,
+                fallbackPrice: target.price
+            )
         }
         .task {
             await model.loadIfNeeded(api: app.api, location: app.historyLocation)
@@ -86,43 +99,139 @@ struct StatsTabView: View {
         }
     }
 
-    private var overallTiles: some View {
-        HStack(spacing: 10) {
-            StatTile(
-                title: s.lowest,
-                value: Formatters.price(model.stats?.overall?.lowestEver),
-                color: Theme.good
+    /// Hero card + 3-up fact row (web `.stats-hero-section`).
+    private var heroSection: some View {
+        VStack(spacing: 8) {
+            StatsHeroCard(
+                avg: model.stats?.overall?.avg,
+                lowest: model.stats?.overall?.lowestEver,
+                highest: model.stats?.overall?.highestEver,
+                periodLabel: periodLabel,
+                avgLabel: s.avgPrice,
+                spreadCaption: s.priceSpread
             )
-            StatTile(
-                title: s.average30d,
-                value: Formatters.price(model.stats?.overall?.avg),
-                color: .primary
-            )
-            StatTile(
-                title: s.highest,
-                value: Formatters.price(model.stats?.overall?.highestEver),
-                color: Theme.bad
-            )
+            HStack(spacing: 8) {
+                FactCard(
+                    icon: "chart.line.downtrend.xyaxis",
+                    label: s.lowest,
+                    value: Formatters.price(model.stats?.overall?.lowestEver),
+                    color: Theme.good
+                )
+                FactCard(
+                    icon: "chart.line.uptrend.xyaxis",
+                    label: s.highest,
+                    value: Formatters.price(model.stats?.overall?.highestEver),
+                    color: Theme.bad
+                )
+                FactCard(
+                    icon: "chart.bar.fill",
+                    label: s.measurements,
+                    value: "\(model.stats?.overall?.entries ?? 0)",
+                    color: Color.accentColor
+                )
+            }
         }
     }
 
-    private var weekdayCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(text: s.weekdays)
-                let avgValues = model.dayAvgs.map(\.avg)
-                // Bars start at the domain floor instead of 0 — averages cluster within ~0.4 €,
-                // zero-based bars would all look identical. Short labels ("So", "Mo", …) keep the
-                // seven columns from truncating ("Sonnt…").
-                let domain = Theme.priceDomain(for: avgValues)
-                Chart(model.dayAvgs, id: \.day) { day in
-                    BarMark(
-                        x: .value("Tag", String((day.name ?? String(day.day)).prefix(2))),
+    /// "Heute" / "Letzte N Tage" / "Seit {Datum}" from overall.since/until (web periodLabel).
+    private var periodLabel: String? {
+        guard let since = Formatters.date(from: model.stats?.overall?.since) else { return nil }
+        let until = Formatters.date(from: model.stats?.overall?.until) ?? Date()
+        let days = max(1, Int((until.timeIntervalSince(since) / 86400).rounded()) + 1)
+        if days < 2 { return s.periodToday }
+        if days < 90 { return String(format: s.periodLastDaysFormat, days) }
+        return String(format: s.periodSinceFormat, since.formatted(.dateTime.day().month(.wide).year()))
+    }
+
+    /// Cheapest day + cheapest hour cards with savings pills (web `.best-time-grid`).
+    private var bestTimesSection: some View {
+        let bestDay = model.dayAvgsByAvg.first
+        let worstDay = model.dayAvgsByAvg.last
+        let bestHour = model.hourAvgsByAvg.first
+        let worstHour = model.hourAvgsByAvg.last
+        let dayDelta = max((worstDay?.avg ?? 0) - (bestDay?.avg ?? 0), 0)
+        let hourDelta = max((worstHour?.avg ?? 0) - (bestHour?.avg ?? 0), 0)
+
+        return VStack(alignment: .leading, spacing: 8) {
+            SectionHeader(text: s.bestTimes)
+            HStack(spacing: 12) {
+                BestTimeCard(
+                    icon: "calendar",
+                    label: s.cheapestDay,
+                    value: bestDay.map { dayName(for: $0.day) } ?? "–",
+                    price: Formatters.price(bestDay?.avg),
+                    savings: dayDelta > 0.005 ? savingsLabel(dayDelta) : nil
+                )
+                BestTimeCard(
+                    icon: "clock",
+                    label: s.cheapestHourLabel,
+                    value: bestHour.map { "\($0.hour):00\(s.clockSuffix)" } ?? "–",
+                    price: Formatters.price(bestHour?.avg),
+                    savings: hourDelta > 0.005 ? savingsLabel(hourDelta) : nil
+                )
+            }
+        }
+    }
+
+    private func dayName(for day: Int) -> String {
+        guard day >= 0, day < s.dayNames.count else { return "–" }
+        return s.dayNames[day]
+    }
+
+    private func savingsLabel(_ delta: Double) -> String {
+        "−" + String(format: "%.2f€", delta).replacingOccurrences(of: ".", with: ",") + " " + s.vsWorst
+    }
+
+    private var weekdaySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader(text: s.weekdays.uppercased())
+            WeekdayTileGrid(dayAvgs: model.stats?.dayAvgs ?? [], dayAbbr: s.dayAbbr)
+        }
+    }
+
+    /// Hour-of-day line chart with rank-colored points (web `renderStatsHourChart`).
+    private var hourSection: some View {
+        let rankMap = Dictionary(uniqueKeysWithValues: model.hourAvgsByAvg.enumerated().map { ($0.element.hour, $0.offset) })
+        let count = model.hourAvgsByAvg.count
+        let domain = Theme.priceDomain(for: model.hourAvgs.map(\.avg))
+
+        return VStack(alignment: .leading, spacing: 8) {
+            SectionHeader(text: s.hourRanking)
+            Card {
+                Chart(model.hourAvgs, id: \.hour) { hour in
+                    AreaMark(
+                        x: .value("Stunde", hour.hour),
                         yStart: .value("Ø", domain.lowerBound),
-                        yEnd: .value("Ø", day.avg)
+                        yEnd: .value("Ø", hour.avg)
                     )
-                    .foregroundStyle(Theme.priceColor(ratio: model.ratio(of: day.avg, within: avgValues)))
-                    .cornerRadius(4)
+                    .foregroundStyle(LinearGradient(
+                        colors: [Theme.bad.opacity(0.34), Theme.okay.opacity(0.18), Color.yellow.opacity(0.04)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ))
+                    .interpolationMethod(.monotone)
+
+                    LineMark(
+                        x: .value("Stunde", hour.hour),
+                        y: .value("Ø", hour.avg)
+                    )
+                    .foregroundStyle(Theme.okay)
+                    .interpolationMethod(.monotone)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
+
+                    PointMark(
+                        x: .value("Stunde", hour.hour),
+                        y: .value("Ø", hour.avg)
+                    )
+                    .foregroundStyle(Theme.rankColor(ratio: count > 1 ? Double(rankMap[hour.hour] ?? 0) / Double(count - 1) : 0))
+                    .symbolSize(rankMap[hour.hour] == 0 ? 120 : 45)
+                }
+                .chartXScale(domain: 0...23)
+                .chartXAxis {
+                    AxisMarks(values: [0, 6, 12, 18, 23]) { _ in
+                        AxisGridLine()
+                        AxisValueLabel()
+                    }
                 }
                 .chartYScale(domain: domain)
                 .frame(height: 160)
@@ -130,75 +239,76 @@ struct StatsTabView: View {
         }
     }
 
-    private var hourCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(text: s.cheapestTime)
-                if let cheapest = model.cheapestHour {
-                    Text("\(cheapest.hour):00\(s.clockSuffix)")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(Theme.good)
-                        .contentTransition(.numericText())
-                }
-                let avgValues = model.hourAvgs.map(\.avg)
-                let domain = Theme.priceDomain(for: avgValues)
-                Chart(model.hourAvgs, id: \.hour) { hour in
-                    BarMark(
-                        x: .value("Stunde", hour.hour),
-                        yStart: .value("Ø", domain.lowerBound),
-                        yEnd: .value("Ø", hour.avg)
-                    )
-                    .foregroundStyle(Theme.priceColor(ratio: model.ratio(of: hour.avg, within: avgValues)))
-                    .cornerRadius(2)
-                }
-                .chartXAxis {
-                    AxisMarks(values: Array(stride(from: 0, through: 23, by: 6))) { _ in
-                        AxisGridLine()
-                        AxisValueLabel()
+    /// Top-10 ranking rows with medals, rank-colored stripe and Ø price (web `.stats-station-list`).
+    private var rankingSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader(text: s.stationRanking)
+            VStack(spacing: 0) {
+                let count = model.ranking.count
+                ForEach(Array(model.ranking.enumerated()), id: \.offset) { index, rank in
+                    rankingRow(index: index, rank: rank, count: count)
+                    if index < count - 1 {
+                        Divider().padding(.leading, 22)
                     }
                 }
-                .chartYScale(domain: domain)
-                .frame(height: 140)
+            }
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.rMd, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: Theme.rMd, style: .continuous)
+                    .strokeBorder(Theme.separator, lineWidth: 1)
             }
         }
     }
 
-    private var rankingCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 4) {
-                SectionHeader(text: s.cheapestStations)
-                    .padding(.bottom, 6)
-                ForEach(Array(model.ranking.enumerated()), id: \.offset) { index, rank in
-                    HStack(spacing: 10) {
-                        Text("\(index + 1)")
-                            .font(.footnote.weight(.bold))
-                            .foregroundStyle(index < 3 ? Color.accentColor : Theme.hint)
-                            .frame(width: 22, alignment: .center)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(rank.brand ?? rank.station ?? "")
-                                .font(.subheadline.weight(.medium))
-                                .lineLimit(1)
-                            if rank.brand != nil, let station = rank.station {
-                                Text(station)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                        Spacer(minLength: 8)
-                        Text(Formatters.price(rank.avg))
-                            .font(.subheadline.weight(.semibold))
-                            .contentTransition(.numericText())
-                    }
-                    .padding(.vertical, 6)
-                    .scrollTransition(axis: .vertical) { content, phase in
-                        content.opacity(phase.isIdentity ? 1 : 0.6)
-                    }
-                    if index < model.ranking.count - 1 {
-                        Divider()
-                    }
+    private func rankingRow(index: Int, rank: StationRank, count: Int) -> some View {
+        let ratio = count > 1 ? Double(index) / Double(count - 1) : 0
+        let color = Theme.rankColor(ratio: ratio)
+        let isMedal = index < 3
+        let medal = index == 0 ? "🥇" : index == 1 ? "🥈" : index == 2 ? "🥉" : "\(index + 1)"
+
+        return Button {
+            guard let id = rank.id else { return }
+            Haptics.light()
+            detailTarget = StationDetailTarget(id: id, name: rank.station, brand: rank.brand, price: rank.avg)
+        } label: {
+            HStack(spacing: 12) {
+                Text(medal)
+                    .font(.system(size: isMedal ? 17 : 13, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.hint)
+                    .frame(width: 24)
+                Text(rank.station ?? "")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("Ø")
+                        .font(.system(size: 11, weight: .semibold))
+                        .opacity(0.65)
+                    Text(Formatters.price(rank.avg))
+                        .font(.system(size: 15, weight: .semibold))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
                 }
+                .foregroundStyle(color)
             }
+            .padding(.vertical, 12)
+            .padding(.leading, 22)
+            .padding(.trailing, 16)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .leading) {
+            Capsule()
+                .fill(color)
+                .frame(width: isMedal ? 4 : 3)
+                .padding(.vertical, isMedal ? 8 : 10)
+                .padding(.leading, 6)
+        }
+        .scrollTransition(axis: .vertical) { content, phase in
+            content.opacity(phase.isIdentity ? 1 : 0.6)
         }
     }
 
