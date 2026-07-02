@@ -21,20 +21,21 @@ struct RecenterTarget: Equatable {
     }
 }
 
-/// Drives the map tab: station + price-band loading around a center or for the visible viewport
-/// (debounced), one-shot "locate me", and the current selection. The view injects the current
-/// `ApiClient`/`FuelType` via `configure` so base-URL or fuel changes re-point everything.
+/// Drives the map tab: station + price-band loading around a center or for the visible viewport,
+/// one-shot "locate me", and the current selection. Viewport refreshes are threshold-gated and
+/// silent so the list stays calm while the user pans; explicit loads show the loading state.
 @MainActor
 @Observable
 final class MapViewModel: NSObject, CLLocationManagerDelegate {
     var stations: [Station] = []
     var band: PriceBand?
+    /// True only during explicit loads (start, locate-me, search, "Hier suchen") — background
+    /// viewport refreshes stay silent to avoid list flicker.
     var loading = false
     var selectedStation: Station?
     /// Set when the map should animate to a new center (user location, search result).
-    /// Wrapped so `onChange` fires even when the same coordinate is requested twice.
     var recenterTarget: RecenterTarget?
-    /// True once the camera moved away from the last loaded center.
+    /// True once the camera moved meaningfully away from the last loaded center.
     var showSearchHere = false
 
     private(set) var api = ApiClient(baseURL: URL(string: AppState.defaultBaseURL)!, sessionToken: nil)
@@ -44,9 +45,15 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
     private var boundsTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
     private var started = false
-    private var lastRegion: MKCoordinateRegion?
+    private(set) var lastRegion: MKCoordinateRegion?
+    private var lastLoadedCenter: CLLocationCoordinate2D?
+    private var lastBoundsFetchRegion: MKCoordinateRegion?
     private var bandCenter: CLLocationCoordinate2D?
+    /// Camera-rest events caused by our own recenter animations are consumed once so they don't
+    /// pop the "Hier suchen" pill or trigger a redundant viewport fetch.
+    private var suppressNextCameraEvent = false
 
+    private static let fallbackCenter = CLLocationCoordinate2D(latitude: 51.1657, longitude: 10.4515)
     /// Auto-fetch viewport stations only when zoomed in at least this far (like the web grid).
     private static let maxAutoSpanDegrees = 0.7
 
@@ -64,7 +71,7 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    /// First appearance: locate the user if possible, otherwise load around the last/default center.
+    /// First appearance: locate the user if possible, otherwise load around the default center.
     func start() {
         guard !started else { return }
         started = true
@@ -74,7 +81,7 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
         case .authorizedWhenInUse, .authorizedAlways:
             locationManager.requestLocation()
         default:
-            loadAround(center: CLLocationCoordinate2D(latitude: 51.1657, longitude: 10.4515))
+            loadAround(center: Self.fallbackCenter)
         }
     }
 
@@ -88,6 +95,12 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
         default:
             break
         }
+    }
+
+    /// Programmatic camera move — flags the resulting camera-rest event as self-inflicted.
+    func recenter(to coordinate: CLLocationCoordinate2D) {
+        suppressNextCameraEvent = true
+        recenterTarget = RecenterTarget(coordinate)
     }
 
     /// Center-based load: cached scan data if nearby, else a live Tankerkönig/E-Control call.
@@ -106,25 +119,44 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
             let newStations = (try? await stationsResult) ?? []
             let newBand = try? await bandResult
             guard !Task.isCancelled else { return }
-            withAnimation(.spring(duration: 0.45)) {
+            withAnimation(.easeInOut(duration: 0.25)) {
                 stations = newStations
                 band = newBand?.band
                 loading = false
             }
+            lastLoadedCenter = center
+            lastBoundsFetchRegion = nil
             bandCenter = center
         }
     }
 
-    /// Called on every camera rest: remembers the region, offers "Hier suchen" and auto-fetches
-    /// viewport stations from the cache grid when zoomed in (debounced against camera bursts).
+    /// Called on every camera rest. Programmatic moves are consumed; user pans offer "Hier suchen"
+    /// once they leave the loaded area and silently refresh viewport stations when the view moved
+    /// far enough from the last fetch (no loading UI, no reshuffle animation churn).
     func cameraChanged(_ region: MKCoordinateRegion) {
         lastRegion = region
-        if !showSearchHere {
+        if suppressNextCameraEvent {
+            suppressNextCameraEvent = false
+            return
+        }
+
+        if !showSearchHere, movedMeters(from: lastLoadedCenter, to: region.center) > 2_000 {
             withAnimation(.spring(duration: 0.3)) {
                 showSearchHere = true
             }
         }
+
         guard region.span.latitudeDelta <= Self.maxAutoSpanDegrees else { return }
+        if let last = lastBoundsFetchRegion {
+            let movedLat = abs(region.center.latitude - last.center.latitude)
+            let movedLng = abs(region.center.longitude - last.center.longitude)
+            let movedEnough = movedLat > region.span.latitudeDelta * 0.4
+                || movedLng > region.span.longitudeDelta * 0.4
+            let zoomChanged = abs(region.span.latitudeDelta - last.span.latitudeDelta)
+                > last.span.latitudeDelta * 0.35
+            guard movedEnough || zoomChanged else { return }
+        }
+
         let api = api
         let fuel = fuel
         boundsTask?.cancel()
@@ -137,9 +169,10 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
             let east = region.center.longitude + region.span.longitudeDelta / 2
             guard let result = try? await api.stationsInBounds(south: south, west: west, north: north, east: east, fuel: fuel),
                   !Task.isCancelled, !result.isEmpty else { return }
-            withAnimation(.spring(duration: 0.45)) {
+            withAnimation(.easeInOut(duration: 0.2)) {
                 stations = result
             }
+            lastBoundsFetchRegion = region
             refreshBandIfMoved(center: region.center)
         }
     }
@@ -153,47 +186,47 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
     func reload() {
         if let region = lastRegion {
             loadAround(center: region.center)
+        } else if let center = lastLoadedCenter {
+            loadAround(center: center)
         } else {
-            start()
+            loadAround(center: Self.fallbackCenter)
         }
     }
 
     func select(_ station: Station?) {
-        withAnimation(.spring(duration: 0.3)) {
+        withAnimation(.spring(duration: 0.35)) {
             selectedStation = station
         }
     }
 
-    /// Stations sorted like the web default: price ascending, unknown prices last, distance breaks ties.
-    var sortedStations: [Station] {
-        stations.sorted { a, b in
-            switch (a.price, b.price) {
-            case let (pa?, pb?):
-                if pa != pb { return pa < pb }
-                return (a.dist ?? .infinity) < (b.dist ?? .infinity)
-            case (nil, nil):
-                return (a.dist ?? .infinity) < (b.dist ?? .infinity)
-            case (nil, _):
-                return false
-            case (_, nil):
-                return true
-            }
+    /// List pipeline like the web (renderStationList): open + priced only, price-sorted with
+    /// distance tiebreaker, capped at 50 rows.
+    var displayStations: [Station] {
+        let open = stations.filter { $0.isOpen == true && ($0.price ?? 0) > 0 }
+        let sorted = open.sorted { a, b in
+            if let pa = a.price, let pb = b.price, pa != pb { return pa < pb }
+            return (a.dist ?? 999) < (b.dist ?? 999)
         }
+        return Array(sorted.prefix(50))
+    }
+
+    private func movedMeters(from: CLLocationCoordinate2D?, to: CLLocationCoordinate2D) -> Double {
+        guard let from else { return .infinity }
+        return CLLocation(latitude: from.latitude, longitude: from.longitude)
+            .distance(from: CLLocation(latitude: to.latitude, longitude: to.longitude))
     }
 
     private func refreshBandIfMoved(center: CLLocationCoordinate2D) {
         // The band covers a ~100 km radius; refresh it once the viewport drifts far away.
-        if let bandCenter {
-            let moved = CLLocation(latitude: center.latitude, longitude: center.longitude)
-                .distance(from: CLLocation(latitude: bandCenter.latitude, longitude: bandCenter.longitude))
-            guard moved > 50_000 else { return }
+        if let bandCenter, movedMeters(from: bandCenter, to: center) < 50_000 {
+            return
         }
         bandCenter = center
         let api = api
         let fuel = fuel
         Task {
             guard let response = try? await api.priceBand(fuel: fuel, lat: center.latitude, lng: center.longitude) else { return }
-            withAnimation(.spring(duration: 0.45)) {
+            withAnimation(.easeInOut(duration: 0.25)) {
                 band = response.band
             }
         }
@@ -206,19 +239,19 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
         if status == .authorizedWhenInUse || status == .authorizedAlways {
             manager.requestLocation()
         } else if status == .denied || status == .restricted, started, stations.isEmpty {
-            loadAround(center: CLLocationCoordinate2D(latitude: 51.1657, longitude: 10.4515))
+            loadAround(center: Self.fallbackCenter)
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        recenterTarget = RecenterTarget(location.coordinate)
+        recenter(to: location.coordinate)
         loadAround(center: location.coordinate)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         if stations.isEmpty {
-            loadAround(center: CLLocationCoordinate2D(latitude: 51.1657, longitude: 10.4515))
+            loadAround(center: Self.fallbackCenter)
         }
     }
 }

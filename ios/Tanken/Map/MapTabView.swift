@@ -2,8 +2,8 @@ import SwiftUI
 import MapKit
 
 /// The Karte tab: Apple Maps with price-bubble annotations, Liquid Glass search overlay,
-/// "Hier suchen" pill, locate-me FAB and an inline bottom drawer (station list → detail).
-/// The drawer is deliberately not a `.sheet` — sheets cover the Liquid Glass tab bar.
+/// "Hier suchen" pill, locate-me FAB and an inline Liquid Glass bottom drawer (station list ⇄
+/// detail). The drawer is deliberately not a `.sheet` — sheets cover the Liquid Glass tab bar.
 struct MapTabView: View {
     @Environment(AppState.self) private var app
     @Environment(\.strings) private var s
@@ -17,7 +17,6 @@ struct MapTabView: View {
     )
     @State private var query = ""
     @State private var drawerState: DrawerState = .collapsed
-    @State private var path: [Station] = []
     @Namespace private var glass
 
     var body: some View {
@@ -37,17 +36,11 @@ struct MapTabView: View {
             }
         }
         .onChange(of: model.selectedStation) { _, station in
-            guard let station else { return }
-            path = [station]
+            guard station != nil else { return }
             if drawerState == .collapsed {
                 withAnimation(.spring(duration: 0.35)) {
                     drawerState = .half
                 }
-            }
-        }
-        .onChange(of: path) { _, newPath in
-            if newPath.isEmpty {
-                model.select(nil)
             }
         }
         .task {
@@ -174,27 +167,65 @@ struct MapTabView: View {
         }
         .interactiveGlass(in: Circle())
         .padding(.trailing, 16)
-        .padding(.bottom, 108)
+        .padding(.bottom, 118)
     }
 
     // MARK: - Drawer
 
     private var drawer: some View {
         BottomDrawer(state: $drawerState) {
-            NavigationStack(path: $path) {
-                StationListSheet(
-                    stations: model.sortedStations,
-                    band: model.band,
-                    loading: model.loading
-                ) { station in
-                    Haptics.light()
-                    model.select(station)
-                }
-                .navigationDestination(for: Station.self) { station in
-                    StationDetailView(station: station, band: model.band)
+            drawerHeader
+        } content: {
+            ZStack {
+                if let station = model.selectedStation {
+                    StationDetailView(station: station, band: model.band) {
+                        model.select(nil)
+                    }
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        )
+                    )
+                } else {
+                    StationListSheet(
+                        stations: model.displayStations,
+                        band: model.band,
+                        loading: model.loading
+                    ) { station in
+                        Haptics.light()
+                        model.select(station)
+                    }
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .leading).combined(with: .opacity),
+                            removal: .move(edge: .leading).combined(with: .opacity)
+                        )
+                    )
                 }
             }
+            .animation(.spring(duration: 0.35), value: model.selectedStation)
+            .clipped()
         }
+    }
+
+    /// Count + loading header; draggable together with the grabber.
+    private var drawerHeader: some View {
+        HStack {
+            Text(String(format: s.stationsCountFormat, model.displayStations.count).uppercased())
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .contentTransition(.numericText())
+                .animation(.easeInOut(duration: 0.2), value: model.displayStations.count)
+            Spacer()
+            if model.loading {
+                ProgressView()
+                    .controlSize(.small)
+                    .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
     }
 
     // MARK: - Search
@@ -208,7 +239,7 @@ struct MapTabView: View {
         MKLocalSearch(request: request).start { response, _ in
             guard let coordinate = response?.mapItems.first?.placemark.coordinate else { return }
             Task { @MainActor in
-                model.recenterTarget = RecenterTarget(coordinate)
+                model.recenter(to: coordinate)
                 model.loadAround(center: coordinate)
             }
         }

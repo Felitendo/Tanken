@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Station list inside the persistent bottom drawer: header with count, price-sorted rows with
-/// brand/address/distance and a price pill colored by the regional band.
+/// Station list inside the bottom drawer (the count/controls header lives in the drawer's
+/// draggable header slot).
 struct StationListSheet: View {
     @Environment(\.strings) private var s
     let stations: [Station]
@@ -10,32 +10,11 @@ struct StationListSheet: View {
     let onSelect: (Station) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            if stations.isEmpty {
-                emptyState
-            } else {
-                list
-            }
+        if stations.isEmpty {
+            emptyState
+        } else {
+            list
         }
-    }
-
-    private var header: some View {
-        HStack {
-            Text(String(format: s.stationsCountFormat, stations.count))
-                .font(.subheadline.weight(.semibold))
-                .contentTransition(.numericText())
-                .animation(.spring(duration: 0.4), value: stations.count)
-            Spacer()
-            if loading {
-                ProgressView()
-                    .controlSize(.small)
-                    .transition(.opacity)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 10)
     }
 
     private var list: some View {
@@ -48,11 +27,6 @@ struct StationListSheet: View {
                         StationRow(station: station, band: band)
                     }
                     .buttonStyle(.plain)
-                    .scrollTransition(axis: .vertical) { content, phase in
-                        content
-                            .opacity(phase.isIdentity ? 1 : 0.6)
-                            .scaleEffect(phase.isIdentity ? 1 : 0.97)
-                    }
                     Divider()
                         .padding(.leading, 16)
                 }
@@ -77,7 +51,7 @@ struct StationListSheet: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, 40)
     }
 }
@@ -93,17 +67,10 @@ struct StationRow: View {
                 Text(station.displayBrand)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
-                HStack(spacing: 6) {
-                    if station.isOpen == false {
-                        Circle()
-                            .fill(Theme.bad)
-                            .frame(width: 6, height: 6)
-                    }
-                    Text([station.addressLine, station.cityLine].filter { !$0.isEmpty }.joined(separator: ", "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                Text([station.addressLine, station.cityLine].filter { !$0.isEmpty }.joined(separator: ", "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 if let dist = station.dist {
                     Text(Formatters.distance(dist, approximate: station.distApprox == true))
                         .font(.caption2)

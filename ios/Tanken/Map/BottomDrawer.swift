@@ -7,17 +7,18 @@ enum DrawerState: CaseIterable {
     case expanded
 }
 
-/// Inline bottom drawer used instead of a `.sheet`: a sheet would be presented above the whole
-/// TabView and hide the Liquid Glass tab bar, while this lives inside the tab's content and
-/// respects the tab-bar safe area. Dragging the grabber snaps between three heights with
-/// rubber-banding; tapping it toggles collapsed ⇄ half.
-struct BottomDrawer<Content: View>: View {
+/// Inline Liquid Glass bottom drawer used instead of a `.sheet`: a sheet would be presented above
+/// the whole TabView and hide the tab bar, while this lives inside the tab's content and respects
+/// the tab-bar safe area. The grabber and the `header` slot are draggable (snap between three
+/// heights, rubber-banding, velocity-based settling); the `content` below scrolls freely.
+struct BottomDrawer<Header: View, Content: View>: View {
     @Binding var state: DrawerState
+    @ViewBuilder let header: Header
     @ViewBuilder let content: Content
 
     @State private var dragOffset: CGFloat = 0
 
-    private static var collapsedHeight: CGFloat { 96 }
+    private static var collapsedHeight: CGFloat { 104 }
 
     private static var shape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
@@ -37,12 +38,24 @@ struct BottomDrawer<Content: View>: View {
             let current = rubberBanded(base - dragOffset, min: Self.collapsedHeight, max: expandedHeight)
 
             VStack(spacing: 0) {
-                grabber(base: base, half: halfHeight, expanded: expandedHeight)
+                VStack(spacing: 0) {
+                    grabber
+                    header
+                }
+                .contentShape(Rectangle())
+                .gesture(dragGesture(base: base, half: halfHeight, expanded: expandedHeight))
+                .onTapGesture {
+                    Haptics.selection()
+                    withAnimation(.spring(duration: 0.35)) {
+                        state = state == .collapsed ? .half : .collapsed
+                    }
+                }
+
                 content
             }
             .frame(maxWidth: .infinity)
             .frame(height: current, alignment: .top)
-            .background(.regularMaterial, in: Self.shape)
+            .glassSurface(in: Self.shape)
             .clipShape(Self.shape)
             .shadow(color: .black.opacity(0.15), radius: 12, y: -3)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -50,35 +63,27 @@ struct BottomDrawer<Content: View>: View {
         }
     }
 
-    /// Full-width drag handle strip; the drag lives here (not on the list) so it never fights
-    /// the list's scroll gesture.
-    private func grabber(base: CGFloat, half: CGFloat, expanded: CGFloat) -> some View {
+    private var grabber: some View {
         Capsule()
-            .fill(Color(.systemGray3))
-            .frame(width: 40, height: 5)
+            .fill(Theme.hint.opacity(0.5))
+            .frame(width: 36, height: 4)
             .frame(maxWidth: .infinity)
-            .frame(height: 26)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        dragOffset = value.translation.height
-                    }
-                    .onEnded { value in
-                        let projected = base - value.predictedEndTranslation.height
-                        let target = nearestState(to: projected, half: half, expanded: expanded)
-                        withAnimation(.spring(duration: 0.35)) {
-                            dragOffset = 0
-                            state = target
-                        }
-                        Haptics.light()
-                    }
-            )
-            .onTapGesture {
-                Haptics.selection()
+            .frame(height: 20)
+    }
+
+    private func dragGesture(base: CGFloat, half: CGFloat, expanded: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                dragOffset = value.translation.height
+            }
+            .onEnded { value in
+                let projected = base - value.predictedEndTranslation.height
+                let target = nearestState(to: projected, half: half, expanded: expanded)
                 withAnimation(.spring(duration: 0.35)) {
-                    state = state == .collapsed ? .half : .collapsed
+                    dragOffset = 0
+                    state = target
                 }
+                Haptics.light()
             }
     }
 

@@ -1,13 +1,14 @@
 import SwiftUI
 import UIKit
 
-/// Station detail inside the drawer's NavigationStack: open/closed state, all three fuel prices,
-/// address with Apple/Google Maps directions, and opening times.
+/// Station detail inside the bottom drawer: back row, open/closed state, fuel prices, address
+/// with Apple/Google Maps directions, and opening times.
 struct StationDetailView: View {
     @Environment(AppState.self) private var app
     @Environment(\.strings) private var s
     let station: Station
     let band: PriceBand?
+    let onBack: () -> Void
 
     @State private var detail: StationDetail?
 
@@ -22,11 +23,9 @@ struct StationDetailView: View {
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 24)
         }
-        .background(Theme.background)
-        .navigationTitle(station.displayBrand)
-        .navigationBarTitleDisplayMode(.inline)
         .task(id: station.id) {
             let loaded = try? await app.api.stationDetail(id: station.id)
             withAnimation(.spring(duration: 0.4)) {
@@ -41,6 +40,22 @@ struct StationDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Button {
+                    Haptics.light()
+                    onBack()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.body.weight(.semibold))
+                        .padding(6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Text(station.displayBrand)
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer()
+            }
             if let name = station.name, !name.isEmpty, name != station.displayBrand {
                 Text(name)
                     .font(.subheadline)
