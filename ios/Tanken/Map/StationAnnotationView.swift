@@ -19,7 +19,7 @@ struct StationAnnotationView: View {
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.white.opacity(0.9))
                 }
-                Text(Formatters.priceSuper(station.price))
+                Text(Formatters.priceText(station.price))
                     .font(.system(size: 14, weight: .heavy))
                     .foregroundStyle(.white)
                     .contentTransition(.numericText())

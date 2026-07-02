@@ -189,7 +189,7 @@ struct MapTabView: View {
                     )
                 } else {
                     StationListSheet(
-                        stations: model.displayStations,
+                        stations: displayStations,
                         band: model.band,
                         loading: model.loading
                     ) { station in
@@ -209,23 +209,87 @@ struct MapTabView: View {
         }
     }
 
-    /// Count + loading header; draggable together with the grabber.
+    /// The web's list pipeline, driven by the synced list options in AppState.
+    private var displayStations: [Station] {
+        StationListPipeline.apply(
+            model.stations,
+            sort: app.stationSort,
+            groupByPrice: app.groupByPrice,
+            favouritesOnTop: app.favouritesOnTop,
+            favourites: app.favourites
+        )
+    }
+
+    /// Sort bar like the web's `.station-sort-bar`: toggles left, count centered, sort right.
+    /// Draggable together with the grabber (it sits in the drawer's header slot).
     private var drawerHeader: some View {
-        HStack {
-            Text(String(format: s.stationsCountFormat, model.displayStations.count).uppercased())
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .contentTransition(.numericText())
-                .animation(.easeInOut(duration: 0.2), value: model.displayStations.count)
-            Spacer()
-            if model.loading {
-                ProgressView()
-                    .controlSize(.small)
-                    .transition(.opacity)
+        HStack(spacing: 8) {
+            HStack(spacing: 4) {
+                headerToggle(
+                    icon: "star",
+                    active: app.favouritesOnTop
+                ) {
+                    app.favouritesOnTop.toggle()
+                }
+                headerToggle(
+                    icon: "rectangle.stack",
+                    active: app.groupByPrice
+                ) {
+                    app.groupByPrice.toggle()
+                }
             }
+
+            Spacer(minLength: 4)
+
+            Text(String(format: s.stationsCountFormat, displayStations.count).uppercased())
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.hint)
+                .lineLimit(1)
+                .contentTransition(.numericText())
+                .animation(.easeInOut(duration: 0.2), value: displayStations.count)
+
+            Spacer(minLength: 4)
+
+            Button {
+                Haptics.selection()
+                withAnimation(.spring(duration: 0.3)) {
+                    app.stationSort = app.stationSort == .price ? .distance : .price
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: app.stationSort == .price ? "arrow.up.arrow.down" : "location")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                    Text(app.stationSort == .price ? s.sortPrice : s.sortDistance)
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(PressableRowStyle())
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .padding(.bottom, 8)
+    }
+
+    private func headerToggle(icon: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.selection()
+            withAnimation(.spring(duration: 0.3)) {
+                action()
+            }
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(active ? .white : Theme.hint)
+                .padding(7)
+                .background(
+                    active ? Color.accentColor : Color.primary.opacity(0.06),
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+        }
+        .buttonStyle(PressableRowStyle())
     }
 
     // MARK: - Search

@@ -16,21 +16,16 @@ enum Formatters {
         return isoWithFraction.date(from: timestamp) ?? isoPlain.date(from: timestamp)
     }
 
-    /// "1,859 €" — full price with three decimals, German decimal comma.
+    /// "1,79€" — the web's formatPrice: two decimals, German comma, no space before €.
     static func price(_ value: Double?) -> String {
         guard let value, value > 0 else { return "–" }
-        return String(format: "%.3f €", value).replacingOccurrences(of: ".", with: ",")
+        return String(format: "%.2f€", value).replacingOccurrences(of: ".", with: ",")
     }
 
-    /// "1,85⁹" — price with the third decimal superscripted, like fuel-station signs and the web UI.
-    static func priceSuper(_ value: Double?) -> String {
+    /// "1,79" — price without the € suffix, for the compact map bubbles.
+    static func priceText(_ value: Double?) -> String {
         guard let value, value > 0 else { return "–" }
-        let cents = Int((value * 1000).rounded())
-        let euros = cents / 1000
-        let fraction = cents % 1000
-        let main = String(format: "%d,%02d", euros, fraction / 10)
-        let superscripts = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"]
-        return main + superscripts[fraction % 10]
+        return String(format: "%.2f", value).replacingOccurrences(of: ".", with: ",")
     }
 
     /// "1,2 km" / "850 m" (approximate distances get a "~" prefix like the website).

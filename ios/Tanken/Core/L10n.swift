@@ -25,6 +25,12 @@ struct Strings {
     let loadingStations: String
     let noStations: String
     let stationsCountFormat: String
+    // Station list
+    let noOpenStations: String
+    let sortPrice: String
+    let sortDistance: String
+    let loginRequiredFavourite: String
+    let maxFavourites: String
     // Station detail
     let open: String
     let closed: String
@@ -105,6 +111,11 @@ extension Strings {
         loadingStations: "Tankstellen laden…",
         noStations: "Keine Tankstellen gefunden.",
         stationsCountFormat: "%d Tankstellen",
+        noOpenStations: "Keine offenen Tankstellen gefunden",
+        sortPrice: "Preis",
+        sortDistance: "Entfernung",
+        loginRequiredFavourite: "Zum Speichern von Favoriten bitte anmelden.",
+        maxFavourites: "Maximal 50 Favoriten erlaubt",
         open: "Geöffnet",
         closed: "Geschlossen",
         wholeDay: "Durchgehend geöffnet",
@@ -179,6 +190,11 @@ extension Strings {
         loadingStations: "Loading stations…",
         noStations: "No stations found.",
         stationsCountFormat: "%d stations",
+        noOpenStations: "No open stations found",
+        sortPrice: "Price",
+        sortDistance: "Distance",
+        loginRequiredFavourite: "Sign in to save favourites.",
+        maxFavourites: "Maximum of 50 favourites",
         open: "Open",
         closed: "Closed",
         wholeDay: "Open 24 hours",

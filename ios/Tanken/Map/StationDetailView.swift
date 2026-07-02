@@ -55,6 +55,17 @@ struct StationDetailView: View {
                     .font(.headline)
                     .lineLimit(1)
                 Spacer()
+                Button {
+                    app.toggleFavourite(station.id)
+                } label: {
+                    Image(systemName: app.isFavourite(station.id) ? "star.fill" : "star")
+                        .font(.title3)
+                        .foregroundStyle(app.isFavourite(station.id) ? Theme.favorite : Theme.hint)
+                        .symbolEffect(.bounce, value: app.isFavourite(station.id))
+                        .padding(4)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
             if let name = station.name, !name.isEmpty, name != station.displayBrand {
                 Text(name)

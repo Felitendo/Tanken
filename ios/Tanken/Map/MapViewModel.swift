@@ -199,17 +199,6 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    /// List pipeline like the web (renderStationList): open + priced only, price-sorted with
-    /// distance tiebreaker, capped at 50 rows.
-    var displayStations: [Station] {
-        let open = stations.filter { $0.isOpen == true && ($0.price ?? 0) > 0 }
-        let sorted = open.sorted { a, b in
-            if let pa = a.price, let pb = b.price, pa != pb { return pa < pb }
-            return (a.dist ?? 999) < (b.dist ?? 999)
-        }
-        return Array(sorted.prefix(50))
-    }
-
     private func movedMeters(from: CLLocationCoordinate2D?, to: CLLocationCoordinate2D) -> Double {
         guard let from else { return .infinity }
         return CLLocation(latitude: from.latitude, longitude: from.longitude)
