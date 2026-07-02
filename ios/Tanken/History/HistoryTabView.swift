@@ -9,6 +9,7 @@ struct HistoryTabView: View {
 
     @State private var model = HistoryViewModel()
     @State private var appliedDefaultRange = false
+    @State private var detailTarget: StationDetailTarget?
 
     private struct RangeOption: Identifiable, Equatable {
         let days: Int
@@ -27,9 +28,12 @@ struct HistoryTabView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(s.historyDescription)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(s.historyDescription)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Divider()
+                    }
 
                     countryChips
                     if !model.locationOptions.isEmpty {
@@ -52,12 +56,12 @@ struct HistoryTabView: View {
                     } else if model.filteredPoints.isEmpty {
                         emptyState
                     } else {
+                        heroCard
                         chartCard
                         if !model.hourPoints.isEmpty {
                             hourCard
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                         }
-                        summaryTiles
                         extremesSection
                     }
                 }
@@ -71,6 +75,14 @@ struct HistoryTabView: View {
                 Haptics.light()
                 await model.load(api: app.api, location: app.historyLocation)
             }
+        }
+        .sheet(item: $detailTarget) { target in
+            StationDetailSheet(
+                stationId: target.id,
+                fallbackName: target.name,
+                fallbackBrand: target.brand,
+                fallbackPrice: target.price
+            )
         }
         .task {
             // The synced historyDefaultDays setting (1 = 24 h, 7 = 7 days) seeds the range once.
@@ -210,71 +222,139 @@ struct HistoryTabView: View {
         }
     }
 
-    private var summaryTiles: some View {
-        HStack(spacing: 10) {
-            StatTile(
-                title: s.currentAverage,
-                value: Formatters.price(model.currentAverage),
-                color: .primary
-            )
-            StatTile(
-                title: s.periodTrendTitle(days: model.rangeDays),
-                value: trendText,
-                color: trendColor
-            )
+    /// Gradient hero card matching the web's `.history-hero-card`: current average with count-up,
+    /// period pill, trend glyph and week/month delta pills. Computed over ALL loaded data, so it
+    /// stays put while the range chips only re-scope the chart.
+    private var heroCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(s.currentAvg)
+                        .font(.system(size: 11, weight: .semibold))
+                        .textCase(.uppercase)
+                        .kerning(0.7)
+                        .foregroundStyle(Theme.hint)
+                    Text(Formatters.price(model.overallCurrentAvg))
+                        .font(.system(size: 36, weight: .heavy))
+                        .monospacedDigit()
+                        .foregroundStyle(.primary)
+                        .contentTransition(.numericText())
+                    if let period = periodLabel {
+                        HStack(spacing: 5) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(period)
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.12), in: Capsule())
+                        .padding(.top, 6)
+                    }
+                }
+                Spacer(minLength: 0)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(trendColor(model.weekDelta).opacity(0.14))
+                    .frame(width: 44, height: 44)
+                    .overlay {
+                        Image(systemName: trendIcon(model.weekDelta))
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(trendColor(model.weekDelta))
+                    }
+            }
+            if model.weekDelta != nil || model.monthDelta != nil {
+                HStack(spacing: 8) {
+                    trendPill(delta: model.weekDelta, label: s.vsLastWeek)
+                    trendPill(delta: model.monthDelta, label: s.vsLastMonth)
+                }
+                .padding(.top, 14)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .heroCardSurface()
+    }
+
+    /// "Heute" / "Letzte N Tage" / "Seit {Datum}" from the oldest loaded entry (web periodLabel).
+    private var periodLabel: String? {
+        guard let since = model.sinceDate else { return nil }
+        let days = max(1, Int((Date().timeIntervalSince(since) / 86400).rounded()) + 1)
+        if days < 2 { return s.periodToday }
+        if days < 90 { return String(format: s.periodLastDaysFormat, days) }
+        return String(format: s.periodSinceFormat, since.formatted(.dateTime.day().month(.wide).year()))
+    }
+
+    private func trendColor(_ delta: Double?) -> Color {
+        guard let delta, abs(delta) >= 0.005 else { return Theme.hint }
+        return delta < 0 ? Theme.good : Theme.bad
+    }
+
+    private func trendIcon(_ delta: Double?) -> String {
+        guard let delta, abs(delta) >= 0.005 else { return "chart.bar.fill" }
+        return delta < 0 ? "chart.line.downtrend.xyaxis" : "chart.line.uptrend.xyaxis"
+    }
+
+    @ViewBuilder
+    private func trendPill(delta: Double?, label: String) -> some View {
+        if let delta {
+            let color = trendColor(delta)
+            HStack(spacing: 6) {
+                Text(trendArrow(delta))
+                    .font(.system(size: 12, weight: .bold))
+                Text(Formatters.delta(delta))
+                    .font(.system(size: 12, weight: .bold))
+                    .monospacedDigit()
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .opacity(0.75)
+            }
+            .foregroundStyle(color)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 5)
+            .background(color.opacity(0.16), in: Capsule())
         }
     }
 
-    private var trendText: String {
-        guard let delta = model.trendDelta else { return "–" }
-        let cents = delta * 100
-        let sign = cents > 0 ? "+" : ""
-        return String(format: "%@%.1f ct", sign, cents).replacingOccurrences(of: ".", with: ",")
-    }
-
-    private var trendColor: Color {
-        guard let delta = model.trendDelta else { return .primary }
-        if delta > 0.001 { return Theme.bad }
-        if delta < -0.001 { return Theme.good }
-        return .primary
+    private func trendArrow(_ delta: Double) -> String {
+        if abs(delta) < 0.005 { return "→" }
+        return delta < 0 ? "↓" : "↑"
     }
 
     private var extremesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(text: s.extremes.uppercased())
-            HStack(spacing: 10) {
+            SectionHeader(text: s.summary)
+            HStack(spacing: 8) {
                 if let cheapest = model.extremes?.cheapest {
-                    extremeCard(title: s.cheapest, extreme: cheapest, color: Theme.good)
+                    extremeCard(label: s.lowestPrice, extreme: cheapest, color: Theme.good, icon: "chart.line.downtrend.xyaxis")
                 }
                 if let priciest = model.extremes?.mostExpensive {
-                    extremeCard(title: s.mostExpensive, extreme: priciest, color: Theme.bad)
+                    extremeCard(label: s.highestPrice, extreme: priciest, color: Theme.bad, icon: "chart.line.uptrend.xyaxis")
                 }
             }
         }
     }
 
-    private func extremeCard(title: String, extreme: PriceExtreme, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(Formatters.price(extreme.price))
-                .font(.title3.weight(.bold))
-                .foregroundStyle(color)
-                .contentTransition(.numericText())
-            Text(extreme.stationBrand ?? extreme.stationName ?? "")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            if let date = Formatters.date(from: extreme.timestamp) {
-                Text(date.formatted(.dateTime.day().month().year()))
-                    .font(.caption2)
-                    .foregroundStyle(Theme.hint)
+    private func extremeCard(label: String, extreme: PriceExtreme, color: Color, icon: String) -> some View {
+        var action: (() -> Void)?
+        if let id = extreme.stationId {
+            action = {
+                detailTarget = StationDetailTarget(
+                    id: id,
+                    name: extreme.stationName,
+                    brand: extreme.stationBrand,
+                    price: extreme.price
+                )
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.rMd, style: .continuous))
+        return ExtremeCard(
+            label: label,
+            price: extreme.price,
+            station: extreme.stationName ?? extreme.stationBrand ?? "–",
+            color: color,
+            icon: icon,
+            action: action
+        )
     }
 
     private var emptyState: some View {
@@ -291,17 +371,10 @@ struct HistoryTabView: View {
     }
 }
 
-private extension Strings {
-    /// "Trend (7 Tage)" tile title — "Trend" reads the same in German and English.
-    func periodTrendTitle(days: Int) -> String {
-        let range: String
-        switch days {
-        case 1: range = range24h
-        case 7: range = days7
-        case 14: range = days14
-        case 30: range = days30
-        default: range = allRange
-        }
-        return "Trend (\(range))"
-    }
+/// Identifiable payload for the extreme-card → station-detail sheet.
+struct StationDetailTarget: Identifiable {
+    let id: String
+    var name: String?
+    var brand: String?
+    var price: Double?
 }

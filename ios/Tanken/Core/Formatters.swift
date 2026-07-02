@@ -28,6 +28,13 @@ enum Formatters {
         return String(format: "%.2f", value).replacingOccurrences(of: ".", with: ",")
     }
 
+    /// "+0,04€" / "−0,04€" / "±0,00€" — the web's formatDelta for trend pills.
+    static func delta(_ value: Double?) -> String {
+        guard let value, value.isFinite else { return "–" }
+        if abs(value) < 0.005 { return "±0,00€" }
+        return (value > 0 ? "+" : "−") + price(abs(value))
+    }
+
     /// "1,2 km" / "850 m" (approximate distances get a "~" prefix like the website).
     static func distance(_ km: Double?, approximate: Bool = false) -> String {
         guard let km, km >= 0 else { return "" }

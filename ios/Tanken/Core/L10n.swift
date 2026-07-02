@@ -132,6 +132,16 @@ struct Strings {
     let apply: String
     let retry: String
     let errorGeneric: String
+    // History hero + summary (web keys: currentAvg, vsLastWeek, vsLastMonth, summary, …)
+    let currentAvg: String
+    let vsLastWeek: String
+    let vsLastMonth: String
+    let summary: String
+    let lowestPrice: String
+    let highestPrice: String
+    let periodToday: String
+    let periodLastDaysFormat: String
+    let periodSinceFormat: String
 }
 
 extension Strings {
@@ -243,7 +253,16 @@ extension Strings {
         cancel: "Abbrechen",
         apply: "Übernehmen",
         retry: "Erneut versuchen",
-        errorGeneric: "Etwas ist schiefgelaufen."
+        errorGeneric: "Etwas ist schiefgelaufen.",
+        currentAvg: "Aktuell Ø",
+        vsLastWeek: "vs. letzte Woche",
+        vsLastMonth: "vs. letzter Monat",
+        summary: "ZUSAMMENFASSUNG",
+        lowestPrice: "Niedrigster Preis",
+        highestPrice: "Höchster Preis",
+        periodToday: "Heute",
+        periodLastDaysFormat: "Letzte %d Tage",
+        periodSinceFormat: "Seit %@"
     )
 
     static let en = Strings(
@@ -354,7 +373,16 @@ extension Strings {
         cancel: "Cancel",
         apply: "Apply",
         retry: "Retry",
-        errorGeneric: "Something went wrong."
+        errorGeneric: "Something went wrong.",
+        currentAvg: "Current Avg",
+        vsLastWeek: "vs. last week",
+        vsLastMonth: "vs. last month",
+        summary: "SUMMARY",
+        lowestPrice: "Lowest Price",
+        highestPrice: "Highest Price",
+        periodToday: "Today",
+        periodLastDaysFormat: "Last %d days",
+        periodSinceFormat: "Since %@"
     )
 
     /// Resolves the catalogue from the persisted setting and the device language.

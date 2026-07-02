@@ -40,7 +40,8 @@ final class HistoryViewModel {
         async let optionsResult = LocationPickerData.load(api: api, country: country)
         do {
             let response = try await api.history(location: location, country: country)
-            let parsed = (response.entries ?? []).compactMap { entry -> HistoryPoint? in
+            let entries = response.entries ?? []
+            let parsed = entries.compactMap { entry -> HistoryPoint? in
                 guard let date = Formatters.date(from: entry.timestamp) else { return nil }
                 return HistoryPoint(date: date, min: entry.minPrice, avg: entry.avgPrice, max: entry.maxPrice)
             }
@@ -48,7 +49,7 @@ final class HistoryViewModel {
             let options = await optionsResult
             withAnimation(.spring(duration: 0.5)) {
                 points = parsed
-                extremes = response.extremes
+                extremes = Self.fillExtremes(response.extremes, from: entries)
                 locationOptions = options
                 loading = false
             }
@@ -78,6 +79,65 @@ final class HistoryViewModel {
     var trendDelta: Double? {
         guard let first = filteredPoints.first?.avg, let last = filteredPoints.last?.avg else { return nil }
         return last - first
+    }
+
+    /// Newest average across ALL loaded entries — the hero card's headline value
+    /// (web `renderHistoryStats` currentAvg), independent of the selected range.
+    var overallCurrentAvg: Double? {
+        points.last?.avg
+    }
+
+    /// Oldest data timestamp, for the hero card's period pill.
+    var sinceDate: Date? {
+        points.first?.date
+    }
+
+    /// Ø of the last 7 days minus Ø of the 7 days before (web deltaWeek).
+    var weekDelta: Double? {
+        guard let current = avgInRange(startDaysAgo: 0, endDaysAgo: 7),
+              let previous = avgInRange(startDaysAgo: 7, endDaysAgo: 14) else { return nil }
+        return current - previous
+    }
+
+    /// Ø of the last 30 days minus Ø of the 30 days before (web deltaMonth).
+    var monthDelta: Double? {
+        guard let current = avgInRange(startDaysAgo: 0, endDaysAgo: 30),
+              let previous = avgInRange(startDaysAgo: 30, endDaysAgo: 60) else { return nil }
+        return current - previous
+    }
+
+    private func avgInRange(startDaysAgo: Double, endDaysAgo: Double) -> Double? {
+        let now = Date()
+        let start = now.addingTimeInterval(-endDaysAgo * 86400)
+        let end = now.addingTimeInterval(-startDaysAgo * 86400)
+        let values = points.filter { $0.date >= start && $0.date < end }.map(\.avg)
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
+    }
+
+    /// The web falls back to the aggregated min/max entries when per-station extremes are missing.
+    private static func fillExtremes(_ extremes: HistoryExtremes?, from entries: [HistoryEntry]) -> HistoryExtremes? {
+        var result = extremes ?? HistoryExtremes(cheapest: nil, mostExpensive: nil)
+        if result.cheapest == nil, let entry = entries.min(by: { $0.minPrice < $1.minPrice }) {
+            result.cheapest = PriceExtreme(
+                stationName: entry.station,
+                stationId: nil,
+                stationBrand: nil,
+                price: entry.minPrice,
+                timestamp: entry.timestamp
+            )
+        }
+        if result.mostExpensive == nil, let entry = entries.max(by: { $0.maxPrice < $1.maxPrice }) {
+            result.mostExpensive = PriceExtreme(
+                stationName: entry.station,
+                stationId: nil,
+                stationBrand: nil,
+                price: entry.maxPrice,
+                timestamp: entry.timestamp
+            )
+        }
+        if result.cheapest == nil && result.mostExpensive == nil { return nil }
+        return result
     }
 
     /// Hour buckets of the last 24 h for the extra hour chart in 24h mode (web hour drill-down).
