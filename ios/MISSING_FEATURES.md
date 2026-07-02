@@ -10,21 +10,22 @@ der README dokumentiert.
 als Liquid-Glass-Bottom-Drawer im Web-Design (Rank-Badges, Sortierung Preis/Entfernung,
 groupByPrice, Favoriten-oben), Stationsdetail nach Web-Vorlage (großer Preis, Status, Öffnungszeiten,
 Routing, Preisverlauf-Chart 24h/7d), Favoriten mit Account-Sync, Preisalarm (ntfy/E-Mail,
-serverseitig ausgewertet), Settings-Sync (Kraftstoff, Darstellung, Sprache, Chart-Standard,
-Listen-Optionen), Verlauf-Charts (7/14/30/Alles, DE/AT), Stats, FELO-ID-Login, Toasts, Haptik +
-Animationen durchgängig.
+serverseitig ausgewertet, Schwellen-Bar gegen die Marktspanne), Settings-Sync (Kraftstoff,
+Darstellung, Sprache, Chart-Standard, Listen-Optionen), Verlauf-Charts (24h/7/14/30/Alles, DE/AT,
+Standort-Picker mit Auto-Auswahl, Stundenchart im 24h-Modus, Pull-to-Refresh), Stats
+(Standort-Picker, Pull-to-Refresh), FELO-ID-Login, Toasts, Haptik + Animationen durchgängig.
 
 ---
 
 ## 1. Preisalarm: lokale Prüfung als Bonus
 
-Die Alarm-Karte (Toggle, Schwellenwert-Stepper, ntfy/E-Mail, Status, Test) ist umgesetzt —
+Die Alarm-Karte (Toggle, Schwellenwert-Stepper, draggable Schwellen-Bar gegen die aktuelle
+Marktspanne inkl. „Aktuell günstigster Preis", ntfy/E-Mail, Status, Test) ist umgesetzt —
 serverseitige Auswertung wie im Web. **Offen als iOS-Bonus:** lokale Prüfung via
 `BGAppRefreshTask` + `UNUserNotificationCenter` (Task via `BGTaskScheduler` registrieren,
 Info.plist-Key `BGTaskSchedulerPermittedIdentifiers`, im Refresh `stations()` um den
 Alarm-Standort abrufen und bei Unterschreitung lokal benachrichtigen) — dann kommt der Alarm auch
-ohne ntfy-App an. Außerdem fehlt noch die Schwellen-Visualisierung (Threshold-Bar gegen den
-aktuell günstigsten Preis) aus dem Web.
+ohne ntfy-App an.
 
 ## 2. Routen-/Korridorsuche („Entlang Route suchen")
 
@@ -37,21 +38,18 @@ aktuell günstigsten Preis) aus dem Web.
   `MKDirections` + eigenes Korridor-Sampling. Overlay als `MapPolyline` mit accent-Stroke,
   Stationen entlang der Route wie normale Annotations, Zusammenfassung (Distanz/Dauer) im Panel.
 
-## 3. Verlauf: Standort-Picker, 24h-Ansicht, Stundenchart
+## 3. Verlauf: Standort-Picker, 24h-Ansicht, Stundenchart — ✅ umgesetzt
 
-- **Was fehlt:** Standort-Filter („Alle Standorte" + einzelne Scan-Standorte, automatisch nächster),
-  24h-Ansicht des Verlauf-Tabs, Stundenchart im 24h-Modus, Verlaufs-Zusammenfassung unterhalb des
-  Charts. (Die `historyDefaultDays`-Einstellung + das Stations-Chart im Detail sind umgesetzt.)
-- **API:** `GET /api/history?locations=list&country=`, `?location=<id>`;
-  `ApiClient.historyLocations()` existiert.
-- **Umsetzung:** `Picker`/Menu über dem Chart (Standorte aus `historyLocations`), Auto-Auswahl über
-  CoreLocation-Distanz zum nächsten Scan-Standort (`/api/scan-locations` liefert Koordinaten).
-  24h-Modus: Range-Chip „24 h" + `hourAvgs`-BarChart einblenden.
+- `LocationPickerRow` (gemeinsame Komponente) über dem Chart: „Alle Standorte" + Scan-Standorte
+  aus `/api/history?locations=list` ∩ `/api/scan-locations`, Auto-Auswahl des nächsten Standorts
+  per CoreLocation (mit „Automatisch · nächster Standort"-Hinweis, manuelle Wahl stoppt Auto-Pick).
+- 24h-Range-Chip (Standard folgt der `historyDefaultDays`-Einstellung) + Stundenchart
+  (Stunden-Buckets, preisgefärbt) im 24h-Modus. Offen: Tages-Drilldown per Tap wie im Web.
 
-## 4. Stats: Standort-Picker
+## 4. Stats: Standort-Picker — ✅ umgesetzt
 
-- **Was fehlt:** Gleicher Standort-Filter wie im Verlauf (`/api/stats?location=`).
-- **Umsetzung:** Identisches Picker-Pattern wie Nr. 3, gemeinsame Komponente extrahieren.
+- Gleicher `LocationPickerRow` wie im Verlauf, Auswahl zwischen beiden Tabs geteilt (wie die
+  synchronisierten Web-Picker), `/api/stats?location=`.
 
 ## 5. Standorte mit Verlaufsdaten + Standort-Anfragen
 
@@ -65,11 +63,11 @@ aktuell günstigsten Preis) aus dem Web.
   Radius-Slider (Glass), POST + Erfolgs-Haptik. Anfragen-Status als Liste mit Badges
   (pending/approved/denied).
 
-## 6. Pull-to-Refresh & Offline-Cache
+## 6. Pull-to-Refresh & Offline-Cache — teilweise ✅
 
-- **Was fehlt:** Web hat Pull-to-Refresh; App lädt nur bei Kamerabewegung/Tab-Wechsel neu.
-- **Umsetzung:** `.refreshable` auf Liste/Verlauf/Stats; letzter Stationsdatensatz + Band in
-  `UserDefaults`/`FileManager` cachen und beim Start sofort anzeigen (stale-while-revalidate).
+- **Umgesetzt:** `.refreshable` auf Verlauf + Stats.
+- **Offen:** Offline-Cache — letzter Stationsdatensatz + Band in `UserDefaults`/`FileManager`
+  cachen und beim Start sofort anzeigen (stale-while-revalidate).
 
 ## 7. Vollständige i18n
 

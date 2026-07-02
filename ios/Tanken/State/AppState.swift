@@ -100,6 +100,14 @@ final class AppState {
         }
     }
 
+    /// Selected history/stats scan location (nil = "Alle Standorte"); shared by both tabs like
+    /// the web's synced pickers. Session-only, not persisted.
+    var historyLocation: String?
+    /// True once the user picked manually — stops the nearest-location auto-pick.
+    var historyLocationTouched = false
+    /// True while the current selection came from the auto-pick (drives the hint).
+    var historyLocationAutoPicked = false
+
     private(set) var sessionToken: String?
 
     /// Latest `/api/me` snapshot (nil until fetched).
@@ -177,6 +185,19 @@ final class AppState {
         Task {
             _ = try? await api.setFavourite(stationId: stationId, isFavourite: isFav)
         }
+    }
+
+    // MARK: - History/stats location picker
+
+    /// Defaults the picker to the scan location closest to the user, like the web — only while
+    /// the user hasn't chosen manually and nothing is selected yet.
+    func autoPickHistoryLocation(from options: [LocationOption]) async {
+        guard !historyLocationTouched, historyLocation == nil, !options.isEmpty else { return }
+        guard let coordinate = await OneShotLocation().current() else { return }
+        guard !historyLocationTouched, historyLocation == nil else { return }
+        guard let nearest = LocationPickerData.nearest(in: options, to: coordinate) else { return }
+        historyLocation = nearest.id
+        historyLocationAutoPicked = true
     }
 
     // MARK: - Toast

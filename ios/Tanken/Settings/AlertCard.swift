@@ -1,37 +1,9 @@
 import SwiftUI
 import CoreLocation
 
-/// One-shot location fetch for the alert's monitoring center (no permission prompt of its own —
-/// the map tab is responsible for asking; without permission the alert is saved without coords
-/// and the server keeps/derives the area).
-@MainActor
-private final class OneShotLocation: NSObject, CLLocationManagerDelegate {
-    private let manager = CLLocationManager()
-    private var continuation: CheckedContinuation<CLLocationCoordinate2D?, Never>?
-
-    func current() async -> CLLocationCoordinate2D? {
-        let status = manager.authorizationStatus
-        guard status == .authorizedWhenInUse || status == .authorizedAlways else { return nil }
-        manager.delegate = self
-        return await withCheckedContinuation { continuation in
-            self.continuation = continuation
-            manager.requestLocation()
-        }
-    }
-
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        continuation?.resume(returning: locations.last?.coordinate)
-        continuation = nil
-    }
-
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        continuation?.resume(returning: nil)
-        continuation = nil
-    }
-}
-
 /// The Preisalarm card, mirroring the web's alert card: enable toggle, threshold hero with
-/// ±1-cent steppers, ntfy/email channel picker, status panel and save/test actions.
+/// ±1-cent steppers and a draggable threshold bar against the current market range, ntfy/email
+/// channel picker, status panel and save/test actions.
 /// Server-side evaluation — no push infrastructure needed in the app.
 struct AlertCard: View {
     @Environment(AppState.self) private var app
@@ -45,6 +17,11 @@ struct AlertCard: View {
     @State private var existing: PriceAlert?
     @State private var busy = false
     @State private var loaded = false
+    /// Cheapest…priciest price around the user (with a small margin) — anchors the threshold bar
+    /// (web #alert-threshold-bar).
+    @State private var marketRange: ClosedRange<Double>?
+    /// The actual cheapest price in the area, for the caption under the bar.
+    @State private var cheapestPrice: Double?
 
     private let locator = OneShotLocation()
 
@@ -63,12 +40,14 @@ struct AlertCard: View {
                     toggleRow
                     if enabled {
                         thresholdHero
+                        thresholdBar
                         channelSection
                         statusPanel
                         actions
                     }
                 }
                 .animation(.spring(duration: 0.35), value: enabled)
+                .animation(.spring(duration: 0.35), value: marketRange)
             }
         }
         .task(id: app.isLoggedIn) {
@@ -82,6 +61,32 @@ struct AlertCard: View {
                 email = alert.email ?? ""
             }
             loaded = true
+            await loadMarketRange()
+        }
+    }
+
+    /// Fetches the cheapest/priciest price around the alert area (saved coords, else the user's
+    /// location) so the bar can show where the threshold sits in the current market.
+    private func loadMarketRange() async {
+        var center: CLLocationCoordinate2D?
+        if let lat = existing?.lat, let lng = existing?.lng {
+            center = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+        } else {
+            center = await locator.current()
+        }
+        guard let center else { return }
+        guard let stations = try? await app.api.stations(
+            lat: center.latitude,
+            lng: center.longitude,
+            fuel: app.fuelType
+        ) else { return }
+        let prices = stations.compactMap(\.price).filter { $0 > 0 }
+        guard let low = prices.min(), let high = prices.max(), high > low else { return }
+        cheapestPrice = low
+        marketRange = (low - 0.05)...(high + 0.05)
+        // Web default when nothing is armed yet: 3 ct under the current cheapest price.
+        if existing == nil {
+            threshold = min(3.0, max(0.5, ((low - 0.03) * 100).rounded() / 100))
         }
     }
 
@@ -130,6 +135,65 @@ struct AlertCard: View {
                     threshold = min(3.0, (threshold * 100 + 1).rounded() / 100)
                 }
             }
+        }
+    }
+
+    /// Green→red bar spanning the current market range; the marker sits at the threshold and can
+    /// be dragged, like the web's #alert-threshold-bar.
+    @ViewBuilder
+    private var thresholdBar: some View {
+        if let range = marketRange {
+            VStack(spacing: 4) {
+                GeometryReader { geo in
+                    let span = range.upperBound - range.lowerBound
+                    let fraction = (threshold - range.lowerBound) / span
+                    let x = geo.size.width * min(max(fraction, 0), 1)
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Theme.good, Theme.okay, Theme.bad],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(height: 6)
+                        Circle()
+                            .fill(.white)
+                            .frame(width: 18, height: 18)
+                            .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                            .position(x: x, y: geo.size.height / 2)
+                    }
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { drag in
+                                let dragFraction = min(max(drag.location.x / geo.size.width, 0), 1)
+                                let price = range.lowerBound + dragFraction * span
+                                let next = min(3.0, max(0.5, (price * 100).rounded() / 100))
+                                if next != threshold {
+                                    threshold = next
+                                    Haptics.selection()
+                                }
+                            }
+                    )
+                }
+                .frame(height: 24)
+                HStack {
+                    Text(Formatters.price(range.lowerBound))
+                    Spacer()
+                    Text(Formatters.price(range.upperBound))
+                }
+                .font(.caption2)
+                .foregroundStyle(Theme.hint)
+                if let cheapestPrice {
+                    Text(String(format: s.alertCheapestFormat, Formatters.price(cheapestPrice)))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
 

@@ -8,13 +8,20 @@ struct HistoryTabView: View {
     @Environment(\.strings) private var s
 
     @State private var model = HistoryViewModel()
+    @State private var appliedDefaultRange = false
 
     private struct RangeOption: Identifiable, Equatable {
         let days: Int
         var id: Int { days }
     }
 
-    private let ranges = [RangeOption(days: 7), RangeOption(days: 14), RangeOption(days: 30), RangeOption(days: 0)]
+    private let ranges = [
+        RangeOption(days: 1),
+        RangeOption(days: 7),
+        RangeOption(days: 14),
+        RangeOption(days: 30),
+        RangeOption(days: 0),
+    ]
 
     var body: some View {
         NavigationStack {
@@ -25,6 +32,14 @@ struct HistoryTabView: View {
                         .foregroundStyle(.secondary)
 
                     countryChips
+                    if !model.locationOptions.isEmpty {
+                        LocationPickerRow(
+                            options: model.locationOptions,
+                            selection: locationBinding,
+                            autoPicked: app.historyLocationAutoPicked
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                     SectionHeader(text: s.periodLabel)
                     rangeChips
 
@@ -32,30 +47,62 @@ struct HistoryTabView: View {
                         LoadingErrorState(error: nil) {}
                     } else if model.failed && model.filteredPoints.isEmpty {
                         LoadingErrorState(error: s.errorGeneric) {
-                            Task { await model.load(api: app.api) }
+                            Task { await model.load(api: app.api, location: app.historyLocation) }
                         }
                     } else if model.filteredPoints.isEmpty {
                         emptyState
                     } else {
                         chartCard
+                        if !model.hourPoints.isEmpty {
+                            hourCard
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
                         summaryTiles
                         extremesSection
                     }
                 }
                 .padding(16)
+                .animation(.spring(duration: 0.35), value: model.rangeDays)
+                .animation(.spring(duration: 0.35), value: model.locationOptions.isEmpty)
             }
             .background(Theme.background)
             .navigationTitle(s.historyTitle)
+            .refreshable {
+                Haptics.light()
+                await model.load(api: app.api, location: app.historyLocation)
+            }
         }
         .task {
-            await model.loadIfNeeded(api: app.api)
+            // The synced historyDefaultDays setting (1 = 24 h, 7 = 7 days) seeds the range once.
+            if !appliedDefaultRange {
+                appliedDefaultRange = true
+                model.rangeDays = app.historyDefaultDays == 1 ? 1 : 7
+            }
+            await model.loadIfNeeded(api: app.api, location: app.historyLocation)
+            await app.autoPickHistoryLocation(from: model.locationOptions)
         }
         .onChange(of: model.country) {
-            Task { await model.load(api: app.api) }
+            Task { await model.load(api: app.api, location: app.historyLocation) }
+        }
+        .onChange(of: app.historyLocation) {
+            Task { await model.loadIfNeeded(api: app.api, location: app.historyLocation) }
         }
         .onChange(of: app.baseURLString) {
-            Task { await model.load(api: app.api) }
+            Task { await model.load(api: app.api, location: app.historyLocation) }
         }
+    }
+
+    /// Manual picks flow through here — they stop the auto-pick like the web's
+    /// `locationPickerTouched` and drop the "Automatisch" hint on both tabs.
+    private var locationBinding: Binding<String?> {
+        Binding(
+            get: { app.historyLocation },
+            set: { value in
+                app.historyLocation = value
+                app.historyLocationTouched = true
+                app.historyLocationAutoPicked = false
+            }
+        )
     }
 
     private var countryChips: some View {
@@ -79,11 +126,44 @@ struct HistoryTabView: View {
 
     private func label(for option: RangeOption) -> String {
         switch option.days {
+        case 1: return s.range24h
         case 7: return s.days7
         case 14: return s.days14
         case 30: return s.days30
         default: return s.allRange
         }
+    }
+
+    /// Extra hour chart shown in 24h mode — average per hour bucket, price-colored like the
+    /// stats hour chart.
+    private var hourCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(text: s.hourlyTitle)
+                let avgValues = model.hourPoints.map(\.avg)
+                Chart(model.hourPoints) { point in
+                    BarMark(
+                        x: .value("Zeit", point.date, unit: .hour),
+                        y: .value("Ø", point.avg)
+                    )
+                    .foregroundStyle(Theme.priceColor(ratio: ratio(of: point.avg, within: avgValues)))
+                    .cornerRadius(2)
+                }
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
+                        AxisGridLine()
+                        AxisValueLabel(format: .dateTime.hour())
+                    }
+                }
+                .chartYScale(domain: .automatic(includesZero: false))
+                .frame(height: 140)
+            }
+        }
+    }
+
+    private func ratio(of value: Double, within values: [Double]) -> Double {
+        guard let min = values.min(), let max = values.max(), max > min else { return 0 }
+        return (value - min) / (max - min)
     }
 
     private var chartCard: some View {
@@ -214,6 +294,7 @@ private extension Strings {
     func periodTrendTitle(days: Int) -> String {
         let range: String
         switch days {
+        case 1: range = range24h
         case 7: range = days7
         case 14: range = days14
         case 30: range = days30

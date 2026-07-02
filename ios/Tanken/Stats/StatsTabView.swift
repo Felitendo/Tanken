@@ -18,12 +18,20 @@ struct StatsTabView: View {
                         .foregroundStyle(.secondary)
 
                     countryChips
+                    if !model.locationOptions.isEmpty {
+                        LocationPickerRow(
+                            options: model.locationOptions,
+                            selection: locationBinding,
+                            autoPicked: app.historyLocationAutoPicked
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
 
                     if model.loading && model.stats == nil {
                         LoadingErrorState(error: nil) {}
                     } else if model.failed && model.stats == nil {
                         LoadingErrorState(error: s.errorGeneric) {
-                            Task { await model.load(api: app.api) }
+                            Task { await model.load(api: app.api, location: app.historyLocation) }
                         }
                     } else if model.stats == nil || model.dayAvgs.isEmpty {
                         emptyState
@@ -35,19 +43,41 @@ struct StatsTabView: View {
                     }
                 }
                 .padding(16)
+                .animation(.spring(duration: 0.35), value: model.locationOptions.isEmpty)
             }
             .background(Theme.background)
             .navigationTitle(s.statsTitle)
+            .refreshable {
+                Haptics.light()
+                await model.load(api: app.api, location: app.historyLocation)
+            }
         }
         .task {
-            await model.loadIfNeeded(api: app.api)
+            await model.loadIfNeeded(api: app.api, location: app.historyLocation)
+            await app.autoPickHistoryLocation(from: model.locationOptions)
         }
         .onChange(of: model.country) {
-            Task { await model.load(api: app.api) }
+            Task { await model.load(api: app.api, location: app.historyLocation) }
+        }
+        .onChange(of: app.historyLocation) {
+            Task { await model.loadIfNeeded(api: app.api, location: app.historyLocation) }
         }
         .onChange(of: app.baseURLString) {
-            Task { await model.load(api: app.api) }
+            Task { await model.load(api: app.api, location: app.historyLocation) }
         }
+    }
+
+    /// Manual picks stop the auto-pick and drop the "Automatisch" hint — the selection is shared
+    /// with the history tab, like the web keeps both pickers in sync.
+    private var locationBinding: Binding<String?> {
+        Binding(
+            get: { app.historyLocation },
+            set: { value in
+                app.historyLocation = value
+                app.historyLocationTouched = true
+                app.historyLocationAutoPicked = false
+            }
+        )
     }
 
     private var countryChips: some View {

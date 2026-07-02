@@ -71,6 +71,10 @@ struct Strings {
     let spanMinMax: String
     let averageLabel: String
     let pointsLabel: String
+    let hourlyTitle: String
+    // Location picker (history + stats)
+    let allLocations: String
+    let locationAutoPicked: String
     // Stats
     let statsTitle: String
     let statsDescription: String
@@ -99,6 +103,7 @@ struct Strings {
     let alertLoginRequired: String
     let alertSaved: String
     let testSent: String
+    let alertCheapestFormat: String
     // Settings
     let settingsTitle: String
     let settingsDescription: String
@@ -183,6 +188,9 @@ extension Strings {
         spanMinMax: "Spanne (Min–Max)",
         averageLabel: "Durchschnitt",
         pointsLabel: "Punkte",
+        hourlyTitle: "PREIS NACH UHRZEIT",
+        allLocations: "Alle Standorte",
+        locationAutoPicked: "Automatisch · nächster Standort",
         statsTitle: "Statistiken",
         statsDescription: "Wann und wo Tanken am günstigsten ist.",
         noStats: "Keine Statistik verfügbar.",
@@ -209,6 +217,7 @@ extension Strings {
         alertLoginRequired: "Melde dich an, um Preisalarme einzurichten.",
         alertSaved: "Alarm gespeichert",
         testSent: "Test gesendet",
+        alertCheapestFormat: "Aktuell günstigster Preis: %@",
         settingsTitle: "Einstellungen",
         settingsDescription: "Deine App-Einstellungen und dein Konto.",
         feloId: "FELO ID",
@@ -290,6 +299,9 @@ extension Strings {
         spanMinMax: "Range (min–max)",
         averageLabel: "Average",
         pointsLabel: "points",
+        hourlyTitle: "PRICE BY TIME OF DAY",
+        allLocations: "All locations",
+        locationAutoPicked: "Auto · nearest location",
         statsTitle: "Statistics",
         statsDescription: "When and where refuelling is cheapest.",
         noStats: "No statistics available.",
@@ -316,6 +328,7 @@ extension Strings {
         alertLoginRequired: "Sign in to set up price alerts.",
         alertSaved: "Alert saved",
         testSent: "Test sent",
+        alertCheapestFormat: "Currently cheapest price: %@",
         settingsTitle: "Settings",
         settingsDescription: "Your app settings and your account.",
         feloId: "FELO ID",

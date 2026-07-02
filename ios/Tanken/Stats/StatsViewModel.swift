@@ -1,7 +1,7 @@
 import SwiftUI
 import Observation
 
-/// Loads `/api/stats` (30-day aggregates) for the selected country.
+/// Loads `/api/stats` (30-day aggregates) for the selected country + scan location.
 @MainActor
 @Observable
 final class StatsViewModel {
@@ -10,24 +10,32 @@ final class StatsViewModel {
     private(set) var stats: HistoryStats?
     private(set) var loading = false
     private(set) var failed = false
+    /// Scan locations with history data for the picker (shared UI with the history tab).
+    private(set) var locationOptions: [LocationOption] = []
     private var loadedCountry: Country?
+    private var loadedLocation: String??
 
-    func loadIfNeeded(api: ApiClient) async {
-        guard loadedCountry != country else { return }
-        await load(api: api)
+    func loadIfNeeded(api: ApiClient, location: String?) async {
+        guard loadedCountry != country || loadedLocation != .some(location) else { return }
+        await load(api: api, location: location)
     }
 
-    func load(api: ApiClient) async {
+    func load(api: ApiClient, location: String?) async {
         loading = true
         failed = false
+        async let optionsResult = LocationPickerData.load(api: api, country: country)
         do {
-            let result = try await api.stats(country: country)
+            let result = try await api.stats(location: location, country: country)
+            let options = await optionsResult
             withAnimation(.spring(duration: 0.5)) {
                 stats = result
+                locationOptions = options
                 loading = false
             }
             loadedCountry = country
+            loadedLocation = .some(location)
         } catch {
+            locationOptions = await optionsResult
             withAnimation(.spring(duration: 0.3)) {
                 failed = true
                 loading = false
