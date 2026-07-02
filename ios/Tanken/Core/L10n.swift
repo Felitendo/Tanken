@@ -24,6 +24,7 @@ struct Strings {
     let myLocation: String
     let loadingStations: String
     let noStations: String
+    let noResults: String
     let stationsCountFormat: String
     // Station list
     let noOpenStations: String
@@ -122,6 +123,7 @@ extension Strings {
         myLocation: "Mein Standort",
         loadingStations: "Tankstellen laden…",
         noStations: "Keine Tankstellen gefunden.",
+        noResults: "Keine Ergebnisse",
         stationsCountFormat: "%d Tankstellen",
         noOpenStations: "Keine offenen Tankstellen gefunden",
         sortPrice: "Preis",
@@ -212,6 +214,7 @@ extension Strings {
         myLocation: "My location",
         loadingStations: "Loading stations…",
         noStations: "No stations found.",
+        noResults: "No results",
         stationsCountFormat: "%d stations",
         noOpenStations: "No open stations found",
         sortPrice: "Price",

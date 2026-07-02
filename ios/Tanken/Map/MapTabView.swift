@@ -17,6 +17,10 @@ struct MapTabView: View {
     )
     @State private var query = ""
     @State private var drawerState: DrawerState = .collapsed
+    @State private var searchResults: SearchResults?
+    @State private var searchTask: Task<Void, Never>?
+    @State private var searchSeq = 0
+    @FocusState private var searchFocused: Bool
     @Namespace private var glass
 
     var body: some View {
@@ -99,12 +103,14 @@ struct MapTabView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .submitLabel(.search)
-                        .onSubmit(runSearch)
+                        .focused($searchFocused)
+                        .onSubmit(submitSearch)
                     if !query.isEmpty {
                         Button {
                             Haptics.light()
                             withAnimation(.spring(duration: 0.25)) {
                                 query = ""
+                                searchResults = nil
                             }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
@@ -118,6 +124,21 @@ struct MapTabView: View {
                 .padding(.vertical, 12)
                 .glassSurface(in: RoundedRectangle(cornerRadius: Theme.rMd, style: .continuous))
                 .glassEffectID("search", in: glass)
+                .onChange(of: query) {
+                    queryChanged()
+                }
+
+                if let results = searchResults, searchFocused || !results.isEmpty {
+                    SearchResultsView(
+                        results: results,
+                        band: model.band,
+                        onStation: selectSearchStation,
+                        onPlace: selectSearchPlace
+                    )
+                    .glassSurface(in: RoundedRectangle(cornerRadius: Theme.rMd, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.rMd, style: .continuous))
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 if model.showSearchHere {
                     Button {
@@ -154,6 +175,7 @@ struct MapTabView: View {
         .padding(.top, 8)
         .animation(.spring(duration: 0.35), value: model.showSearchHere)
         .animation(.spring(duration: 0.35), value: model.loading)
+        .animation(.spring(duration: 0.3), value: searchResults)
     }
 
     private var locateFab: some View {
@@ -296,20 +318,143 @@ struct MapTabView: View {
         .buttonStyle(PressableRowStyle())
     }
 
-    // MARK: - Search
+    // MARK: - Search (web: 350 ms debounce, instant local matches, places first, max 8)
 
-    private func runSearch() {
+    private func queryChanged() {
+        searchTask?.cancel()
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        Haptics.medium()
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = trimmed
-        MKLocalSearch(request: request).start { response, _ in
-            guard let coordinate = response?.mapItems.first?.placemark.coordinate else { return }
-            Task { @MainActor in
-                model.recenter(to: coordinate)
-                model.loadAround(center: coordinate)
+        guard trimmed.count >= 2 else {
+            withAnimation(.spring(duration: 0.25)) {
+                searchResults = nil
             }
+            return
+        }
+
+        // Instant feedback from the already loaded stations, like the web's local matching.
+        let local = localMatches(trimmed)
+        if !local.isEmpty {
+            withAnimation(.spring(duration: 0.25)) {
+                searchResults = SearchResults(places: searchResults?.places ?? [], stations: local)
+            }
+        }
+
+        searchSeq += 1
+        let seq = searchSeq
+        let fuel = app.fuelType
+        let api = app.api
+        let center = model.lastRegion?.center
+        searchTask = Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            async let serverTask = api.searchStations(query: trimmed, fuel: fuel, lat: center?.latitude, lng: center?.longitude)
+            async let placesTask = searchPlaces(trimmed)
+            let server = (try? await serverTask) ?? []
+            let places = await placesTask
+            guard !Task.isCancelled, seq == searchSeq else { return }
+            let stations = mergeMatches(local: localMatches(trimmed), server: server)
+            withAnimation(.spring(duration: 0.3)) {
+                searchResults = SearchResults(places: places, stations: stations)
+            }
+        }
+    }
+
+    /// Web matchStationsByQuery: score brand/name/street/place, only open + priced, top 6.
+    private func localMatches(_ rawQuery: String) -> [StationMatch] {
+        let q = rawQuery.lowercased()
+        let ranked = displayStations
+        var scored: [(Station, Int)] = []
+        for station in model.stations where station.isOpen == true && (station.price ?? 0) > 0 {
+            let brand = (station.brand ?? "").lowercased()
+            let name = (station.name ?? "").lowercased()
+            let street = (station.street ?? "").lowercased()
+            let place = (station.place ?? "").lowercased()
+            let score: Int
+            if !brand.isEmpty, brand.hasPrefix(q) { score = 100 }
+            else if !name.isEmpty, name.hasPrefix(q) { score = 90 }
+            else if !brand.isEmpty, brand.contains(q) { score = 80 }
+            else if !name.isEmpty, name.contains(q) { score = 70 }
+            else if street.contains(q) { score = 50 }
+            else if place.contains(q) { score = 40 }
+            else { continue }
+            scored.append((station, score))
+        }
+        scored.sort { a, b in
+            if a.1 != b.1 { return a.1 > b.1 }
+            return (a.0.price ?? .infinity) < (b.0.price ?? .infinity)
+        }
+        return scored.prefix(6).map { station, _ in
+            let rank = ranked.firstIndex(where: { $0.id == station.id }).map { $0 + 1 }
+            return StationMatch(station: station, rank: rank)
+        }
+    }
+
+    /// Local matches win (they carry the list rank); server-wide results fill up to 8.
+    private func mergeMatches(local: [StationMatch], server: [Station]) -> [StationMatch] {
+        var merged = local
+        var seen = Set(local.map(\.id))
+        for station in server where !seen.contains(station.id) {
+            seen.insert(station.id)
+            merged.append(StationMatch(station: station, rank: nil))
+            if merged.count >= 8 { break }
+        }
+        return Array(merged.prefix(8))
+    }
+
+    private func searchPlaces(_ rawQuery: String) async -> [PlaceResult] {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = rawQuery
+        request.resultTypes = .address
+        if let region = model.lastRegion {
+            request.region = region
+        }
+        guard let response = try? await MKLocalSearch(request: request).start() else { return [] }
+        return response.mapItems.prefix(4).compactMap { item in
+            let coordinate = item.placemark.coordinate
+            let name = item.name ?? ""
+            guard !name.isEmpty else { return nil }
+            return PlaceResult(
+                id: UUID(),
+                name: name,
+                subtitle: item.placemark.title ?? "",
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude
+            )
+        }
+    }
+
+    private func selectSearchStation(_ station: Station) {
+        Haptics.light()
+        query = station.displayBrand
+        dismissSearch()
+        model.recenter(to: CLLocationCoordinate2D(latitude: station.lat, longitude: station.lng))
+        model.loadAround(center: CLLocationCoordinate2D(latitude: station.lat, longitude: station.lng))
+        model.select(station)
+    }
+
+    private func selectSearchPlace(_ place: PlaceResult) {
+        Haptics.light()
+        query = place.name
+        dismissSearch()
+        let coordinate = CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude)
+        model.recenter(to: coordinate)
+        model.loadAround(center: coordinate)
+    }
+
+    private func dismissSearch() {
+        searchFocused = false
+        searchTask?.cancel()
+        searchSeq += 1
+        withAnimation(.spring(duration: 0.25)) {
+            searchResults = nil
+        }
+    }
+
+    /// Return key: pick the first suggestion (places first, like the web dropdown order).
+    private func submitSearch() {
+        if let place = searchResults?.places.first {
+            selectSearchPlace(place)
+        } else if let match = searchResults?.stations.first {
+            selectSearchStation(match.station)
         }
     }
 }
