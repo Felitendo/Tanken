@@ -37,6 +37,9 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
     var recenterTarget: RecenterTarget?
     /// True once the camera moved meaningfully away from the last loaded center.
     var showSearchHere = false
+    /// While a route is active, viewport fetches and "Hier suchen" are paused so the corridor
+    /// station list stays put (web: `state.routeActive` guard in refreshMapData).
+    var routeModeActive = false
 
     /// When the currently shown station data was fetched — feeds the detail's "Zuletzt
     /// aktualisiert" row like the web's dataTimestamp.
@@ -56,6 +59,11 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
     /// Camera-rest events caused by our own recenter animations are consumed once so they don't
     /// pop the "Hier suchen" pill or trigger a redundant viewport fetch.
     private var suppressNextCameraEvent = false
+
+    /// Last known device location (route planner "Aktueller Standort" shortcut).
+    var userCoordinate: CLLocationCoordinate2D? {
+        locationManager.location?.coordinate
+    }
 
     private static let fallbackCenter = CLLocationCoordinate2D(latitude: 51.1657, longitude: 10.4515)
     /// Auto-fetch viewport stations only when zoomed in at least this far (like the web grid).
@@ -144,6 +152,7 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
             suppressNextCameraEvent = false
             return
         }
+        guard !routeModeActive else { return }
 
         if !showSearchHere, movedMeters(from: lastLoadedCenter, to: region.center) > 2_000 {
             withAnimation(.spring(duration: 0.3)) {

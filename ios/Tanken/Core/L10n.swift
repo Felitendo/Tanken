@@ -185,6 +185,19 @@ struct Strings {
     let requestFailed: String
     let requestTooMany: String
     let requestDeniedReason: String
+    // Route planner
+    let routePlan: String
+    let routeStartPlaceholder: String
+    let routeDestPlaceholder: String
+    let routeCurrentLocation: String
+    let routeGo: String
+    let routeLoading: String
+    let routeLoginRequired: String
+    let routeNoOrs: String
+    let routeNoRoute: String
+    let routeNoStations: String
+    let routeExit: String
+    let routeSummaryFormat: String
 }
 
 extension Strings {
@@ -345,7 +358,19 @@ extension Strings {
         requestSending: "Wird gesendet…",
         requestFailed: "Anfrage fehlgeschlagen",
         requestTooMany: "Zu viele offene Anfragen. Warte bitte auf Bearbeitung.",
-        requestDeniedReason: "Begründung"
+        requestDeniedReason: "Begründung",
+        routePlan: "Entlang der Route suchen",
+        routeStartPlaceholder: "Start (aktueller Standort)",
+        routeDestPlaceholder: "Ziel",
+        routeCurrentLocation: "Aktueller Standort",
+        routeGo: "Route finden",
+        routeLoading: "Route wird berechnet…",
+        routeLoginRequired: "Bitte einloggen, um die Routenplanung zu nutzen.",
+        routeNoOrs: "Routenplanung nicht konfiguriert. Bitte Admin um einen ORS-Key bitten.",
+        routeNoRoute: "Route konnte nicht berechnet werden.",
+        routeNoStations: "Keine Tankstellen entlang der Route gefunden.",
+        routeExit: "Route beenden",
+        routeSummaryFormat: "%@ km · %@ · %d Tankstellen"
     )
 
     static let en = Strings(
@@ -505,7 +530,19 @@ extension Strings {
         requestSending: "Sending…",
         requestFailed: "Request failed",
         requestTooMany: "Too many pending requests. Please wait for review.",
-        requestDeniedReason: "Reason"
+        requestDeniedReason: "Reason",
+        routePlan: "Search along route",
+        routeStartPlaceholder: "Start (current location)",
+        routeDestPlaceholder: "Destination",
+        routeCurrentLocation: "Current location",
+        routeGo: "Find route",
+        routeLoading: "Calculating route…",
+        routeLoginRequired: "Please log in to use route planning.",
+        routeNoOrs: "Route planning not configured. Ask the admin for an ORS key.",
+        routeNoRoute: "Could not calculate route.",
+        routeNoStations: "No stations found along the route.",
+        routeExit: "Exit route",
+        routeSummaryFormat: "%@ km · %@ · %d stations"
     )
 
     /// Resolves the catalogue from the persisted setting and the device language.

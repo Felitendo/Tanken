@@ -9,6 +9,7 @@ struct MapTabView: View {
     @Environment(\.strings) private var s
 
     @State private var model = MapViewModel()
+    @State private var planner = RoutePlanner()
     @State private var camera: MapCameraPosition = .region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 51.1657, longitude: 10.4515),
@@ -88,6 +89,35 @@ struct MapTabView: View {
                     }
                 }
             }
+            if planner.phase == .active {
+                if planner.polyline.count > 1 {
+                    MapPolyline(coordinates: planner.polyline)
+                        .stroke(
+                            Color.accentColor.opacity(0.85),
+                            style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+                        )
+                }
+                if let start = planner.start {
+                    Annotation("", coordinate: start.coordinate) {
+                        routeEndpointDot(fill: Color.accentColor, border: .white)
+                    }
+                }
+                if let dest = planner.dest {
+                    Annotation("", coordinate: dest.coordinate) {
+                        routeEndpointDot(fill: .white, border: Color.accentColor)
+                    }
+                }
+                ForEach(planner.scanDots) { dot in
+                    Annotation("", coordinate: dot.coordinate) {
+                        RouteScanDotView(state: dot.state)
+                    }
+                }
+                ForEach(planner.scanDots.filter { $0.state == .pending || $0.state == .scanning }) { dot in
+                    MapCircle(center: dot.coordinate, radius: 25_000)
+                        .foregroundStyle(Color.accentColor.opacity(0.07))
+                        .stroke(Color.accentColor.opacity(0.35), lineWidth: 1)
+                }
+            }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
         .ignoresSafeArea(edges: .top)
@@ -103,36 +133,38 @@ struct MapTabView: View {
     private var topOverlay: some View {
         GlassEffectContainer(spacing: 16) {
             VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField(s.mapSearchPlaceholder, text: $query)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.search)
-                        .focused($searchFocused)
-                        .onSubmit(submitSearch)
-                    if !query.isEmpty {
-                        Button {
-                            Haptics.light()
-                            withAnimation(.spring(duration: 0.25)) {
-                                query = ""
-                                searchResults = nil
+                if planner.phase != .active {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        TextField(s.mapSearchPlaceholder, text: $query)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.search)
+                            .focused($searchFocused)
+                            .onSubmit(submitSearch)
+                        if !query.isEmpty {
+                            Button {
+                                Haptics.light()
+                                withAnimation(.spring(duration: 0.25)) {
+                                    query = ""
+                                    searchResults = nil
+                                }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
                             }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
+                            .buttonStyle(.plain)
+                            .transition(.scale.combined(with: .opacity))
                         }
-                        .buttonStyle(.plain)
-                        .transition(.scale.combined(with: .opacity))
                     }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .glassSurface(in: RoundedRectangle(cornerRadius: Theme.rMd, style: .continuous))
-                .glassEffectID("search", in: glass)
-                .onChange(of: query) {
-                    queryChanged()
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .glassSurface(in: RoundedRectangle(cornerRadius: Theme.rMd, style: .continuous))
+                    .glassEffectID("search", in: glass)
+                    .onChange(of: query) {
+                        queryChanged()
+                    }
                 }
 
                 if let results = searchResults, searchFocused || !results.isEmpty {
@@ -146,6 +178,8 @@ struct MapTabView: View {
                     .clipShape(RoundedRectangle(cornerRadius: Theme.rMd, style: .continuous))
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
+
+                routeOverlay
 
                 if model.showSearchHere {
                     Button {
@@ -183,6 +217,167 @@ struct MapTabView: View {
         .animation(.spring(duration: 0.35), value: model.showSearchHere)
         .animation(.spring(duration: 0.35), value: model.loading)
         .animation(.spring(duration: 0.3), value: searchResults)
+        .animation(.spring(duration: 0.35), value: planner.phase)
+    }
+
+    // MARK: - Route planner overlay
+
+    /// Route chip → input panel → active summary, mirroring the web's route chip/panel flow.
+    @ViewBuilder
+    private var routeOverlay: some View {
+        switch planner.phase {
+        case .idle:
+            if searchResults == nil && !searchFocused {
+                Button {
+                    Haptics.light()
+                    withAnimation(.spring(duration: 0.35)) {
+                        planner.phase = .planning
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                            .font(.footnote.weight(.semibold))
+                        Text(s.routePlan)
+                    }
+                    .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.glass)
+                .glassEffectID("route-chip", in: glass)
+                .transition(.scale.combined(with: .opacity))
+            }
+        case .planning:
+            RoutePanel(
+                planner: planner,
+                userLocation: model.userCoordinate,
+                biasRegion: model.lastRegion,
+                onRoute: startRoute,
+                onClose: {
+                    withAnimation(.spring(duration: 0.35)) {
+                        planner.phase = .idle
+                    }
+                }
+            )
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        case .active:
+            HStack(spacing: 10) {
+                Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                Text(routeSummaryText)
+                    .font(.footnote.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Button {
+                    Haptics.light()
+                    exitRoute()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(s.routeExit)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .glassSurface(in: Capsule())
+            .glassEffectID("route-summary", in: glass)
+            .transition(.scale.combined(with: .opacity))
+        }
+    }
+
+    private var routeSummaryText: String {
+        String(
+            format: s.routeSummaryFormat,
+            "\(Int(planner.distanceKm.rounded()))",
+            RoutePlanner.formatDuration(planner.durationMin),
+            planner.stationCount
+        )
+    }
+
+    private func routeEndpointDot(fill: Color, border: Color) -> some View {
+        Circle()
+            .fill(fill)
+            .frame(width: 16, height: 16)
+            .overlay {
+                Circle().strokeBorder(border, lineWidth: 3)
+            }
+            .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+    }
+
+    /// Compute the route and enter route mode (web `enterRouteMode`).
+    private func startRoute() {
+        guard !planner.loading else { return }
+        // Fall back to the current location when the start field was left empty, like the web.
+        if planner.start == nil, let user = model.userCoordinate {
+            planner.start = RoutePlanner.Endpoint(
+                label: s.routeCurrentLocation,
+                lat: user.latitude,
+                lng: user.longitude
+            )
+        }
+        guard let start = planner.start, let dest = planner.dest else { return }
+        planner.loading = true
+        Task {
+            do {
+                let response = try await app.api.route(
+                    startLat: start.lat, startLng: start.lng,
+                    destLat: dest.lat, destLng: dest.lng,
+                    fuel: app.fuelType
+                )
+                planner.loading = false
+                guard response.route != nil else {
+                    app.showToast(s.routeNoRoute)
+                    return
+                }
+                planner.savedStations = model.stations
+                planner.apply(response)
+                let corridor = response.stations ?? []
+                withAnimation(.spring(duration: 0.35)) {
+                    planner.phase = .active
+                    model.routeModeActive = true
+                    model.showSearchHere = false
+                    model.stations = corridor
+                }
+                if corridor.isEmpty {
+                    app.showToast(s.routeNoStations)
+                }
+                if let region = planner.routeRegion {
+                    withAnimation(.spring(duration: 0.7)) {
+                        camera = .region(region)
+                    }
+                }
+                Haptics.success()
+                planner.startScanLoop(api: app.api, fuel: app.fuelType) { stations in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        model.stations = stations
+                    }
+                }
+            } catch let error as ApiError {
+                planner.loading = false
+                Haptics.error()
+                switch error.status {
+                case 401: app.showToast(s.routeLoginRequired)
+                case 503: app.showToast(s.routeNoOrs)
+                default: app.showToast(s.routeNoRoute)
+                }
+            } catch {
+                planner.loading = false
+                Haptics.error()
+                app.showToast(s.routeNoRoute)
+            }
+        }
+    }
+
+    /// Leave route mode: cancel scans, clear the route and restore the pre-route stations.
+    private func exitRoute() {
+        let restored = planner.savedStations
+        withAnimation(.spring(duration: 0.35)) {
+            planner.reset()
+            model.routeModeActive = false
+            model.stations = restored
+        }
+        planner.savedStations = []
     }
 
     private var locateFab: some View {
