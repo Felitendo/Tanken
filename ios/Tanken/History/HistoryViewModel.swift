@@ -11,6 +11,16 @@ struct HistoryPoint: Identifiable, Equatable {
     var id: Date { date }
 }
 
+/// One calendar day on the main history chart (web `daily` aggregation: min price of the day,
+/// raw entries kept for the tap-to-drill-down hour view).
+struct ChartDay: Identifiable, Equatable {
+    let day: Date
+    let minPrice: Double
+    let entries: [HistoryPoint]
+
+    var id: Date { day }
+}
+
 /// Loads `/api/history` for the selected country + scan location and filters it client-side by
 /// range, mirroring the web's Zeitraum chips (1 = 24 h, 7/14/30 days, 0 = everything).
 @MainActor
@@ -138,6 +148,21 @@ final class HistoryViewModel {
         }
         if result.cheapest == nil && result.mostExpensive == nil { return nil }
         return result
+    }
+
+    /// Per-day aggregation of the filtered range for the main chart (web `daily`): one point per
+    /// calendar day carrying the day's minimum price and its raw entries for the drill-down.
+    var chartDays: [ChartDay] {
+        let calendar = Calendar.current
+        let buckets = Dictionary(grouping: filteredPoints) { calendar.startOfDay(for: $0.date) }
+        return buckets.map { day, group in
+            ChartDay(
+                day: day,
+                minPrice: group.map(\.min).min() ?? 0,
+                entries: group.sorted { $0.date < $1.date }
+            )
+        }
+        .sorted { $0.day < $1.day }
     }
 
     /// Hour buckets of the last 24 h for the extra hour chart in 24h mode (web hour drill-down).

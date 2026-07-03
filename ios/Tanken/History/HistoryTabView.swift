@@ -10,6 +10,7 @@ struct HistoryTabView: View {
     @State private var model = HistoryViewModel()
     @State private var appliedDefaultRange = false
     @State private var detailTarget: StationDetailTarget?
+    @State private var drillDay: ChartDay?
 
     private struct RangeOption: Identifiable, Equatable {
         let days: Int
@@ -58,7 +59,10 @@ struct HistoryTabView: View {
                     } else {
                         heroCard
                         chartCard
-                        if !model.hourPoints.isEmpty {
+                        if let drill = drillDay {
+                            drillHourCard(drill)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        } else if !model.hourPoints.isEmpty {
                             hourCard
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                         }
@@ -93,8 +97,15 @@ struct HistoryTabView: View {
             await model.loadIfNeeded(api: app.api, location: app.historyLocation)
             await app.autoPickHistoryLocation(from: model.locationOptions)
         }
+        .onChange(of: model.rangeDays) {
+            drillDay = nil
+        }
         .onChange(of: model.country) {
+            drillDay = nil
             Task { await model.load(api: app.api, location: app.historyLocation) }
+        }
+        .onChange(of: app.historyLocation) {
+            drillDay = nil
         }
         .onChange(of: app.historyLocation) {
             Task { await model.loadIfNeeded(api: app.api, location: app.historyLocation) }
@@ -146,80 +157,172 @@ struct HistoryTabView: View {
         }
     }
 
-    /// Extra hour chart shown in 24h mode — average per hour bucket, price-colored like the
-    /// stats hour chart.
+    /// Extra hour chart shown in 24h mode — per-hour minimum, same warm line recipe as the web.
     private var hourCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(text: s.hourlyTitle)
-                let avgValues = model.hourPoints.map(\.avg)
-                let domain = Theme.priceDomain(for: avgValues)
-                Chart(model.hourPoints) { point in
-                    BarMark(
-                        x: .value("Zeit", point.date, unit: .hour),
-                        yStart: .value("Ø", domain.lowerBound),
-                        yEnd: .value("Ø", point.avg)
-                    )
-                    .foregroundStyle(Theme.priceColor(ratio: ratio(of: point.avg, within: avgValues)))
-                    .cornerRadius(2)
-                }
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
-                        AxisGridLine()
-                        AxisValueLabel(format: .dateTime.hour())
-                    }
-                }
-                .chartYScale(domain: domain)
-                .frame(height: 140)
+                gradientLineChart(
+                    points: model.hourPoints.map { ($0.date, $0.min) },
+                    height: 140,
+                    hourAxis: true
+                )
             }
         }
     }
 
-    private func ratio(of value: Double, within values: [Double]) -> Double {
-        guard let min = values.min(), let max = values.max(), max > min else { return 0 }
-        return (value - min) / (max - min)
-    }
-
-    private var chartCard: some View {
+    /// Tap-to-drill-down hour view for one day of the range chart (web `renderHourChart`):
+    /// day label + close button over the day's raw minimum prices.
+    private func drillHourCard(_ day: ChartDay) -> some View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 14) {
-                    legendDot(color: Color.accentColor, label: s.averageLabel)
-                    legendDot(color: Color.accentColor.opacity(0.25), label: s.spanMinMax)
+                HStack {
+                    Text(drillDayLabel(day))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Button {
+                        Haptics.light()
+                        withAnimation(.spring(duration: 0.3)) {
+                            drillDay = nil
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(6)
+                            .background(Theme.background, in: Circle())
+                    }
+                    .buttonStyle(.plain)
                 }
-                Chart(model.filteredPoints) { point in
-                    AreaMark(
-                        x: .value("Zeit", point.date),
-                        yStart: .value("Min", point.min),
-                        yEnd: .value("Max", point.max)
-                    )
-                    .foregroundStyle(Color.accentColor.opacity(0.15))
-                    .interpolationMethod(.monotone)
-
-                    LineMark(
-                        x: .value("Zeit", point.date),
-                        y: .value("Ø", point.avg)
-                    )
-                    .foregroundStyle(Color.accentColor)
-                    .interpolationMethod(.monotone)
-                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
-                }
-                .chartYScale(domain: .automatic(includesZero: false))
-                .frame(height: 220)
-                .animation(.spring(duration: 0.5), value: model.rangeDays)
+                gradientLineChart(
+                    points: day.entries.map { ($0.date, $0.min) },
+                    height: 140,
+                    hourAxis: true
+                )
             }
         }
     }
 
-    private func legendDot(color: Color, label: String) -> some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+    private func drillDayLabel(_ day: ChartDay) -> String {
+        let weekday = Calendar.current.component(.weekday, from: day.day) - 1
+        let name = weekday >= 0 && weekday < s.dayNames.count ? s.dayNames[weekday] : ""
+        return "\(name) \(day.day.formatted(.dateTime.day().month().year()))"
+    }
+
+    /// Main range chart (web `renderChart`): one point per day at the day's minimum price,
+    /// rank-colored line + points and the warm vertical fill. Tapping a day with intraday data
+    /// opens the hour drill-down.
+    private var chartCard: some View {
+        let dayPoints: [(Date, Double)] = model.rangeDays == 1
+            ? model.filteredPoints.map { ($0.date, $0.min) }
+            : model.chartDays.map { ($0.day, $0.minPrice) }
+        return Card {
+            gradientLineChart(points: dayPoints, height: 220, hourAxis: model.rangeDays == 1) { tapped in
+                guard model.rangeDays != 1 else { return }
+                let day = Calendar.current.startOfDay(for: tapped)
+                if let hit = model.chartDays.first(where: { $0.day == day }), hit.entries.count > 1 {
+                    Haptics.light()
+                    withAnimation(.spring(duration: 0.3)) {
+                        drillDay = hit
+                    }
+                }
+            }
+            .animation(.spring(duration: 0.5), value: model.rangeDays)
         }
+    }
+
+    /// The web's shared chart recipe: line colored by price (green cheap → red expensive — the
+    /// color is a pure function of the y-value, so a vertical gradient reproduces it exactly),
+    /// warm red→orange→yellow area fill, rank-colored points.
+    @ViewBuilder
+    private func gradientLineChart(
+        points: [(Date, Double)],
+        height: CGFloat,
+        hourAxis: Bool,
+        onTap: ((Date) -> Void)? = nil
+    ) -> some View {
+        let values = points.map(\.1)
+        let domain = Theme.priceDomain(for: values)
+        let lo = values.min() ?? 0
+        let hi = values.max() ?? 1
+        let span = max(hi - lo, 0.0001)
+        let manyPoints = points.count > 30
+        let chartPoints = points.enumerated().map { pair in
+            GradientChartPoint(index: pair.offset, date: pair.element.0, value: pair.element.1)
+        }
+
+        Chart(chartPoints) { point in
+            AreaMark(
+                x: .value("Zeit", point.date),
+                yStart: .value("Preis", domain.lowerBound),
+                yEnd: .value("Preis", point.value)
+            )
+            .foregroundStyle(LinearGradient(
+                colors: [Theme.bad.opacity(0.34), Theme.okay.opacity(0.18), Color.yellow.opacity(0.04)],
+                startPoint: .top,
+                endPoint: .bottom
+            ))
+            .interpolationMethod(.monotone)
+
+            LineMark(
+                x: .value("Zeit", point.date),
+                y: .value("Preis", point.value)
+            )
+            .foregroundStyle(priceLineGradient(domain: domain, dataLo: lo, dataHi: hi))
+            .interpolationMethod(.monotone)
+            .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+
+            PointMark(
+                x: .value("Zeit", point.date),
+                y: .value("Preis", point.value)
+            )
+            .foregroundStyle(Theme.rankColor(ratio: (point.value - lo) / span))
+            .symbolSize(point.index == chartPoints.count - 1 ? 100 : (manyPoints ? 20 : 50))
+        }
+        .chartYScale(domain: domain)
+        .chartXAxis {
+            if hourAxis {
+                AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
+                    AxisGridLine()
+                    AxisValueLabel(format: .dateTime.hour())
+                }
+            } else {
+                AxisMarks(values: .automatic(desiredCount: 5)) { _ in
+                    AxisGridLine()
+                    AxisValueLabel(format: .dateTime.day().month())
+                }
+            }
+        }
+        .frame(height: height)
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                Rectangle()
+                    .fill(.clear)
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        guard let onTap, let plotAnchor = proxy.plotFrame else { return }
+                        let plotOrigin = geo[plotAnchor].origin
+                        let x = location.x - plotOrigin.x
+                        if let date: Date = proxy.value(atX: x) {
+                            onTap(date)
+                        }
+                    }
+            }
+        }
+    }
+
+    /// Vertical gradient whose stops map the y-domain onto the web's rankColor scale.
+    private func priceLineGradient(domain: ClosedRange<Double>, dataLo: Double, dataHi: Double) -> LinearGradient {
+        let domainSpan = max(domain.upperBound - domain.lowerBound, 0.0001)
+        let dataSpan = max(dataHi - dataLo, 0.0001)
+        // Sample rankColor at several y positions across the plot (top = domain max).
+        let stops = stride(from: 0.0, through: 1.0, by: 0.25).map { location -> Gradient.Stop in
+            let value = domain.upperBound - location * domainSpan
+            let ratio = (value - dataLo) / dataSpan
+            return Gradient.Stop(color: Theme.rankColor(ratio: ratio), location: location)
+        }
+        return LinearGradient(gradient: Gradient(stops: stops), startPoint: .top, endPoint: .bottom)
     }
 
     /// Gradient hero card matching the web's `.history-hero-card`: current average with count-up,
@@ -377,4 +480,13 @@ struct StationDetailTarget: Identifiable {
     var name: String?
     var brand: String?
     var price: Double?
+}
+
+/// One point on the gradient line chart.
+private struct GradientChartPoint: Identifiable {
+    let index: Int
+    let date: Date
+    let value: Double
+
+    var id: Int { index }
 }
