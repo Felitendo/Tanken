@@ -120,6 +120,14 @@ Then set `DATABASE_URL` before starting the dev server:
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/tanken npm run dev
 ```
 
+## iOS App
+
+A native iOS companion app lives in [`mobile/`](mobile/) — Kotlin/Compose Multiplatform with a pure-Compose UI that mirrors the PWA's design, including a custom map renderer using the same CARTO tiles.
+
+- **Install:** grab `Tanken.ipa` from the rolling [Dev release](https://github.com/Felitendo/Tanken/releases/tag/dev) and sideload it with [AltStore](https://altstore.io) or [SideStore](https://sidestore.io) (the IPA is unsigned; the store signs it on device).
+- **CI:** every push to `main` touching `mobile/**` rebuilds the IPA and replaces the Dev release asset (`.github/workflows/mobile-ci.yml`).
+- **Development:** `cd mobile && ./gradlew :composeApp:run` starts the desktop verification build (390x844 window); `./gradlew :composeApp:desktopTest` runs the shared-code tests. The iOS binary itself only builds on macOS via `mobile/iosApp/Tanken.xcodeproj`.
+
 ## License
 
 MIT
