@@ -4,8 +4,14 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+    paths-ignore:
+      - "mobile/**"
+      - ".github/workflows/mobile-ci.yml"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "mobile/**"
+      - ".github/workflows/mobile-ci.yml"
 
 env:
   REGISTRY: ghcr.io
