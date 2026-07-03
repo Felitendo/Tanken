@@ -5,6 +5,7 @@ import com.russhwolf.settings.Settings
 import io.ktor.client.engine.HttpClientEngineFactory
 import io.ktor.client.engine.darwin.Darwin
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.useContents
 import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.AuthenticationServices.ASPresentationAnchor
 import platform.AuthenticationServices.ASWebAuthenticationPresentationContextProvidingProtocol
@@ -177,7 +178,8 @@ private class AnchorProvider : NSObject(), ASWebAuthenticationPresentationContex
     override fun presentationAnchorForWebAuthenticationSession(
         session: ASWebAuthenticationSession,
     ): ASPresentationAnchor {
-        return UIApplication.sharedApplication.keyWindow ?: ASPresentationAnchor()
+        // ASPresentationAnchor is a typealias for UIWindow.
+        return UIApplication.sharedApplication.keyWindow ?: platform.UIKit.UIWindow()
     }
 }
 
