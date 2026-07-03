@@ -28,9 +28,9 @@ fun main(args: Array<String>) {
     val state = args.optionValue("--state")
     val themeMode = when (args.optionValue("--theme")) {
         "light" -> gg.felo.tanken.ui.theme.ThemeMode.Light
-        "dark" -> gg.felo.tanken.ui.theme.ThemeMode.Dark
         else -> gg.felo.tanken.ui.theme.ThemeMode.Dark
     }
+    val graph = AppGraph()
 
     application(exitProcessOnExit = true) {
         Window(
@@ -40,7 +40,7 @@ fun main(args: Array<String>) {
             resizable = false,
             undecorated = shotOut != null,
         ) {
-            App(initialState = state, themeMode = themeMode)
+            App(graph, initialState = state, themeOverride = themeMode)
             if (shotOut != null) {
                 LaunchedEffect(Unit) {
                     delay(delayMs)
