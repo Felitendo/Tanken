@@ -25,6 +25,12 @@ import kotlin.system.exitProcess
 fun main(args: Array<String>) {
     val shotOut = args.optionValue("--shot")
     val delayMs = args.optionValue("--delay")?.toLongOrNull() ?: 8000L
+    val state = args.optionValue("--state")
+    val themeMode = when (args.optionValue("--theme")) {
+        "light" -> gg.felo.tanken.ui.theme.ThemeMode.Light
+        "dark" -> gg.felo.tanken.ui.theme.ThemeMode.Dark
+        else -> gg.felo.tanken.ui.theme.ThemeMode.Dark
+    }
 
     application(exitProcessOnExit = true) {
         Window(
@@ -34,7 +40,7 @@ fun main(args: Array<String>) {
             resizable = false,
             undecorated = shotOut != null,
         ) {
-            App()
+            App(initialState = state, themeMode = themeMode)
             if (shotOut != null) {
                 LaunchedEffect(Unit) {
                     delay(delayMs)
