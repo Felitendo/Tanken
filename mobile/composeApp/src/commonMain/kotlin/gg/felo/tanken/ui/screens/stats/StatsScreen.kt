@@ -287,13 +287,20 @@ private fun StatsContent(stats: HistoryStats, strings: gg.felo.tanken.i18n.Strin
 
     // Hour chart 0..23
     if (stats.hourAvgs.isNotEmpty()) {
+        val graph = gg.felo.tanken.LocalAppGraph.current
         SectionHeader(strings.hourRanking)
         AppCard {
             val byHour = stats.hourAvgs.sortedBy { it.hour }
             val colors = rankColors(byHour.map { it.avg })
-            val points = byHour.mapIndexed { i, hour -> ChartPoint("${hour.hour}", hour.avg, colors[i]) }
+            val points = byHour.mapIndexed { i, hour ->
+                ChartPoint("${hour.hour}:00", hour.avg, colors[i])
+            }
             Box(Modifier.fillMaxWidth().height(180.dp)) {
-                PriceLineChart(points = points, emphasizeLast = false)
+                PriceLineChart(
+                    points = points,
+                    emphasizeLast = false,
+                    onScrubTick = { graph.haptics.selection() },
+                )
             }
         }
     }

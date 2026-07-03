@@ -44,7 +44,19 @@ fun main(args: Array<String>) {
             resizable = false,
             undecorated = shotOut != null,
         ) {
-            App(graph, initialState = state, themeOverride = themeMode)
+            // --density simulates a phone screen (iPhone = 3): px/dp bugs invisible
+            // at density 1 become obvious here.
+            val densityOverride = args.optionValue("--density")?.toFloatOrNull()
+            if (densityOverride != null) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalDensity provides
+                        androidx.compose.ui.unit.Density(densityOverride),
+                ) {
+                    App(graph, initialState = state, themeOverride = themeMode)
+                }
+            } else {
+                App(graph, initialState = state, themeOverride = themeMode)
+            }
             if (shotOut != null) {
                 LaunchedEffect(Unit) {
                     delay(delayMs)

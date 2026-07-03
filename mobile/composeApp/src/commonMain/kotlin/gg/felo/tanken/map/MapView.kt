@@ -71,6 +71,7 @@ fun MapView(
     val density = LocalDensity.current.density
     val retina = density >= 1.5f
     val tileVersion by tiles.version.collectAsState()
+    camera.density = density
 
     Layout(
         content = {
@@ -188,17 +189,18 @@ private fun DrawScope.drawTiles(
     val tz = camera.zoom.roundToInt().coerceIn(MapCamera.MIN_ZOOM.toInt(), 19)
     val tilesAcross = 1 shl tz
     val scale = 2.0.pow(camera.zoom - tz)
-    val tileSizeLogical = Projection.TILE_SIZE * scale
-    val worldSizeLogical = tileSizeLogical * tilesAcross
+    // All math below is in PHYSICAL pixels — the camera viewport, gesture
+    // positions and DrawScope all agree on that unit at any screen density.
+    val tileSizePx = Projection.TILE_SIZE * density * scale
+    val worldSizePx = tileSizePx * tilesAcross
 
-    // World origin (top-left of world) position on screen, in logical px.
-    val originX = viewportW / 2.0 - camera.centerX * worldSizeLogical
-    val originY = viewportH / 2.0 - camera.centerY * worldSizeLogical
+    val originX = viewportW / 2.0 - camera.centerX * worldSizePx
+    val originY = viewportH / 2.0 - camera.centerY * worldSizePx
 
-    val firstX = floor((-originX) / tileSizeLogical).toInt()
-    val lastX = ceil((viewportW - originX) / tileSizeLogical).toInt() - 1
-    val firstY = floor((-originY) / tileSizeLogical).toInt().coerceAtLeast(0)
-    val lastY = (ceil((viewportH - originY) / tileSizeLogical).toInt() - 1).coerceAtMost(tilesAcross - 1)
+    val firstX = floor((-originX) / tileSizePx).toInt()
+    val lastX = ceil((viewportW - originX) / tileSizePx).toInt() - 1
+    val firstY = floor((-originY) / tileSizePx).toInt().coerceAtLeast(0)
+    val lastY = (ceil((viewportH - originY) / tileSizePx).toInt() - 1).coerceAtMost(tilesAcross - 1)
 
     val wanted = mutableListOf<TileKey>()
 
@@ -206,9 +208,9 @@ private fun DrawScope.drawTiles(
         for (txRaw in firstX..lastX) {
             val tx = ((txRaw % tilesAcross) + tilesAcross) % tilesAcross
             val key = TileKey(style, tz, tx, ty, retina)
-            val dstX = (originX + txRaw * tileSizeLogical) * density
-            val dstY = (originY + ty * tileSizeLogical) * density
-            val dstSize = tileSizeLogical * density
+            val dstX = originX + txRaw * tileSizePx
+            val dstY = originY + ty * tileSizePx
+            val dstSize = tileSizePx
             val bitmap = tiles.peek(key)
             if (bitmap != null) {
                 drawImage(

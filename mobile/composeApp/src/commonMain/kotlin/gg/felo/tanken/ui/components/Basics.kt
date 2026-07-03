@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -37,10 +40,15 @@ import gg.felo.tanken.ui.theme.Rad
 import gg.felo.tanken.ui.theme.Sp
 import gg.felo.tanken.ui.theme.Theme
 
-/** `.page-header`: big bold title + hint description (28px/14px on phones). */
+/** `.page-header`: big bold title + hint description, pushed below the status bar. */
 @Composable
 fun PageHeader(title: String, description: String? = null) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = Sp.s4, vertical = Sp.s3)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(horizontal = Sp.s4, vertical = Sp.s3),
+    ) {
         Text(
             title,
             style = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.56).sp),

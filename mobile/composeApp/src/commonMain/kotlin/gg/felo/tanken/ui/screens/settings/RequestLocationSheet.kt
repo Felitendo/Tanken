@@ -29,9 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import gg.felo.tanken.LocalAppGraph
 import gg.felo.tanken.i18n.Strings
-import gg.felo.tanken.map.MapCamera
-import gg.felo.tanken.map.MapView
-import gg.felo.tanken.map.TileStyle
+import gg.felo.tanken.map.MapController
+import gg.felo.tanken.map.PlatformMapView
 import gg.felo.tanken.platform.LatLng
 import gg.felo.tanken.ui.components.AppIcon
 import gg.felo.tanken.ui.components.BottomSheet
@@ -63,11 +62,8 @@ fun RequestLocationSheet(
         var name by remember { mutableStateOf("") }
         var note by remember { mutableStateOf("") }
         var radius by remember { mutableStateOf(10.0) }
-        val camera = remember {
-            MapCamera(
-                viewModel.userLocation.value ?: LatLng(52.52, 13.405),
-                11.0,
-            )
+        val mapController = remember {
+            MapController(viewModel.userLocation.value ?: LatLng(52.52, 13.405), 11.0)
         }
 
         Column(Modifier.fillMaxWidth().padding(horizontal = Sp.s5, vertical = Sp.s2)) {
@@ -81,10 +77,17 @@ fun RequestLocationSheet(
                     .height(190.dp)
                     .clip(RoundedCornerShape(12.dp)),
             ) {
-                MapView(
-                    camera = camera,
-                    tiles = graph.tiles,
-                    style = if (c.isDark) TileStyle.Dark else TileStyle.Light,
+                PlatformMapView(
+                    controller = mapController,
+                    dark = c.isDark,
+                    clusters = emptyList(),
+                    band = null,
+                    selectedId = null,
+                    favourites = emptySet(),
+                    showUserLocation = false,
+                    userLocation = null,
+                    onStationTap = {},
+                    onClusterTap = {},
                     modifier = Modifier.fillMaxWidth().height(190.dp),
                 )
                 AppIcon(
@@ -136,7 +139,7 @@ fun RequestLocationSheet(
                     ) {
                         if (name.isBlank()) return@clickable
                         scope.launch {
-                            val center = camera.center
+                            val center = mapController.center.value
                             if (viewModel.submitRequest(name.trim(), center.lat, center.lng, radius, note)) {
                                 onDismiss()
                             }

@@ -41,6 +41,11 @@ import gg.felo.tanken.ui.theme.Sp
 import gg.felo.tanken.ui.theme.Theme
 import gg.felo.tanken.util.formatKm
 import gg.felo.tanken.util.twoDecimals
+import tanken.composeapp.generated.resources.Res
+import tanken.composeapp.generated.resources.apple_maps
+import tanken.composeapp.generated.resources.apple_maps_dark
+import tanken.composeapp.generated.resources.google_maps
+import tanken.composeapp.generated.resources.google_maps_dark
 
 /**
  * Station detail sheet content, mirroring the PWA's `loadStationSheet` markup:
@@ -183,17 +188,19 @@ fun StationDetailContent(
             }
         }
 
-        // `.sheet-nav-buttons`: Google Maps + Apple Maps side by side
+        // `.sheet-nav-buttons`: Google Maps + Apple Maps side by side with brand icons
         Row(
             Modifier.fillMaxWidth().padding(vertical = Sp.s3),
             horizontalArrangement = Arrangement.spacedBy(Sp.s2),
         ) {
             NavButton(
                 label = "Google Maps",
+                icon = if (c.isDark) Res.drawable.google_maps_dark else Res.drawable.google_maps,
                 modifier = Modifier.weight(1f),
             ) { onNavigate(gg.felo.tanken.platform.MapsProvider.Google) }
             NavButton(
                 label = "Apple Maps",
+                icon = if (c.isDark) Res.drawable.apple_maps_dark else Res.drawable.apple_maps,
                 modifier = Modifier.weight(1f),
             ) { onNavigate(gg.felo.tanken.platform.MapsProvider.Apple) }
         }
@@ -203,9 +210,14 @@ fun StationDetailContent(
     }
 }
 
-/** `.sheet-nav-btn`: secondary-surface button with the provider name. */
+/** `.sheet-nav-btn`: secondary-surface button with the provider's brand icon. */
 @Composable
-private fun NavButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun NavButton(
+    label: String,
+    icon: org.jetbrains.compose.resources.DrawableResource,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val c = Theme.colors
     Row(
         modifier
@@ -220,7 +232,11 @@ private fun NavButton(label: String, modifier: Modifier = Modifier, onClick: () 
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AppIcon(AppIcons.Route, tint = c.accent, size = 16.dp)
+        androidx.compose.foundation.Image(
+            painter = org.jetbrains.compose.resources.painterResource(icon),
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+        )
         Text(
             label,
             modifier = Modifier.padding(start = 8.dp),

@@ -166,7 +166,12 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                 } else {
                     val colors = rankColors(buckets.map { it.minPrice })
                     val points = buckets.mapIndexed { i, day ->
-                        ChartPoint(day.label, day.minPrice, colors[i])
+                        ChartPoint(
+                            label = day.label,
+                            value = day.minPrice,
+                            color = colors[i],
+                            detail = "${strings.historyAvgLabel} ${formatPrice(day.avgPrice)} · ${strings.historyHighLabel} ${formatPrice(day.maxPrice)}",
+                        )
                     }
                     Box(Modifier.fillMaxWidth().height(230.dp)) {
                         PriceLineChart(
@@ -177,6 +182,7 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                                     viewModel.drillDay.value = buckets[idx]
                                 }
                             },
+                            onScrubTick = { graph.haptics.selection() },
                         )
                     }
                     Text(
@@ -206,7 +212,11 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                             ChartPoint("${hour.hour}", hour.price, hourColors[i])
                         }
                         Box(Modifier.fillMaxWidth().height(180.dp)) {
-                            PriceLineChart(points = hourPoints, emphasizeLast = false)
+                            PriceLineChart(
+                                points = hourPoints,
+                                emphasizeLast = false,
+                                onScrubTick = { graph.haptics.selection() },
+                            )
                         }
                     }
                 }

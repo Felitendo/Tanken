@@ -35,8 +35,11 @@ class MapCamera(
     var zoom by mutableStateOf(zoom.coerceIn(MIN_ZOOM, MAX_ZOOM))
         private set
 
-    /** Viewport size in logical px, set by MapView's layout pass. */
+    /** Viewport size in physical px, set by MapView's layout pass. */
     var viewport by mutableStateOf(IntSize.Zero)
+
+    /** Screen density; camera math runs in physical px = logical * density. */
+    var density: Float = 1f
 
     /** Bumped after every gesture/animation ends — drives "camera idle" loads. */
     var idleTick by mutableLongStateOf(0L)
@@ -54,8 +57,11 @@ class MapCamera(
         const val MAX_ZOOM = 19.0
     }
 
+    /** World size in physical pixels at [z]. */
+    fun worldSizePx(z: Double): Double = Projection.worldSize(z) * density
+
     fun panBy(delta: Offset) {
-        val size = Projection.worldSize(zoom)
+        val size = worldSizePx(zoom)
         centerX -= delta.x / size
         centerY = (centerY - delta.y / size).coerceIn(0.0, 1.0)
         moved = true
@@ -70,24 +76,24 @@ class MapCamera(
     }
 
     private fun applyZoom(newZoom: Double, focus: Offset) {
-        val sizeBefore = Projection.worldSize(zoom)
+        val sizeBefore = worldSizePx(zoom)
         val fx = centerX + (focus.x - viewport.width / 2.0) / sizeBefore
         val fy = centerY + (focus.y - viewport.height / 2.0) / sizeBefore
-        val sizeAfter = Projection.worldSize(newZoom)
+        val sizeAfter = worldSizePx(newZoom)
         zoom = newZoom
         centerX = fx - (focus.x - viewport.width / 2.0) / sizeAfter
         centerY = (fy - (focus.y - viewport.height / 2.0) / sizeAfter).coerceIn(0.0, 1.0)
     }
 
     fun screenOf(point: LatLng): Offset {
-        val size = Projection.worldSize(zoom)
+        val size = worldSizePx(zoom)
         val x = ((Projection.worldX(point.lng) - centerX) * size + viewport.width / 2.0).toFloat()
         val y = ((Projection.worldY(point.lat) - centerY) * size + viewport.height / 2.0).toFloat()
         return Offset(x, y)
     }
 
     fun latLngOf(screen: Offset): LatLng {
-        val size = Projection.worldSize(zoom)
+        val size = worldSizePx(zoom)
         val wx = centerX + (screen.x - viewport.width / 2.0) / size
         val wy = centerY + (screen.y - viewport.height / 2.0) / size
         return LatLng(Projection.lat(wy.coerceIn(0.0, 1.0)), Projection.lng(wx))
@@ -143,7 +149,7 @@ class MapCamera(
     }
 
     private fun panByRaw(dx: Float, dy: Float) {
-        val size = Projection.worldSize(zoom)
+        val size = worldSizePx(zoom)
         centerX -= dx / size
         centerY = (centerY - dy / size).coerceIn(0.0, 1.0)
     }

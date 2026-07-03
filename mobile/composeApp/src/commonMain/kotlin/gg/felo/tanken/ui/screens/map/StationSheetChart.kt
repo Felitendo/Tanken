@@ -83,7 +83,12 @@ fun StationSheetChart(history: List<HistoryEntry>, strings: Strings) {
                     style = TextStyle(fontSize = 12.sp, color = c.hint),
                 )
             } else {
-                PriceLineChart(points = points, emphasizeLast = false)
+                val graph = gg.felo.tanken.LocalAppGraph.current
+                PriceLineChart(
+                    points = points,
+                    emphasizeLast = false,
+                    onScrubTick = { graph.haptics.selection() },
+                )
             }
         }
     }

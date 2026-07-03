@@ -25,11 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import gg.felo.tanken.LocalAppGraph
-import gg.felo.tanken.map.LocationPuck
-import gg.felo.tanken.map.MapCamera
-import gg.felo.tanken.map.MapView
-import gg.felo.tanken.map.StationMarkers
-import gg.felo.tanken.map.TileStyle
+import gg.felo.tanken.map.PlatformMapView
 import gg.felo.tanken.map.clusterStations
 import gg.felo.tanken.platform.LatLng
 import gg.felo.tanken.state.StationSort
@@ -63,39 +59,34 @@ fun MapScreen(viewModel: MapViewModel) {
     val user by graph.state.user.collectAsState()
     val fuel by graph.state.fuel.collectAsState()
 
-    LaunchedEffect(Unit) { viewModel.start(scope) }
+    LaunchedEffect(Unit) { viewModel.start() }
     LaunchedEffect(fuel) { viewModel.refreshOnFuelChange() }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             // `#map-container`: 55% of the tab height
             Box(Modifier.fillMaxWidth().weight(0.55f)) {
-                val tileZoom = viewModel.camera.zoom.toInt()
-                val clusters = remember(stations, tileZoom) { clusterStations(stations, tileZoom) }
-                MapView(
-                    camera = viewModel.camera,
-                    tiles = graph.tiles,
-                    style = if (c.isDark) TileStyle.Dark else TileStyle.Light,
+                val mapZoom by viewModel.map.zoom.collectAsState()
+                val mapMoved by viewModel.map.moved.collectAsState()
+                val clusters = remember(stations, mapZoom.toInt()) { clusterStations(stations, mapZoom.toInt()) }
+                PlatformMapView(
+                    controller = viewModel.map,
+                    dark = c.isDark,
+                    clusters = clusters,
+                    band = band,
+                    selectedId = selected?.id,
+                    favourites = if (user != null) favourites else emptySet(),
+                    showUserLocation = true,
+                    userLocation = viewModel.userLocation.collectAsState().value,
+                    onStationTap = { viewModel.select(it) },
+                    onClusterTap = { cluster ->
+                        viewModel.map.requestFlyTo(
+                            LatLng(cluster.lat, cluster.lng),
+                            (mapZoom + 2).coerceAtMost(19.0),
+                        )
+                    },
                     modifier = Modifier.fillMaxSize(),
-                ) {
-                    StationMarkers(
-                        clusters = clusters,
-                        band = band,
-                        selectedId = selected?.id,
-                        favourites = if (user != null) favourites else emptySet(),
-                        onStationTap = { viewModel.select(it) },
-                        onClusterTap = { cluster ->
-                            viewModel.camera.animateTo(
-                                scope,
-                                LatLng(cluster.lat, cluster.lng),
-                                (viewModel.camera.zoom + 2).coerceAtMost(MapCamera.MAX_ZOOM),
-                            )
-                        },
-                    )
-                    viewModel.userLocation.collectAsState().value?.let { location ->
-                        LocationPuck(Modifier.mapAnchor(location.lat, location.lng, ax = 0.5f, ay = 0.5f))
-                    }
-                }
+                )
 
                 // Search + pill + suggestions overlay
                 MapSearchBar(
@@ -103,9 +94,9 @@ fun MapScreen(viewModel: MapViewModel) {
                     onQueryChange = viewModel::onSearchInput,
                     suggestions = suggestions,
                     band = band,
-                    showSearchHere = viewModel.camera.moved,
+                    showSearchHere = mapMoved,
                     strings = strings,
-                    onSuggestionTap = { viewModel.onSuggestionTap(it, scope) },
+                    onSuggestionTap = { viewModel.onSuggestionTap(it) },
                     onSearchHere = {
                         graph.haptics.tap()
                         scope.launch { viewModel.loadViewport() }
@@ -128,7 +119,7 @@ fun MapScreen(viewModel: MapViewModel) {
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                        ) { scope.launch { viewModel.jumpToUser(scope) } }
+                        ) { scope.launch { viewModel.jumpToUser() } }
                         .size(48.dp),
                     contentAlignment = Alignment.Center,
                 ) {

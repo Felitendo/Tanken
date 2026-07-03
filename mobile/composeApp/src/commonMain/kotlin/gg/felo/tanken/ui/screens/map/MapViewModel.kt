@@ -1,7 +1,7 @@
 package gg.felo.tanken.ui.screens.map
 
 import gg.felo.tanken.AppGraph
-import gg.felo.tanken.map.MapCamera
+import gg.felo.tanken.map.MapController
 import gg.felo.tanken.model.PriceBand
 import gg.felo.tanken.model.Station
 import gg.felo.tanken.platform.LatLng
@@ -16,7 +16,7 @@ import kotlin.math.roundToInt
  */
 class MapViewModel(private val graph: AppGraph) {
 
-    val camera = MapCamera(LatLng(52.52, 13.405), 11.0)
+    val map = MapController(LatLng(52.52, 13.405), 11.0)
     val stations = MutableStateFlow<List<Station>>(emptyList())
     val band = MutableStateFlow<PriceBand?>(null)
     val userLocation = MutableStateFlow<LatLng?>(null)
@@ -28,8 +28,7 @@ class MapViewModel(private val graph: AppGraph) {
     /** Screenshot harness: open the cheapest station's sheet once loaded. */
     var autoSelectFirst = false
 
-    /** [uiScope] must be a composition scope — camera animations need its frame clock. */
-    suspend fun start(uiScope: kotlinx.coroutines.CoroutineScope) {
+    suspend fun start() {
         if (started) return
         started = true
         // Stale-while-revalidate: show the last known stations instantly.
@@ -39,9 +38,9 @@ class MapViewModel(private val graph: AppGraph) {
         val located = graph.geolocation.current()
         if (located != null) {
             userLocation.value = located
-            camera.animateTo(uiScope, located, 12.0)
+            map.requestFlyTo(located, 12.0)
         }
-        val anchor = located ?: camera.center
+        val anchor = located ?: map.center.value
         loadAround(anchor)
         if (autoSelectFirst) {
             stations.value
@@ -51,10 +50,10 @@ class MapViewModel(private val graph: AppGraph) {
         }
     }
 
-    suspend fun jumpToUser(uiScope: kotlinx.coroutines.CoroutineScope) {
+    suspend fun jumpToUser() {
         val located = graph.geolocation.current() ?: return
         userLocation.value = located
-        camera.animateTo(uiScope, located, 12.0)
+        map.requestFlyTo(located, 12.0)
         loadAround(located)
         graph.haptics.tap()
     }
@@ -76,17 +75,17 @@ class MapViewModel(private val graph: AppGraph) {
 
     /** "Hier suchen": loads stations for the visible viewport. */
     suspend fun loadViewport() {
+        val bounds = map.bounds.value ?: return
         loading.value = true
         try {
-            val bounds = camera.visibleBounds()
             val fuel = graph.state.fuel.value
             runCatching {
                 graph.api.stationsInBounds(bounds.south, bounds.west, bounds.north, bounds.east, fuel)
             }.onSuccess {
                 stations.value = it
-                camera.moved = false
+                map.moved.value = false
             }
-            loadBand(camera.center)
+            loadBand(map.center.value)
         } finally {
             loading.value = false
         }
@@ -111,7 +110,7 @@ class MapViewModel(private val graph: AppGraph) {
 
     fun refreshOnFuelChange() {
         bandKey = null
-        graph.mainScope.launch { loadAround(camera.center) }
+        graph.mainScope.launch { loadAround(map.center.value) }
     }
 
     // ---- Search -----------------------------------------------------------------------
@@ -158,10 +157,10 @@ class MapViewModel(private val graph: AppGraph) {
         }
     }
 
-    fun onSuggestionTap(suggestion: SearchSuggestion, uiScope: kotlinx.coroutines.CoroutineScope) {
+    fun onSuggestionTap(suggestion: SearchSuggestion) {
         searchQuery.value = ""
         suggestions.value = emptyList()
-        camera.animateTo(uiScope, LatLng(suggestion.lat, suggestion.lng), 13.0)
+        map.requestFlyTo(LatLng(suggestion.lat, suggestion.lng), 13.0)
         graph.mainScope.launch {
             loadAround(LatLng(suggestion.lat, suggestion.lng))
             suggestion.station?.let { select(it) }
