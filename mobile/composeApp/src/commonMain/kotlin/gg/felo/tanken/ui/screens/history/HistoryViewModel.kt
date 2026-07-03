@@ -32,6 +32,7 @@ class HistoryViewModel(private val graph: AppGraph) {
     val rangeDays = MutableStateFlow(graph.state.historyDefaultDays.value)
     val loading = MutableStateFlow(false)
     val drillDay = MutableStateFlow<DayBucket?>(null)
+    val stats = MutableStateFlow<gg.felo.tanken.model.HistoryStats?>(null)
 
     private var started = false
 
@@ -71,6 +72,8 @@ class HistoryViewModel(private val graph: AppGraph) {
                     entries.value = it.entries
                     extremes.value = it.extremes
                 }
+            runCatching { graph.api.stats(country.value, location) }
+                .onSuccess { stats.value = it }
         } finally {
             loading.value = false
         }

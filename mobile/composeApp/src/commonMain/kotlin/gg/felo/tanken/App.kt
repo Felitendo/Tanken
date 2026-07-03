@@ -65,7 +65,7 @@ fun App(graph: AppGraph, initialState: String? = null, themeOverride: ThemeMode?
                         else -> when (tab) {
                             AppTab.Map -> gg.felo.tanken.ui.screens.map.MapScreen(mapViewModel)
                             AppTab.History -> gg.felo.tanken.ui.screens.history.HistoryScreen(historyViewModel)
-                            AppTab.Stats -> PlaceholderScreen(strings.statsTitle, strings.statsDescription)
+                            AppTab.Stats -> gg.felo.tanken.ui.screens.stats.StatsScreen(historyViewModel)
                             AppTab.Settings -> PlaceholderScreen(strings.settingsTitle, strings.settingsDescription)
                         }
                     }
