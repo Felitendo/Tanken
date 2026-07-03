@@ -229,7 +229,9 @@ actual fun PlatformMapView(
         factory = {
             mapView.delegate = delegate
             mapView.showsUserLocation = showUserLocation
-            mapView.pointOfInterestFilter = platform.MapKit.MKPointOfInterestFilter.excludingAllPointOfInterestFilter
+            // Include-nothing filter hides Apple's own POI pins (incl. their fuel prices).
+            mapView.pointOfInterestFilter =
+                platform.MapKit.MKPointOfInterestFilter(includingCategories = emptyList<Any?>())
             val start = controller.center.value
             val spanDegrees = 360.0 / 2.0.pow(controller.zoom.value) * 1.4
             mapView.setRegion(
