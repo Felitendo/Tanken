@@ -110,7 +110,7 @@ struct LoadingErrorState: View {
                     Haptics.light()
                     retry()
                 }
-                .buttonStyle(.glass)
+                .buttonStyle(.bordered)
             } else {
                 ProgressView()
             }

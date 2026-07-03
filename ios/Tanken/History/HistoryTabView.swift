@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 /// Verlauf tab: country + range chips, the min–max/average price chart and extremes cards —
 /// the native counterpart of the web's Preisverlauf view.
@@ -162,7 +161,7 @@ struct HistoryTabView: View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(text: s.hourlyTitle)
-                gradientLineChart(
+                PriceLineChart(
                     points: model.hourPoints.map { ($0.date, $0.min) },
                     height: 140,
                     hourAxis: true
@@ -195,7 +194,7 @@ struct HistoryTabView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                gradientLineChart(
+                PriceLineChart(
                     points: day.entries.map { ($0.date, $0.min) },
                     height: 140,
                     hourAxis: true
@@ -211,15 +210,16 @@ struct HistoryTabView: View {
     }
 
     /// Main range chart (web `renderChart`): one point per day at the day's minimum price,
-    /// rank-colored line + points and the warm vertical fill. Tapping a day with intraday data
-    /// opens the hour drill-down.
+    /// rank-colored line + points and the warm vertical fill. Scrub to inspect prices; tapping
+    /// a day with intraday data opens the hour drill-down.
     private var chartCard: some View {
         let dayPoints: [(Date, Double)] = model.rangeDays == 1
             ? model.filteredPoints.map { ($0.date, $0.min) }
             : model.chartDays.map { ($0.day, $0.minPrice) }
-        return Card {
-            gradientLineChart(points: dayPoints, height: 220, hourAxis: model.rangeDays == 1) { tapped in
-                guard model.rangeDays != 1 else { return }
+        // In 24h mode there is nothing to drill into — a tap pins the tooltip instead.
+        var drillAction: ((Date) -> Void)?
+        if model.rangeDays != 1 {
+            drillAction = { tapped in
                 let day = Calendar.current.startOfDay(for: tapped)
                 if let hit = model.chartDays.first(where: { $0.day == day }), hit.entries.count > 1 {
                     Haptics.light()
@@ -228,101 +228,16 @@ struct HistoryTabView: View {
                     }
                 }
             }
+        }
+        return Card {
+            PriceLineChart(
+                points: dayPoints,
+                height: 220,
+                hourAxis: model.rangeDays == 1,
+                onTap: drillAction
+            )
             .animation(.spring(duration: 0.5), value: model.rangeDays)
         }
-    }
-
-    /// The web's shared chart recipe: line colored by price (green cheap → red expensive — the
-    /// color is a pure function of the y-value, so a vertical gradient reproduces it exactly),
-    /// warm red→orange→yellow area fill, rank-colored points.
-    @ViewBuilder
-    private func gradientLineChart(
-        points: [(Date, Double)],
-        height: CGFloat,
-        hourAxis: Bool,
-        onTap: ((Date) -> Void)? = nil
-    ) -> some View {
-        let values = points.map(\.1)
-        let domain = Theme.priceDomain(for: values)
-        let lo = values.min() ?? 0
-        let hi = values.max() ?? 1
-        let span = max(hi - lo, 0.0001)
-        let manyPoints = points.count > 30
-        let chartPoints = points.enumerated().map { pair in
-            GradientChartPoint(index: pair.offset, date: pair.element.0, value: pair.element.1)
-        }
-
-        Chart(chartPoints) { point in
-            AreaMark(
-                x: .value("Zeit", point.date),
-                yStart: .value("Preis", domain.lowerBound),
-                yEnd: .value("Preis", point.value)
-            )
-            .foregroundStyle(LinearGradient(
-                colors: [Theme.bad.opacity(0.34), Theme.okay.opacity(0.18), Color.yellow.opacity(0.04)],
-                startPoint: .top,
-                endPoint: .bottom
-            ))
-            .interpolationMethod(.monotone)
-
-            LineMark(
-                x: .value("Zeit", point.date),
-                y: .value("Preis", point.value)
-            )
-            .foregroundStyle(priceLineGradient(domain: domain, dataLo: lo, dataHi: hi))
-            .interpolationMethod(.monotone)
-            .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-
-            PointMark(
-                x: .value("Zeit", point.date),
-                y: .value("Preis", point.value)
-            )
-            .foregroundStyle(Theme.rankColor(ratio: (point.value - lo) / span))
-            .symbolSize(point.index == chartPoints.count - 1 ? 100 : (manyPoints ? 20 : 50))
-        }
-        .chartYScale(domain: domain)
-        .chartXAxis {
-            if hourAxis {
-                AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
-                    AxisGridLine()
-                    AxisValueLabel(format: .dateTime.hour())
-                }
-            } else {
-                AxisMarks(values: .automatic(desiredCount: 5)) { _ in
-                    AxisGridLine()
-                    AxisValueLabel(format: .dateTime.day().month())
-                }
-            }
-        }
-        .frame(height: height)
-        .chartOverlay { proxy in
-            GeometryReader { geo in
-                Rectangle()
-                    .fill(.clear)
-                    .contentShape(Rectangle())
-                    .onTapGesture { location in
-                        guard let onTap, let plotAnchor = proxy.plotFrame else { return }
-                        let plotOrigin = geo[plotAnchor].origin
-                        let x = location.x - plotOrigin.x
-                        if let date: Date = proxy.value(atX: x) {
-                            onTap(date)
-                        }
-                    }
-            }
-        }
-    }
-
-    /// Vertical gradient whose stops map the y-domain onto the web's rankColor scale.
-    private func priceLineGradient(domain: ClosedRange<Double>, dataLo: Double, dataHi: Double) -> LinearGradient {
-        let domainSpan = max(domain.upperBound - domain.lowerBound, 0.0001)
-        let dataSpan = max(dataHi - dataLo, 0.0001)
-        // Sample rankColor at several y positions across the plot (top = domain max).
-        let stops = stride(from: 0.0, through: 1.0, by: 0.25).map { location -> Gradient.Stop in
-            let value = domain.upperBound - location * domainSpan
-            let ratio = (value - dataLo) / dataSpan
-            return Gradient.Stop(color: Theme.rankColor(ratio: ratio), location: location)
-        }
-        return LinearGradient(gradient: Gradient(stops: stops), startPoint: .top, endPoint: .bottom)
     }
 
     /// Gradient hero card matching the web's `.history-hero-card`: current average with count-up,
@@ -480,13 +395,4 @@ struct StationDetailTarget: Identifiable {
     var name: String?
     var brand: String?
     var price: Double?
-}
-
-/// One point on the gradient line chart.
-private struct GradientChartPoint: Identifiable {
-    let index: Int
-    let date: Date
-    let value: Double
-
-    var id: Int { index }
 }

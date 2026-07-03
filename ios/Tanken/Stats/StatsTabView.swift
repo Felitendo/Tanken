@@ -9,6 +9,7 @@ struct StatsTabView: View {
 
     @State private var model = StatsViewModel()
     @State private var detailTarget: StationDetailTarget?
+    @State private var hourSelection: Int?
 
     var body: some View {
         NavigationStack {
@@ -189,42 +190,79 @@ struct StatsTabView: View {
         }
     }
 
-    /// Hour-of-day line chart with rank-colored points (web `renderStatsHourChart`).
+    /// Hour-of-day line chart with rank-colored points (web `renderStatsHourChart`), scrubbable:
+    /// drag across the plot to inspect any hour's average with a rule line and tooltip.
     private var hourSection: some View {
         let rankMap = Dictionary(uniqueKeysWithValues: model.hourAvgsByAvg.enumerated().map { ($0.element.hour, $0.offset) })
         let count = model.hourAvgsByAvg.count
         let domain = Theme.priceDomain(for: model.hourAvgs.map(\.avg))
+        let selected = hourSelection.flatMap { sel in
+            model.hourAvgs.min { abs($0.hour - sel) < abs($1.hour - sel) }
+        }
+        let rankRatio: (Int) -> Double = { hour in
+            count > 1 ? Double(rankMap[hour] ?? 0) / Double(count - 1) : 0
+        }
 
         return VStack(alignment: .leading, spacing: 8) {
             SectionHeader(text: s.hourRanking)
             Card {
-                Chart(model.hourAvgs, id: \.hour) { hour in
-                    AreaMark(
-                        x: .value("Stunde", hour.hour),
-                        yStart: .value("Ø", domain.lowerBound),
-                        yEnd: .value("Ø", hour.avg)
-                    )
-                    .foregroundStyle(LinearGradient(
-                        colors: [Theme.bad.opacity(0.34), Theme.okay.opacity(0.18), Color.yellow.opacity(0.04)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ))
-                    .interpolationMethod(.monotone)
+                Chart {
+                    ForEach(model.hourAvgs, id: \.hour) { hour in
+                        AreaMark(
+                            x: .value("Stunde", hour.hour),
+                            yStart: .value("Ø", domain.lowerBound),
+                            yEnd: .value("Ø", hour.avg)
+                        )
+                        .foregroundStyle(LinearGradient(
+                            colors: [Theme.bad.opacity(0.34), Theme.okay.opacity(0.18), Color.yellow.opacity(0.04)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ))
+                        .interpolationMethod(.monotone)
 
-                    LineMark(
-                        x: .value("Stunde", hour.hour),
-                        y: .value("Ø", hour.avg)
-                    )
-                    .foregroundStyle(Theme.okay)
-                    .interpolationMethod(.monotone)
-                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        LineMark(
+                            x: .value("Stunde", hour.hour),
+                            y: .value("Ø", hour.avg)
+                        )
+                        .foregroundStyle(Theme.okay)
+                        .interpolationMethod(.monotone)
+                        .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
 
-                    PointMark(
-                        x: .value("Stunde", hour.hour),
-                        y: .value("Ø", hour.avg)
-                    )
-                    .foregroundStyle(Theme.rankColor(ratio: count > 1 ? Double(rankMap[hour.hour] ?? 0) / Double(count - 1) : 0))
-                    .symbolSize(rankMap[hour.hour] == 0 ? 120 : 45)
+                        PointMark(
+                            x: .value("Stunde", hour.hour),
+                            y: .value("Ø", hour.avg)
+                        )
+                        .foregroundStyle(Theme.rankColor(ratio: rankRatio(hour.hour)))
+                        .symbolSize(rankMap[hour.hour] == 0 ? 120 : 45)
+                    }
+
+                    if let selected {
+                        RuleMark(x: .value("Stunde", selected.hour))
+                            .foregroundStyle(Theme.hint.opacity(0.45))
+                            .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+                            .zIndex(-1)
+                            .annotation(
+                                position: .top,
+                                spacing: 8,
+                                overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))
+                            ) {
+                                hourTooltip(for: selected, color: Theme.rankColor(ratio: rankRatio(selected.hour)))
+                            }
+
+                        PointMark(
+                            x: .value("Stunde", selected.hour),
+                            y: .value("Ø", selected.avg)
+                        )
+                        .foregroundStyle(Theme.card)
+                        .symbolSize(190)
+
+                        PointMark(
+                            x: .value("Stunde", selected.hour),
+                            y: .value("Ø", selected.avg)
+                        )
+                        .foregroundStyle(Theme.rankColor(ratio: rankRatio(selected.hour)))
+                        .symbolSize(100)
+                    }
                 }
                 .chartXScale(domain: 0...23)
                 .chartXAxis {
@@ -234,9 +272,60 @@ struct StatsTabView: View {
                     }
                 }
                 .chartYScale(domain: domain)
+                .chartXSelection(value: $hourSelection)
+                .chartGesture { proxy in
+                    ExclusiveGesture(
+                        SpatialTapGesture()
+                            .onEnded { value in
+                                let before = hourSelection
+                                proxy.selectXValue(at: value.location.x)
+                                if before != nil, before == hourSelection {
+                                    withAnimation(.easeOut(duration: 0.15)) {
+                                        hourSelection = nil
+                                    }
+                                }
+                            },
+                        DragGesture(minimumDistance: 12)
+                            .onChanged { value in
+                                proxy.selectXValue(at: value.location.x)
+                            }
+                            .onEnded { _ in
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    hourSelection = nil
+                                }
+                            }
+                    )
+                }
+                .sensoryFeedback(.selection, trigger: selected?.hour) { _, new in new != nil }
                 .frame(height: 160)
             }
         }
+    }
+
+    private func hourTooltip(for hour: HourAvg, color: Color) -> some View {
+        VStack(spacing: 2) {
+            Text("\(hour.hour):00\(s.clockSuffix)")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text("Ø")
+                    .font(.system(size: 11, weight: .semibold))
+                    .opacity(0.65)
+                Text(Formatters.price(hour.avg))
+                    .font(.system(size: 15, weight: .bold))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+            }
+            .foregroundStyle(color)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Theme.separator, lineWidth: 0.5)
+        }
+        .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
     }
 
     /// Top-10 ranking rows with medals, rank-colored stripe and Ø price (web `.stats-station-list`).

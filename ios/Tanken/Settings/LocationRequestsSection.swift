@@ -135,7 +135,7 @@ struct LocationRequestsSection: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.bordered)
     }
 
     private func load() async {

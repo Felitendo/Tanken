@@ -281,7 +281,7 @@ struct AlertCard: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.borderedProminent)
             .disabled(busy || !inputValid)
 
             if channel == "ntfy", !ntfyTopic.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -293,7 +293,7 @@ struct AlertCard: View {
                         .font(.subheadline.weight(.medium))
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glass)
+                .buttonStyle(.bordered)
                 .disabled(busy)
             }
         }

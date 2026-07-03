@@ -137,7 +137,7 @@ struct SettingsTabView: View {
                             .font(.subheadline.weight(.semibold))
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.glass)
+                    .buttonStyle(.bordered)
                 } else if app.config?.auth?.oidcConfigured == true {
                     Button {
                         login()
@@ -152,7 +152,7 @@ struct SettingsTabView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.borderedProminent)
                     .disabled(loggingIn)
                 }
         }
@@ -233,7 +233,7 @@ struct SettingsTabView: View {
                                 Text(s.apply)
                                     .font(.footnote.weight(.semibold))
                             }
-                            .buttonStyle(.glassProminent)
+                            .buttonStyle(.borderedProminent)
                         }
                         if app.baseURLString != AppState.defaultBaseURL {
                             Button {
@@ -243,7 +243,7 @@ struct SettingsTabView: View {
                                 Text("\(s.reset) (\(s.defaultLabel))")
                                     .font(.footnote.weight(.semibold))
                             }
-                            .buttonStyle(.glass)
+                            .buttonStyle(.bordered)
                         }
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))

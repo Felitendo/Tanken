@@ -392,7 +392,7 @@ struct MapTabView: View {
         }
         .interactiveGlass(in: Circle())
         .padding(.trailing, 16)
-        .padding(.bottom, 118)
+        .padding(.bottom, 84)
         // The half/expanded drawer covers the FAB's fixed spot — hide it instead of leaving a
         // dead button underneath.
         .opacity(drawerState == .collapsed ? 1 : 0)

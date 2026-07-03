@@ -51,7 +51,7 @@ struct RoutePanel: View {
                         .font(.subheadline.weight(.medium))
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glass)
+                .buttonStyle(.bordered)
                 Button {
                     Haptics.medium()
                     onRoute()
@@ -65,7 +65,7 @@ struct RoutePanel: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.borderedProminent)
                 .disabled(planner.loading || resolvedStart == nil || planner.dest == nil)
             }
         }

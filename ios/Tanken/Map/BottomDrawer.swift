@@ -18,7 +18,9 @@ struct BottomDrawer<Header: View, Content: View>: View {
 
     @State private var dragOffset: CGFloat = 0
 
-    private static var collapsedHeight: CGFloat { 104 }
+    // Fits exactly the grabber + header controls, so no half-cut list row peeks out of the
+    // collapsed drawer.
+    private static var collapsedHeight: CGFloat { 68 }
 
     private static var shape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
@@ -40,6 +42,11 @@ struct BottomDrawer<Header: View, Content: View>: View {
             // glass every frame, which is what made dragging stutter.
             let visible = rubberBanded(base - dragOffset, min: Self.collapsedHeight, max: expandedHeight)
             let offsetY = expandedHeight - visible
+            // Fade the list out towards the collapsed snap so the closed drawer shows only the
+            // header instead of a cut-off first row; fades back in over the first stretch of an
+            // opening drag.
+            let fadeRange = max((halfHeight - Self.collapsedHeight) * 0.35, 1)
+            let contentOpacity = min(max((visible - Self.collapsedHeight) / fadeRange, 0), 1)
 
             VStack(spacing: 0) {
                 VStack(spacing: 0) {
@@ -59,6 +66,8 @@ struct BottomDrawer<Header: View, Content: View>: View {
                     // Layout follows the SNAPPED state only (animated once per snap), so the
                     // scrollable area matches the visible part without per-frame relayout.
                     .padding(.bottom, max(expandedHeight - base, 0))
+                    .opacity(contentOpacity)
+                    .allowsHitTesting(state != .collapsed)
             }
             .frame(maxWidth: .infinity)
             .frame(height: expandedHeight, alignment: .top)

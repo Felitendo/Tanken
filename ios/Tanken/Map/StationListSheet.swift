@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// The web's renderStationList pipeline: open + priced only → optional group-by-price (keep the
-/// closest station per distinct price) → sort (price|distance) → favourites pinned on top →
-/// cap at 50 rows.
+/// The web's renderStationList pipeline: dedupe by id (the API can repeat stations across scan
+/// batches, and duplicate ids corrupt SwiftUI's ForEach diffing) → open + priced only → optional
+/// group-by-price (keep the closest station per distinct price) → sort (price|distance) →
+/// favourites pinned on top → cap at 50 rows.
 enum StationListPipeline {
     static func apply(
         _ stations: [Station],
@@ -11,7 +12,10 @@ enum StationListPipeline {
         favouritesOnTop: Bool,
         favourites: [String]
     ) -> [Station] {
-        var open = stations.filter { $0.isOpen == true && ($0.price ?? 0) > 0 }
+        var seenIds = Set<String>()
+        var open = stations.filter {
+            $0.isOpen == true && ($0.price ?? 0) > 0 && seenIds.insert($0.id).inserted
+        }
 
         if groupByPrice {
             var seen = Set<String>()
@@ -47,7 +51,8 @@ enum StationListPipeline {
 }
 
 /// Station list inside the bottom drawer (the count/controls header lives in the drawer's
-/// draggable header slot). Rows mirror the web's `.station-item` design.
+/// draggable header slot). Rows mirror the web's `.station-item` design; reorders and refreshes
+/// animate in place instead of replaying an entrance animation.
 struct StationListSheet: View {
     @Environment(AppState.self) private var app
     @Environment(\.strings) private var s
@@ -55,8 +60,6 @@ struct StationListSheet: View {
     let band: PriceBand?
     let loading: Bool
     let onSelect: (Station) -> Void
-
-    @State private var appeared = false
 
     var body: some View {
         if stations.isEmpty {
@@ -81,13 +84,6 @@ struct StationListSheet: View {
                         )
                     }
                     .buttonStyle(PressableRowStyle())
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 14)
-                    .animation(
-                        .timingCurve(0.22, 1, 0.36, 1, duration: 0.42)
-                            .delay(min(Double(index) * 0.035, 0.35)),
-                        value: appeared
-                    )
                     if index < stations.count - 1 {
                         Divider()
                             .padding(.leading, 56)
@@ -95,10 +91,9 @@ struct StationListSheet: View {
                 }
             }
             .padding(.bottom, 24)
+            .animation(.spring(duration: 0.3), value: stations.map(\.id))
         }
-        .onAppear {
-            appeared = true
-        }
+        .scrollBounceBehavior(.basedOnSize)
     }
 
     private var emptyState: some View {
@@ -141,6 +136,7 @@ struct StationRow: View {
                 .foregroundStyle(.white)
                 .frame(width: 28, height: 28)
                 .background(priceColor, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .contentTransition(.numericText())
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(station.displayBrand)

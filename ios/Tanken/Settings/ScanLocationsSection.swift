@@ -238,7 +238,7 @@ struct LocationMapSheet: View {
                     .font(.subheadline.weight(.semibold))
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.borderedProminent)
         }
         .padding(16)
         .presentationDetents([.medium])
