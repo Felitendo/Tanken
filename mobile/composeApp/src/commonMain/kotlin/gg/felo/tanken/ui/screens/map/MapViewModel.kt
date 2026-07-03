@@ -166,20 +166,28 @@ class MapViewModel(private val graph: AppGraph) {
 
     val selected = MutableStateFlow<Station?>(null)
     val selectedDetail = MutableStateFlow<gg.felo.tanken.model.StationDetail?>(null)
+    val selectedHistory = MutableStateFlow<List<gg.felo.tanken.model.HistoryEntry>>(emptyList())
 
     fun select(station: Station) {
         selected.value = station
         selectedDetail.value = null
+        selectedHistory.value = emptyList()
         graph.haptics.selection()
         graph.mainScope.launch {
             runCatching { graph.api.stationDetail(station.id) }
                 .onSuccess { if (selected.value?.id == station.id) selectedDetail.value = it }
+        }
+        graph.mainScope.launch {
+            val country = if (station.id.startsWith("at-")) gg.felo.tanken.model.Country.At else gg.felo.tanken.model.Country.De
+            runCatching { graph.api.stationHistory(station.id, graph.state.fuel.value, country) }
+                .onSuccess { if (selected.value?.id == station.id) selectedHistory.value = it.entries }
         }
     }
 
     fun closeDetail() {
         selected.value = null
         selectedDetail.value = null
+        selectedHistory.value = emptyList()
     }
 
     suspend fun toggleFavourite(stationId: String) {

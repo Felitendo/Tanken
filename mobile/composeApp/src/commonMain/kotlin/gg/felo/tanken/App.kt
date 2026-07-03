@@ -58,12 +58,13 @@ fun App(graph: AppGraph, initialState: String? = null, themeOverride: ThemeMode?
                             autoSelectFirst = initialState == "detail"
                         }
                     }
+                    val historyViewModel = remember { gg.felo.tanken.ui.screens.history.HistoryViewModel(graph) }
                     when (initialState) {
                         "gallery" -> GalleryScreen()
                         "smoke" -> SmokeScreen()
                         else -> when (tab) {
                             AppTab.Map -> gg.felo.tanken.ui.screens.map.MapScreen(mapViewModel)
-                            AppTab.History -> PlaceholderScreen(strings.historyTitle, strings.historyDescription)
+                            AppTab.History -> gg.felo.tanken.ui.screens.history.HistoryScreen(historyViewModel)
                             AppTab.Stats -> PlaceholderScreen(strings.statsTitle, strings.statsDescription)
                             AppTab.Settings -> PlaceholderScreen(strings.settingsTitle, strings.settingsDescription)
                         }

@@ -168,6 +168,7 @@ fun MapScreen(viewModel: MapViewModel) {
         // Station detail sheet
         BottomSheet(visible = selected != null, onDismiss = { viewModel.closeDetail() }) {
             selected?.let { station ->
+                val history by viewModel.selectedHistory.collectAsState()
                 StationDetailContent(
                     station = station,
                     detail = selectedDetail,
@@ -180,6 +181,7 @@ fun MapScreen(viewModel: MapViewModel) {
                     onNavigate = { provider ->
                         graph.mapsLink.openNavigation(station.lat, station.lng, station.name, provider)
                     },
+                    chart = { StationSheetChart(history, strings) },
                 )
             }
         }
