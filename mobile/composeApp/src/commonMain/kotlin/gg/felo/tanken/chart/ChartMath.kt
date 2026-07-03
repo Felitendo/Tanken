@@ -58,15 +58,17 @@ fun bucketByDay(entries: List<HistoryEntry>): List<DayBucket> {
 
 /** Hour buckets within one day's entries (min price per hour). */
 fun bucketByHour(entries: List<HistoryEntry>): List<HourBucket> {
-    val map = sortedMapOf<Int, MutableList<Double>>()
+    // NOTE: no sortedMapOf here — that helper is JVM-only and this file must
+    // compile for Kotlin/Native too.
+    val map = mutableMapOf<Int, MutableList<Double>>()
     entries.forEach { entry ->
         val instant = parseInstant(entry.timestamp) ?: return@forEach
         val local = instant.toLocalDateTime(zone)
         entry.minPrice?.let { map.getOrPut(local.hour) { mutableListOf() } += it }
     }
-    return map.map { (hour, prices) ->
-        HourBucket(hour, "$hour", prices.min())
-    }
+    return map.entries
+        .sortedBy { it.key }
+        .map { (hour, prices) -> HourBucket(hour, "$hour", prices.min()) }
 }
 
 /** Cutoff filter: keep entries within the last [days] (0 = everything). */
