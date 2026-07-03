@@ -35,7 +35,11 @@ struct BottomDrawer<Header: View, Content: View>: View {
             let expandedHeight = geo.size.height - 8
             let halfHeight = geo.size.height * 0.45
             let base = height(for: state, half: halfHeight, expanded: expandedHeight)
-            let current = rubberBanded(base - dragOffset, min: Self.collapsedHeight, max: expandedHeight)
+            // The panel keeps a FIXED expanded height and slides via offset — a pure transform.
+            // Resizing the panel per drag frame re-laid-out the whole list and re-rendered the
+            // glass every frame, which is what made dragging stutter.
+            let visible = rubberBanded(base - dragOffset, min: Self.collapsedHeight, max: expandedHeight)
+            let offsetY = expandedHeight - visible
 
             VStack(spacing: 0) {
                 VStack(spacing: 0) {
@@ -52,16 +56,23 @@ struct BottomDrawer<Header: View, Content: View>: View {
                 }
 
                 content
+                    // Layout follows the SNAPPED state only (animated once per snap), so the
+                    // scrollable area matches the visible part without per-frame relayout.
+                    .padding(.bottom, max(expandedHeight - base, 0))
             }
             .frame(maxWidth: .infinity)
-            .frame(height: current, alignment: .top)
+            .frame(height: expandedHeight, alignment: .top)
             .glassSurface(in: Self.shape)
             // The glass alone is transparent enough that map annotations bleed through the
             // expanded drawer as colored blobs — a translucent backdrop keeps content readable.
             .background(Self.shape.fill(Theme.background).opacity(0.5))
             .clipShape(Self.shape)
             .shadow(color: .black.opacity(0.15), radius: 12, y: -3)
+            .offset(y: offsetY)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            // The full-height panel pokes below the screen while collapsed/half — clip the
+            // overflow so it can't shine around the floating tab bar.
+            .clipped()
             .animation(.spring(duration: 0.35), value: state)
         }
     }

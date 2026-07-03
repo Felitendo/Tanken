@@ -27,8 +27,20 @@ struct RecenterTarget: Equatable {
 @MainActor
 @Observable
 final class MapViewModel: NSObject, CLLocationManagerDelegate {
+    /// Center-based "nearby" load (25 km radius like the web) — powers the drawer list, so the
+    /// list always shows everything nearby regardless of where the map was panned.
     var stations: [Station] = []
+    /// Silent viewport fetches while panning — extra bubbles for the map only.
+    var viewportStations: [Station] = []
     var band: PriceBand?
+
+    /// What the map renders: viewport results (fresher for the visible area) merged with the
+    /// nearby set, deduped by id.
+    var mapStations: [Station] {
+        guard !viewportStations.isEmpty else { return stations }
+        let seen = Set(viewportStations.map(\.id))
+        return viewportStations + stations.filter { !seen.contains($0.id) }
+    }
     /// True only during explicit loads (start, locate-me, search, "Hier suchen") — background
     /// viewport refreshes stay silent to avoid list flicker.
     var loading = false
@@ -133,6 +145,7 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
             guard !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.25)) {
                 stations = newStations
+                viewportStations = []
                 band = newBand?.band
                 loading = false
             }
@@ -184,7 +197,7 @@ final class MapViewModel: NSObject, CLLocationManagerDelegate {
             guard let result = try? await api.stationsInBounds(south: south, west: west, north: north, east: east, fuel: fuel),
                   !Task.isCancelled, !result.isEmpty else { return }
             withAnimation(.easeInOut(duration: 0.2)) {
-                stations = result
+                viewportStations = result
             }
             lastBoundsFetchRegion = region
             lastDataAt = Date()

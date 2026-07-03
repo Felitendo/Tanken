@@ -72,7 +72,7 @@ struct MapTabView: View {
     private var mapLayer: some View {
         Map(position: $camera) {
             UserAnnotation()
-            ForEach(model.stations.filter { $0.price != nil }) { station in
+            ForEach(model.mapStations.filter { $0.price != nil }) { station in
                 Annotation(
                     "",
                     coordinate: CLLocationCoordinate2D(latitude: station.lat, longitude: station.lng),
@@ -338,6 +338,7 @@ struct MapTabView: View {
                     model.routeModeActive = true
                     model.showSearchHere = false
                     model.stations = corridor
+                    model.viewportStations = []
                 }
                 if corridor.isEmpty {
                     app.showToast(s.routeNoStations)
