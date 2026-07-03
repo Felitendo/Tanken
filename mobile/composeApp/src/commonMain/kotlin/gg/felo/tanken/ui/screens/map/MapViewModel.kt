@@ -25,6 +25,9 @@ class MapViewModel(private val graph: AppGraph) {
     private var bandKey: String? = null
     private var started = false
 
+    /** Screenshot harness: open the cheapest station's sheet once loaded. */
+    var autoSelectFirst = false
+
     /** [uiScope] must be a composition scope — camera animations need its frame clock. */
     suspend fun start(uiScope: kotlinx.coroutines.CoroutineScope) {
         if (started) return
@@ -36,6 +39,12 @@ class MapViewModel(private val graph: AppGraph) {
         }
         val anchor = located ?: camera.center
         loadAround(anchor)
+        if (autoSelectFirst) {
+            stations.value
+                .filter { it.isOpen && it.price != null }
+                .minByOrNull { it.price!! }
+                ?.let { select(it) }
+        }
     }
 
     suspend fun jumpToUser(uiScope: kotlinx.coroutines.CoroutineScope) {
@@ -97,4 +106,93 @@ class MapViewModel(private val graph: AppGraph) {
         bandKey = null
         graph.mainScope.launch { loadAround(camera.center) }
     }
+
+    // ---- Search -----------------------------------------------------------------------
+
+    val searchQuery = MutableStateFlow("")
+    val suggestions = MutableStateFlow<List<SearchSuggestion>>(emptyList())
+    private var searchJob: kotlinx.coroutines.Job? = null
+
+    fun onSearchInput(text: String) {
+        searchQuery.value = text
+        searchJob?.cancel()
+        if (text.trim().length < 2) {
+            suggestions.value = emptyList()
+            return
+        }
+        searchJob = graph.mainScope.launch {
+            kotlinx.coroutines.delay(250)
+            val fuel = graph.state.fuel.value
+            val user = userLocation.value
+            val stationHits = runCatching {
+                graph.api.searchStations(text.trim(), fuel, user?.lat, user?.lng)
+            }.getOrDefault(emptyList()).map { station ->
+                SearchSuggestion(
+                    title = station.name.ifBlank { station.brand ?: "" },
+                    subtitle = station.address.takeIf { it.isNotBlank() },
+                    lat = station.lat,
+                    lng = station.lng,
+                    price = station.price,
+                    isPlace = false,
+                    station = station,
+                )
+            }
+            // Geocode is login-gated server-side; ignore failures silently.
+            val placeHits = if (graph.state.isLoggedIn) {
+                runCatching {
+                    graph.api.geocode(text.trim(), graph.state.language.value.code)
+                }.getOrNull()?.results.orEmpty().map {
+                    SearchSuggestion(it.name, null, it.lat, it.lng, null, isPlace = true)
+                }
+            } else {
+                emptyList()
+            }
+            suggestions.value = (stationHits + placeHits).take(8)
+        }
+    }
+
+    fun onSuggestionTap(suggestion: SearchSuggestion, uiScope: kotlinx.coroutines.CoroutineScope) {
+        searchQuery.value = ""
+        suggestions.value = emptyList()
+        camera.animateTo(uiScope, LatLng(suggestion.lat, suggestion.lng), 13.0)
+        graph.mainScope.launch {
+            loadAround(LatLng(suggestion.lat, suggestion.lng))
+            suggestion.station?.let { select(it) }
+        }
+        graph.haptics.tap()
+    }
+
+    // ---- Station selection / detail sheet -----------------------------------------------
+
+    val selected = MutableStateFlow<Station?>(null)
+    val selectedDetail = MutableStateFlow<gg.felo.tanken.model.StationDetail?>(null)
+
+    fun select(station: Station) {
+        selected.value = station
+        selectedDetail.value = null
+        graph.haptics.selection()
+        graph.mainScope.launch {
+            runCatching { graph.api.stationDetail(station.id) }
+                .onSuccess { if (selected.value?.id == station.id) selectedDetail.value = it }
+        }
+    }
+
+    fun closeDetail() {
+        selected.value = null
+        selectedDetail.value = null
+    }
+
+    suspend fun toggleFavourite(stationId: String) {
+        if (graph.state.toggleFavourite(stationId)) graph.haptics.success()
+    }
 }
+
+data class SearchSuggestion(
+    val title: String,
+    val subtitle: String?,
+    val lat: Double,
+    val lng: Double,
+    val price: Double?,
+    val isPlace: Boolean,
+    val station: Station? = null,
+)

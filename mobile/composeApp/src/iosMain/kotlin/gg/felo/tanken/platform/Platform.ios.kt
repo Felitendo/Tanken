@@ -182,14 +182,22 @@ private class AnchorProvider : NSObject(), ASWebAuthenticationPresentationContex
 }
 
 actual fun createMapsLink(): MapsLink = object : MapsLink {
-    override fun openNavigation(lat: Double, lng: Double, name: String) {
-        val encoded = name.replace(" ", "+")
-        val google = NSURL.URLWithString("comgooglemaps://?daddr=$lat,$lng&directionsmode=driving")
-        val apple = NSURL.URLWithString("maps://?daddr=$lat,$lng&q=$encoded")
+    override fun openNavigation(lat: Double, lng: Double, name: String, provider: MapsProvider) {
         val app = UIApplication.sharedApplication
-        when {
-            google != null && app.canOpenURL(google) -> app.openURL(google, emptyMap<Any?, Any>(), null)
-            apple != null -> app.openURL(apple, emptyMap<Any?, Any>(), null)
+        when (provider) {
+            MapsProvider.Google -> {
+                val native = NSURL.URLWithString("comgooglemaps://?daddr=$lat,$lng&directionsmode=driving")
+                val web = NSURL.URLWithString("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
+                when {
+                    native != null && app.canOpenURL(native) -> app.openURL(native, emptyMap<Any?, Any>(), null)
+                    web != null -> app.openURL(web, emptyMap<Any?, Any>(), null)
+                }
+            }
+            MapsProvider.Apple -> {
+                NSURL.URLWithString("maps://?daddr=$lat,$lng")?.let {
+                    app.openURL(it, emptyMap<Any?, Any>(), null)
+                }
+            }
         }
     }
 }

@@ -57,8 +57,12 @@ actual fun createAuthenticator(): Authenticator = object : Authenticator {
 }
 
 actual fun createMapsLink(): MapsLink = object : MapsLink {
-    override fun openNavigation(lat: Double, lng: Double, name: String) {
-        runCatching { Desktop.getDesktop().browse(URI("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")) }
+    override fun openNavigation(lat: Double, lng: Double, name: String, provider: MapsProvider) {
+        val url = when (provider) {
+            MapsProvider.Google -> "https://www.google.com/maps/dir/?api=1&destination=$lat,$lng"
+            MapsProvider.Apple -> "https://maps.apple.com/?daddr=$lat,$lng"
+        }
+        runCatching { Desktop.getDesktop().browse(URI(url)) }
     }
 }
 

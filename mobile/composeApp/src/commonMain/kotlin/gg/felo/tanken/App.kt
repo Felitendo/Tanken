@@ -53,7 +53,11 @@ fun App(graph: AppGraph, initialState: String? = null, themeOverride: ThemeMode?
 
             Column(Modifier.fillMaxSize().background(Theme.colors.bg)) {
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    val mapViewModel = remember { gg.felo.tanken.ui.screens.map.MapViewModel(graph) }
+                    val mapViewModel = remember {
+                        gg.felo.tanken.ui.screens.map.MapViewModel(graph).apply {
+                            autoSelectFirst = initialState == "detail"
+                        }
+                    }
                     when (initialState) {
                         "gallery" -> GalleryScreen()
                         "smoke" -> SmokeScreen()

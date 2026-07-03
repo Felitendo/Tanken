@@ -48,9 +48,11 @@ interface Authenticator {
 
 expect fun createAuthenticator(): Authenticator
 
+enum class MapsProvider { Google, Apple }
+
 /** Opens Apple/Google Maps (iOS) or a browser map (desktop) for navigation. */
 interface MapsLink {
-    fun openNavigation(lat: Double, lng: Double, name: String)
+    fun openNavigation(lat: Double, lng: Double, name: String, provider: MapsProvider)
 }
 
 expect fun createMapsLink(): MapsLink
