@@ -4,6 +4,3 @@ node_modules
 *.md
 .github
 .vscode
-
-# Native iOS companion app (SwiftUI) — not part of the web image
-ios
