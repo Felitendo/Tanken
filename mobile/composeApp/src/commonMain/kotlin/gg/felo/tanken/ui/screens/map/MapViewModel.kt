@@ -32,6 +32,10 @@ class MapViewModel(private val graph: AppGraph) {
     suspend fun start(uiScope: kotlinx.coroutines.CoroutineScope) {
         if (started) return
         started = true
+        // Stale-while-revalidate: show the last known stations instantly.
+        if (stations.value.isEmpty()) {
+            stations.value = graph.state.readCachedStations()
+        }
         val located = graph.geolocation.current()
         if (located != null) {
             userLocation.value = located
@@ -60,7 +64,10 @@ class MapViewModel(private val graph: AppGraph) {
         try {
             val fuel = graph.state.fuel.value
             runCatching { graph.api.stations(point.lat, point.lng, fuel) }
-                .onSuccess { stations.value = it }
+                .onSuccess {
+                    stations.value = it
+                    graph.state.writeCachedStations(it)
+                }
             loadBand(point)
         } finally {
             loading.value = false

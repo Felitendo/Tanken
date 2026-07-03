@@ -50,6 +50,7 @@ class AppState(
         const val HISTORY_DAYS = "historyDefaultDays"
         const val SESSION_TOKEN = "sessionToken"
         const val FAVOURITES = "favourites"
+        const val CACHED_STATIONS = "cachedStations"
     }
 
     companion object {
@@ -166,6 +167,22 @@ class AppState(
     }
 
     val isLoggedIn: Boolean get() = user.value != null
+
+    // ---- Offline cache (stale-while-revalidate for the map) --------------------------------
+
+    private val cacheJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+    /** Last successful station payload, shown immediately on cold start. */
+    fun readCachedStations(): List<gg.felo.tanken.model.Station> =
+        settings.getStringOrNull(Keys.CACHED_STATIONS)?.let { raw ->
+            runCatching { cacheJson.decodeFromString<List<gg.felo.tanken.model.Station>>(raw) }.getOrNull()
+        } ?: emptyList()
+
+    fun writeCachedStations(stations: List<gg.felo.tanken.model.Station>) {
+        runCatching {
+            settings.putString(Keys.CACHED_STATIONS, cacheJson.encodeToString(stations.take(120)))
+        }
+    }
 
     // ---- Server round-trips ----------------------------------------------------------------
 
