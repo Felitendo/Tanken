@@ -53,11 +53,12 @@ fun App(graph: AppGraph, initialState: String? = null, themeOverride: ThemeMode?
 
             Column(Modifier.fillMaxSize().background(Theme.colors.bg)) {
                 Box(Modifier.weight(1f).fillMaxWidth()) {
+                    val mapViewModel = remember { gg.felo.tanken.ui.screens.map.MapViewModel(graph) }
                     when (initialState) {
                         "gallery" -> GalleryScreen()
                         "smoke" -> SmokeScreen()
                         else -> when (tab) {
-                            AppTab.Map -> PlaceholderScreen("Karte", "Tankstellen in deiner Nähe.")
+                            AppTab.Map -> gg.felo.tanken.ui.screens.map.MapScreen(mapViewModel)
                             AppTab.History -> PlaceholderScreen(strings.historyTitle, strings.historyDescription)
                             AppTab.Stats -> PlaceholderScreen(strings.statsTitle, strings.statsDescription)
                             AppTab.Settings -> PlaceholderScreen(strings.settingsTitle, strings.settingsDescription)

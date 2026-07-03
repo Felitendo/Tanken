@@ -29,12 +29,16 @@ class AppGraph(
     val mapsLink: MapsLink = createMapsLink(),
 ) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** UI-confined scope: TileProvider mutations must happen on the main thread. */
+    val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     val state = AppState(createSettings(), createSecureStore(), scope)
     val api = ApiClient(
         baseUrl = { state.baseUrl.value },
         sessionToken = { state.sessionToken.value },
         engine = httpClientEngine(),
     )
+    val tiles = gg.felo.tanken.map.TileProvider(httpClientEngine(), mainScope)
 
     init {
         state.api = api

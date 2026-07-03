@@ -31,6 +31,10 @@ fun main(args: Array<String>) {
         else -> gg.felo.tanken.ui.theme.ThemeMode.Dark
     }
     val graph = AppGraph()
+    when (args.optionValue("--lang")) {
+        "de" -> graph.state.setLanguage(gg.felo.tanken.state.AppLanguage.De)
+        "en" -> graph.state.setLanguage(gg.felo.tanken.state.AppLanguage.En)
+    }
 
     application(exitProcessOnExit = true) {
         Window(
