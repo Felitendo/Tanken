@@ -7,7 +7,18 @@ import { loadRepoConfig } from '@/config';
 export const runtime = 'nodejs';
 
 const bodySchema = z.object({
-  to: z.string().email()
+  to: z.string().email(),
+  // Live form values from the admin UI — testing what the admin is about
+  // to save instead of the previously persisted config avoids the
+  // "changed it, test passed, still broken" trap.
+  smtp: z.object({
+    host: z.string(),
+    port: z.coerce.number().min(1).max(65535).default(587),
+    secure: z.boolean().default(false),
+    user: z.string().default(''),
+    pass: z.string().default(''),
+    from: z.string()
+  }).optional()
 });
 
 export async function POST(request: NextRequest) {
@@ -21,10 +32,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Gültige E-Mail-Adresse erforderlich.' }, { status: 400 });
   }
 
-  const config = loadRepoConfig();
-  const smtp = config.smtp;
+  const smtp = parsed.data.smtp ?? loadRepoConfig().smtp;
   if (!smtp?.host || !smtp?.from) {
-    return NextResponse.json({ error: 'SMTP ist nicht konfiguriert. Bitte zuerst Host und Absender-Adresse speichern.' }, { status: 400 });
+    return NextResponse.json({ error: 'SMTP ist nicht konfiguriert. Bitte Host und Absender-Adresse angeben.' }, { status: 400 });
   }
 
   const transporter = nodemailer.createTransport({

@@ -156,8 +156,6 @@ const defaultConfig: AdminConfig = {
   smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
 };
 
-const SCAN_TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
-
 // ─── API helper ────────────────────────────────────────────────────
 
 async function api<T = unknown>(url: string, options?: RequestInit): Promise<T> {
@@ -166,6 +164,12 @@ async function api<T = unknown>(url: string, options?: RequestInit): Promise<T> 
     ...options,
   });
   const payload = await response.json().catch(() => null);
+  if (response.status === 401 && !url.includes('/login') && !url.includes('/bootstrap')) {
+    // Session expired mid-use: bounce the whole panel back to the login
+    // view instead of leaving a dead dashboard with cryptic toasts.
+    window.dispatchEvent(new CustomEvent('admin-unauthorized'));
+    throw new Error('Sitzung abgelaufen – bitte neu anmelden.');
+  }
   if (!response.ok) throw new Error((payload as { error?: string })?.error || `HTTP ${response.status}`);
   return payload as T;
 }
@@ -1734,7 +1738,34 @@ function SetupPanel({
   submitting: boolean;
 }) {
   const [step, setStep] = useState(0);
+  const [showAccountError, setShowAccountError] = useState(false);
   const steps = ['Account', 'API & Suche', 'Erweitert'];
+
+  const usernameValid = username.trim().length >= 3;
+  const passwordValid = password.length >= 8;
+  const accountValid = usernameValid && passwordValid;
+
+  // The account inputs live in a display:none container on steps 1/2, where
+  // native `required` validation dead-ends silently (the browser can't focus
+  // a hidden control). Gate navigation + submit in JS instead.
+  function goToStep(next: number) {
+    if (next > 0 && !accountValid) {
+      setShowAccountError(true);
+      setStep(0);
+      document.getElementById(usernameValid ? 'setup-password' : 'setup-username')?.focus();
+      return;
+    }
+    setStep(next);
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    if (!accountValid) {
+      e.preventDefault();
+      goToStep(1);
+      return;
+    }
+    onSubmit(e);
+  }
 
   return (
     <div className="flex min-h-svh items-center justify-center p-6">
@@ -1752,7 +1783,7 @@ function SetupPanel({
               <button
                 key={label}
                 type="button"
-                onClick={() => setStep(i)}
+                onClick={() => goToStep(i)}
                 className="flex items-center gap-2 text-xs font-medium"
               >
                 <span
@@ -1774,7 +1805,7 @@ function SetupPanel({
           </div>
         </CardHeader>
 
-        <form onSubmit={onSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <CardContent className="space-y-6">
             <div className={step === 0 ? 'grid gap-4' : 'hidden'}>
               <div className="grid gap-2">
@@ -1784,10 +1815,15 @@ function SetupPanel({
                   autoComplete="username"
                   required
                   minLength={3}
+                  aria-invalid={showAccountError && !usernameValid}
                   value={username}
                   onChange={(e) => onUsernameChange(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">Mindestens 3 Zeichen.</p>
+                {showAccountError && !usernameValid ? (
+                  <p role="alert" className="text-xs text-destructive">Benutzername braucht mindestens 3 Zeichen.</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Mindestens 3 Zeichen.</p>
+                )}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="setup-password">Passwort</Label>
@@ -1797,10 +1833,15 @@ function SetupPanel({
                   autoComplete="new-password"
                   required
                   minLength={8}
+                  aria-invalid={showAccountError && !passwordValid}
                   value={password}
                   onChange={(e) => onPasswordChange(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">Mindestens 8 Zeichen.</p>
+                {showAccountError && !passwordValid ? (
+                  <p role="alert" className="text-xs text-destructive">Passwort braucht mindestens 8 Zeichen.</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Mindestens 8 Zeichen.</p>
+                )}
               </div>
             </div>
 
@@ -1825,7 +1866,7 @@ function SetupPanel({
               <ArrowLeft /> Zurück
             </Button>
             {step < steps.length - 1 ? (
-              <Button type="button" size="sm" onClick={() => setStep(step + 1)}>
+              <Button type="button" size="sm" onClick={() => goToStep(step + 1)}>
                 Weiter <ArrowRight />
               </Button>
             ) : (
@@ -2082,6 +2123,17 @@ export default function AdminPage() {
     refreshStatus();
   }, [refreshStatus]);
 
+  useEffect(() => {
+    // api() fires this on any 401 — re-check status so the UI flips to the
+    // login panel and tell the user why.
+    const onUnauthorized = () => {
+      showFeedback('Sitzung abgelaufen – bitte neu anmelden.', 'error');
+      refreshStatus();
+    };
+    window.addEventListener('admin-unauthorized', onUnauthorized);
+    return () => window.removeEventListener('admin-unauthorized', onUnauthorized);
+  }, [refreshStatus, showFeedback]);
+
   const handleConfigChange = useCallback((patch: Partial<AdminConfig>) => {
     setConfig((prev) => ({ ...prev, ...patch }));
   }, []);
@@ -2146,7 +2198,9 @@ export default function AdminPage() {
   const handleTestEmail = async () => {
     setTestingEmail(true);
     try {
-      await api('/api/admin/smtp-test', { method: 'POST', body: JSON.stringify({ to: testEmailRecipient }) });
+      // Test the values currently in the form, not the last saved config —
+      // otherwise editing + testing silently validates stale settings.
+      await api('/api/admin/smtp-test', { method: 'POST', body: JSON.stringify({ to: testEmailRecipient, smtp: config.smtp }) });
       showFeedback(`Test-E-Mail an ${testEmailRecipient} gesendet.`, 'success');
     } catch (err) {
       showFeedback((err as Error).message || 'Test-E-Mail fehlgeschlagen.', 'error');
