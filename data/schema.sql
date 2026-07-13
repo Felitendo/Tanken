@@ -63,24 +63,8 @@ ALTER TABLE station_prices ADD COLUMN IF NOT EXISTS station_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_station_prices_id ON station_prices(station_id, timestamp DESC);
 
 -- fuel_type is needed for country-wide price-band aggregation (color heatmap).
--- New rows are written with the fuel they were scanned for; the two UPDATEs
--- backfill historical rows from scan_locations (DE admin-curated) and
--- station_cache (AT grid + DE cached). Both UPDATEs are no-ops once all rows
--- have a fuel_type, so they are safe to leave in the boot path.
 ALTER TABLE station_prices ADD COLUMN IF NOT EXISTS fuel_type TEXT;
 CREATE INDEX IF NOT EXISTS idx_station_prices_fuel_time ON station_prices(fuel_type, timestamp DESC);
-
-UPDATE station_prices sp
-   SET fuel_type = sl.fuel_type
-  FROM scan_locations sl
- WHERE sp.location_id = sl.id
-   AND sp.fuel_type IS NULL;
-
-UPDATE station_prices sp
-   SET fuel_type = sc.fuel_type
-  FROM station_cache sc
- WHERE sp.location_id = sc.location_id
-   AND sp.fuel_type IS NULL;
 
 -- Persistent station cache (survives restarts, populated by admin scan locations + AT grid)
 CREATE TABLE IF NOT EXISTS station_cache (
@@ -137,3 +121,21 @@ CREATE INDEX IF NOT EXISTS idx_location_requests_status ON location_requests(sta
 -- Legacy dump-import cleanup (dump-import feature was removed)
 DROP TABLE IF EXISTS known_stations;
 DELETE FROM station_cache WHERE location_id LIKE 'de-import-%';
+
+-- fuel_type backfill for historical station_prices rows, from scan_locations
+-- (DE admin-curated) and station_cache (AT grid + DE cached). Must run after
+-- all CREATE TABLE statements: the whole schema executes as one implicit
+-- transaction, so referencing a table created further down would abort the
+-- entire bootstrap on a fresh database. Both UPDATEs are no-ops once all
+-- rows have a fuel_type, so they are safe to leave in the boot path.
+UPDATE station_prices sp
+   SET fuel_type = sl.fuel_type
+  FROM scan_locations sl
+ WHERE sp.location_id = sl.id
+   AND sp.fuel_type IS NULL;
+
+UPDATE station_prices sp
+   SET fuel_type = sc.fuel_type
+  FROM station_cache sc
+ WHERE sp.location_id = sc.location_id
+   AND sp.fuel_type IS NULL;
