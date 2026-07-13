@@ -1,13 +1,16 @@
 name: Mobile CI
 
+# The mobile app was removed from the repo for now. This workflow is kept
+# manual-only so the whole build/release pipeline is ready the moment a new
+# mobile/ app lands — just restore the push/pull_request triggers below.
 on:
-  push:
-    branches: [main]
-    paths: ["mobile/**", ".github/workflows/mobile-ci.yml"]
-  pull_request:
-    branches: [main]
-    paths: ["mobile/**", ".github/workflows/mobile-ci.yml"]
   workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths: ["mobile/**", ".github/workflows/mobile-ci.yml"]
+  # pull_request:
+  #   branches: [main]
+  #   paths: ["mobile/**", ".github/workflows/mobile-ci.yml"]
 
 concurrency:
   group: mobile-ci-${{ github.ref }}
@@ -89,9 +92,10 @@ jobs:
           if-no-files-found: error
 
       # Single rolling "dev" prerelease: the tag is moved to the current commit
-      # and the IPA asset is replaced on every push to main.
+      # and the IPA asset is replaced on every push to main (or a manual run
+      # from main, while the workflow is dispatch-only).
       - name: Update rolling dev release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
