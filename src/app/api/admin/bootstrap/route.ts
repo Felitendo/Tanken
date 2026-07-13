@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { fromAdminConfig, adminConfigSchema, toAdminConfig } from '@/lib/admin-config';
+import { firstIssueLabel, fromAdminConfig, adminConfigSchema, toAdminConfig } from '@/lib/admin-config';
 import { hashPassword, normalizeUsername } from '@/lib/local-auth';
 import { saveRepoConfig } from '@/config';
 import { stores } from '@/lib/server-runtime';
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   const parsed = bootstrapSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Ungültige Setup-Daten.' }, { status: 400 });
+    return NextResponse.json({ error: `Ungültige Setup-Daten.${firstIssueLabel(parsed.error)}`, issues: parsed.error.flatten() }, { status: 400 });
   }
 
   const username = parsed.data.username.trim();

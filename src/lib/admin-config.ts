@@ -42,6 +42,14 @@ export const adminConfigSchema = z.object({
 
 export type AdminConfigInput = z.infer<typeof adminConfigSchema>;
 
+/** First zod issue as a human-readable "field: message" suffix for error toasts. */
+export function firstIssueLabel(error: z.ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) return '';
+  const path = issue.path.join('.');
+  return path ? ` (${path}: ${issue.message})` : ` (${issue.message})`;
+}
+
 function createSessionSecret() {
   return crypto.randomBytes(32).toString('hex');
 }

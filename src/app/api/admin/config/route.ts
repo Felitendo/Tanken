@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminRequestContext } from '@/lib/admin';
-import { adminConfigSchema, fromAdminConfig, toAdminConfig } from '@/lib/admin-config';
+import { adminConfigSchema, firstIssueLabel, fromAdminConfig, toAdminConfig } from '@/lib/admin-config';
 import { loadRepoConfig, saveRepoConfig } from '@/config';
 import { getScheduler } from '@/lib/scheduler';
 
@@ -29,7 +29,7 @@ export async function PUT(request: NextRequest) {
 
   const parsed = adminConfigSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Ungültige Konfiguration.' }, { status: 400 });
+    return NextResponse.json({ error: `Ungültige Konfiguration.${firstIssueLabel(parsed.error)}`, issues: parsed.error.flatten() }, { status: 400 });
   }
 
   const nextConfig = fromAdminConfig(parsed.data);
