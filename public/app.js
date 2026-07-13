@@ -765,7 +765,6 @@ const state = {
   routeSummary: null,       // { distanceKm, durationMin, count }
   routeScanMarkers: null,   // Leaflet markers at scan points (yellow dots)
   routeScanRunId: 0,        // guard against overlapping scan loops
-  _stationsBeforeRoute: null,
 };
 
 const localSettingsKey = 'tank_settings';
@@ -1024,6 +1023,15 @@ async function init() {
   // recent scan saves us a Tankerkönig request. Then poll every minute.
   syncManualScansFromServer({ rerender: false });
   setInterval(() => syncManualScansFromServer(), 60 * 1000);
+  // Honour the admin-configured refresh interval — previously a dead
+  // setting: prices only ever updated on pan, scan or pull-to-refresh.
+  const refreshMinutes = Math.max(1, Number(state.config.refresh_interval_minutes) || 60);
+  setInterval(() => {
+    if (document.visibilityState !== 'visible') return;
+    if (state.currentTab !== 'map' || !state.map) return;
+    if (state.routeMode || isScanBusy() || state._scanPicker) return;
+    loadStationsAroundCenter({ silent: true });
+  }, refreshMinutes * 60 * 1000);
   // Drop and re-render every 30 s so countdowns never overshoot their TTL.
   setInterval(() => {
     if (pruneManualScans() && state.map) {
@@ -2517,6 +2525,9 @@ function showStationSkeletons(count = 5) {
     </div>`).join('');
 }
 
+let _mapTabInflight = null;
+let _mapTabInflightUrl = '';
+
 async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
   state.loaded.map = true;
   const coords = getActiveCoords();
@@ -2624,8 +2635,19 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     showStationSkeletons();
   }
 
+  // Cold boot fires loadMapTab twice (initial tab load + geolocation
+  // settling). When both resolve to the same query, share one request
+  // instead of hitting the API twice.
+  const stationsUrl = `/api/stations?lat=${coords.lat}&lng=${coords.lng}&rad=${state.radiusKm}&fuel=${state.fuelType}`;
+  if (_mapTabInflightUrl === stationsUrl && _mapTabInflight) {
+    try { await _mapTabInflight; } catch {}
+    return;
+  }
+
   try {
-    const result = await api(`/api/stations?lat=${coords.lat}&lng=${coords.lng}&rad=${state.radiusKm}&fuel=${state.fuelType}`);
+    _mapTabInflightUrl = stationsUrl;
+    _mapTabInflight = api(stationsUrl);
+    const result = await _mapTabInflight;
     const rawStations = Array.isArray(result) ? result : [];
     const cacheStatus = result._cacheStatus || 'fresh';
     // Distance labels follow GPS, not the query centre — strips dist if no GPS.
@@ -2656,6 +2678,9 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
     } else {
       renderMapLoadError(loader, () => loadMapTab({ skipFitBounds }));
     }
+  } finally {
+    _mapTabInflight = null;
+    _mapTabInflightUrl = '';
   }
 }
 
@@ -5185,7 +5210,7 @@ async function loadSheetChart(stationName, days = 1, stationId) {
                 if (!Number.isFinite(ms)) return '';
                 const dt = new Date(ms);
                 if (days <= 1) return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())} Uhr`;
-                return `${dt.getDate()}.${dt.getMonth() + 1}. ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+                return `${formatShortDate(dt)} ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
               },
               label: (ctx) => formatPrice(ctx.parsed.y)
             }
@@ -5482,7 +5507,7 @@ function renderChart(data) {
 
   const labels = daily.map(d => {
     const dt = new Date(d.timestamp);
-    return `${dt.getDate()}.${dt.getMonth() + 1}`;
+    return formatShortDate(dt);
   });
 
   const ctx = document.getElementById('price-chart');
@@ -5598,7 +5623,7 @@ function renderChart(data) {
             const dt = new Date(day.timestamp);
             const dayNames = t('dayNames') || [];
             const name = dayNames[dt.getDay()] || '';
-            const dateLabel = `${name} ${dt.getDate()}.${dt.getMonth() + 1}.`;
+            const dateLabel = `${name} ${formatShortDate(dt)}`;
             const color = pointColors[idx] || '#ff9500';
             const drillable = day.entries.length > 1;
             el.innerHTML = `
@@ -5898,7 +5923,7 @@ function renderHourChart(entries, dayKey) {
   // The section header carries the drilled-down day plus a close button
   // so the user can collapse the panel without scrolling away.
   label.innerHTML = `
-    <span class="hour-chart-day">${dayName} ${dt.getDate()}.${dt.getMonth() + 1}.${dt.getFullYear()}</span>
+    <span class="hour-chart-day">${dayName} ${dt.toLocaleDateString(state.lang === 'en' ? 'en-US' : 'de-DE')}</span>
     <button type="button" class="hour-chart-close" aria-label="${t('closeHourView')}">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
     </button>
@@ -7335,10 +7360,6 @@ async function enterRouteMode(start, dest) {
   const data = await resp.json();
   if (!data.route?.coordinates?.length) throw new Error(t('routeNoRoute'));
 
-  // Capture pre-route state so exitRouteMode can restore it.
-  if (!state.routeMode) {
-    state._stationsBeforeRoute = state.stations;
-  }
   state.routeMode = true;
   state.routeStart = start;
   state.routeDest = dest;
@@ -7651,7 +7672,6 @@ function exitRouteMode() {
   hideRouteExitButton();
 
   // Reload normal station list for current viewport.
-  state._stationsBeforeRoute = null;
   loadStationsAroundCenter({ silent: false });
 }
 
