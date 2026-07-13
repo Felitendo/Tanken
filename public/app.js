@@ -1058,11 +1058,12 @@ async function init() {
 function showAppVersion() {
   // The RUNNING build's version from /api/config — not GitHub's latest
   // release, which said nothing about the code actually being served
-  // (and cost a third-party API request on every load).
+  // (and cost a third-party API request on every load). package.json must
+  // be full semver, but a zero patch is noise in the UI: 1.0.0 → v1.0.
   const version = state.config?.version;
   if (version) {
     const el = document.getElementById('app-version');
-    if (el) el.textContent = `v${version}`;
+    if (el) el.textContent = `v${version.replace(/\.0$/, '')}`;
   }
 }
 
