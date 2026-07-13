@@ -178,9 +178,6 @@ const i18n = {
     sheetCollapse: 'Verkleinern',
     retry: 'Erneut versuchen',
     appUpdated: 'App wurde auf die neueste Version aktualisiert',
-    share: 'Teilen',
-    copied: 'In die Zwischenablage kopiert',
-    shareFailed: 'Teilen nicht möglich',
     favouritesOnlyTitle: 'Nur Favoriten anzeigen',
     noFavouritesHere: 'Keine Favoriten in diesem Gebiet',
     clearSearch: 'Suche löschen',
@@ -444,9 +441,6 @@ const i18n = {
     sheetCollapse: 'Collapse',
     retry: 'Retry',
     appUpdated: 'App updated to the latest version',
-    share: 'Share',
-    copied: 'Copied to clipboard',
-    shareFailed: 'Sharing not available',
     favouritesOnlyTitle: 'Show favourites only',
     noFavouritesHere: 'No favourites in this area',
     clearSearch: 'Clear search',
@@ -4175,32 +4169,6 @@ function setupPullToRefresh() {
   document.addEventListener('touchend', onTouchEnd, { passive: true });
 }
 
-// Share a station via the native share sheet (PWA context) with a
-// clipboard fallback on desktop. Share text carries name, price and a
-// universal Google-Maps web link that resolves on any device.
-async function shareStation(station) {
-  const addr = [
-    [fixEnc(station.street || ''), station.houseNumber || ''].filter(Boolean).join(' ').trim(),
-    [station.postCode || '', fixEnc(station.place || '')].filter(Boolean).join(' ').trim(),
-  ].filter(Boolean).join(', ');
-  const priceLabel = station.price ? `${formatPrice(station.price)}/L` : '';
-  const url = `https://www.google.com/maps/search/?api=1&query=${station.lat},${station.lng}`;
-  const text = [fixEnc(station.brand || station.name || ''), priceLabel, addr].filter(Boolean).join(' · ');
-  haptic('light');
-  if (navigator.share) {
-    try {
-      await navigator.share({ title: 'Tanken', text, url });
-    } catch {} // user dismissed the share sheet — not an error
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(`${text}\n${url}`);
-    showToast(t('copied'));
-  } catch {
-    showToast(t('shareFailed'));
-  }
-}
-
 function showStationSheet(station) {
   const sheet = document.getElementById('bottom-sheet');
   const body = document.getElementById('bottom-sheet-body');
@@ -4269,10 +4237,6 @@ function showStationSheet(station) {
         <img src="/icons/apple-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
         <span>Apple Maps</span>
       </a>`}
-      <button type="button" class="sheet-nav-btn sheet-share-btn" aria-label="${t('share')}">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
-        <span>${t('share')}</span>
-      </button>
     </div>` : ''}
     <div class="sheet-chart-section">
       <div class="sheet-chart-header-row">
@@ -4292,8 +4256,6 @@ function showStationSheet(station) {
   if (sheetFavBtn) {
     sheetFavBtn.addEventListener('click', () => toggleFavourite(sheetFavBtn.dataset.stationId));
   }
-
-  body.querySelector('.sheet-share-btn')?.addEventListener('click', () => shareStation(station));
 
   // Rescan the 25 km circle around this station: same flow as "Hier suchen"
   // but anchored on the tapped pin instead of the user's pick. Close the
@@ -4781,10 +4743,6 @@ function renderStationDetailHtml(station) {
         <img src="/icons/apple-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
         <span>Apple Maps</span>
       </a>`}
-      <button type="button" class="sheet-nav-btn sheet-share-btn" aria-label="${t('share')}">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
-        <span>${t('share')}</span>
-      </button>
     </div>` : ''}
     <div class="sheet-chart-section">
       <div class="sheet-chart-header-row">
@@ -4882,7 +4840,6 @@ async function openStationDetail(seed) {
   if (favBtn) {
     favBtn.addEventListener('click', () => toggleFavourite(favBtn.dataset.stationId));
   }
-  body.querySelector('.sheet-share-btn')?.addEventListener('click', () => shareStation(station));
   // Opening-hours expand
   const hoursToggle = body.querySelector('#detail-hours-toggle');
   if (hoursToggle) {

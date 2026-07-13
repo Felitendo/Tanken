@@ -3374,16 +3374,10 @@ body.logged-in .station-fav-sync.synced {
 }
 
 .sheet-nav-btn.gmaps,
-.sheet-nav-btn.amaps,
-.sheet-nav-btn.sheet-share-btn {
+.sheet-nav-btn.amaps {
   background: var(--color-bg-secondary);
   color: var(--color-text);
   border: 1px solid var(--color-separator);
-}
-
-.sheet-share-btn svg {
-  color: var(--color-accent);
-  flex-shrink: 0;
 }
 
 .sheet-nav-icon {
