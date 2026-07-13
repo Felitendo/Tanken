@@ -11,8 +11,11 @@
   --color-bg: #fff;
   --color-bg-secondary: #f2f2f7;
   --color-bg-elevated: #ffffff;
-  --color-hint: #8e8e93;
+  /* 4.6:1 on white — the old #8e8e93 was a 3.3:1 WCAG AA failure for the
+     app's pervasive muted text (hints, sublines, section headers). */
+  --color-hint: #6d6d72;
   --color-separator: rgba(60,60,67,0.12);
+  --color-border: var(--color-separator);
   --color-accent: #007aff;
   --color-accent-text: #fff;
   --color-favorite: #ffb800;
@@ -58,6 +61,7 @@
     --color-bg-elevated: #2c2c2e;
     --color-hint: #98989e;
     --color-separator: rgba(255,255,255,0.1);
+    --color-border: var(--color-separator);
     --color-accent: #0a84ff;
     --color-accent-text: #fff;
     --color-favorite: #ffb800;
@@ -77,6 +81,7 @@ html[data-theme="dark"] {
   --color-bg-elevated: #2c2c2e;
   --color-hint: #98989e;
   --color-separator: rgba(255,255,255,0.1);
+  --color-border: var(--color-separator);
   --color-accent: #0a84ff;
   --color-accent-text: #fff;
 
@@ -117,6 +122,22 @@ html, body {
 :where(input, select, textarea):focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
+}
+
+/* === Accessibility: Tap targets === */
+/* Extend sub-44px controls' hit area to ~44px without changing their
+   visual size (iOS HIG / WCAG 2.5.5). The pseudo-element participates in
+   hit testing but paints nothing. */
+.hour-chart-close, #map-location-banner-close, .map-search-clear,
+.alert-step-btn, .hl-pin-btn {
+  position: relative;
+}
+.hour-chart-close::after, #map-location-banner-close::after,
+.map-search-clear::after, .alert-step-btn::after, .hl-pin-btn::after,
+.detail-modal-close::after, .sheet-expand-btn::after {
+  content: '';
+  position: absolute;
+  inset: calc((100% - 44px) / 2);
 }
 
 /* === Accessibility: Reduced motion === */
@@ -337,7 +358,9 @@ body.logged-in .cloud-sync-hint {
 
 /* === Page header (sits at the top of each non-map tab) === */
 .page-header {
-  padding: var(--sp-5) var(--sp-4) var(--sp-4);
+  /* Top inset keeps the H1 out from under the notch/status bar on iOS
+     (viewport-fit=cover pulls content behind it). */
+  padding: calc(env(safe-area-inset-top, 0px) + var(--sp-5)) var(--sp-4) var(--sp-4);
   border-bottom: 1px solid var(--color-separator);
   margin-bottom: var(--sp-4);
 }
@@ -1540,14 +1563,6 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   min-width: 0;
 }
 
-.account-avatar {
-  display: none;
-  flex-shrink: 0;
-}
-
-.account-avatar.visible {
-  display: block;
-}
 
 .account-avatar-img {
   width: 40px;
@@ -1718,9 +1733,6 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   pointer-events: none;
 }
 
-.top-cta-section {
-  margin-top: 12px;
-}
 
 #map {
   width: 100%;
@@ -1754,10 +1766,24 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   pointer-events: none;
 }
 
+/* Retry affordance shown in the overlay when station loading fails */
+.map-retry-btn {
+  padding: 8px 18px;
+  border: none;
+  border-radius: var(--r-pill);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.map-retry-btn:active { transform: scale(0.96); }
+
 /* === Map Search Bar === */
 #map-search-wrapper {
   position: absolute;
-  top: 12px;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
   left: 12px;
   right: 12px;
   z-index: 1000;
@@ -1868,6 +1894,11 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
 
 .map-search-result-item:last-child {
   border-bottom: none;
+}
+
+/* Keyboard highlight while arrowing through search results */
+.map-search-result-item.kb-active {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
 .map-search-result-item:active {
@@ -3330,6 +3361,7 @@ body.logged-in .station-fav-sync.synced {
   padding: 13px 16px;
   border-radius: 14px;
   border: none;
+  font-family: inherit;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -3342,10 +3374,16 @@ body.logged-in .station-fav-sync.synced {
 }
 
 .sheet-nav-btn.gmaps,
-.sheet-nav-btn.amaps {
+.sheet-nav-btn.amaps,
+.sheet-nav-btn.sheet-share-btn {
   background: var(--color-bg-secondary);
   color: var(--color-text);
   border: 1px solid var(--color-separator);
+}
+
+.sheet-share-btn svg {
+  color: var(--color-accent);
+  flex-shrink: 0;
 }
 
 .sheet-nav-icon {
@@ -3354,58 +3392,8 @@ body.logged-in .station-fav-sync.synced {
 }
 
 
-/* === Slider === */
-.slider-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.slider-row span {
-  font-size: 15px;
-  font-weight: 600;
-  min-width: 50px;
-  color: var(--color-text);
-}
-
-.slider {
-  flex: 1;
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--color-hint);
-  outline: none;
-}
-
-.slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-}
-
 /* === Stats === */
-.stat-big {
-  text-align: center;
-  padding: var(--sp-5) var(--sp-4) var(--sp-3);
-}
 
-.stat-big-value {
-  font-size: 42px;
-  font-weight: 800;
-  color: var(--color-text);
-  letter-spacing: -0.02em;
-}
-
-.stat-big-label {
-  font-size: 14px;
-  color: var(--color-hint);
-  margin-top: var(--sp-1);
-}
 
 .stat-row {
   display: flex;
@@ -3618,88 +3606,6 @@ body.logged-in .station-fav-sync.synced {
   color: var(--color-hint);
 }
 
-.auth-hero-card {
-  background: linear-gradient(135deg, rgba(79,195,247,0.12), rgba(52,199,89,0.08));
-  border: 1px solid rgba(127,127,127,0.14);
-  border-radius: 18px;
-  padding: 18px;
-  display: grid;
-  gap: 14px;
-}
-
-.auth-hero-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  font-size: 22px;
-  box-shadow: 0 8px 18px rgba(0,0,0,0.12);
-}
-
-.auth-hero-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.auth-hero-text,
-.auth-hero-note {
-  color: var(--color-hint);
-  font-size: 14px;
-}
-
-.auth-hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.google-login-slot {
-  min-height: 44px;
-}
-
-.primary-btn,
-.secondary-btn {
-  border: none;
-  border-radius: 999px;
-  padding: 10px 16px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.primary-btn {
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-}
-
-.secondary-btn {
-  background: var(--color-bg-secondary);
-  color: var(--color-text);
-  border: 1px solid rgba(127,127,127,0.16);
-}
-
-.secondary-btn.compact {
-  padding: 8px 14px;
-}
-
-.login-hint-pill {
-  margin-bottom: var(--sp-3);
-  padding: var(--sp-2) var(--sp-3);
-  border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--color-okay) 15%, transparent);
-  color: var(--color-okay);
-  font-size: 13px;
-  text-align: center;
-}
 
 .empty-state-icon {
   font-size: 48px;
@@ -3885,10 +3791,6 @@ body.logged-in .station-fav-sync.synced {
   display: none !important;
 }
 
-/* Brighten dark map labels for readability */
-.bright-labels {
-  filter: brightness(1.8) contrast(1.1);
-}
 
 /* Lift dark-mode tiles so place names stay readable without washing
    out the dark background — brightness pulls labels up, lower contrast
@@ -3971,39 +3873,6 @@ body.logged-in .station-fav-sync.synced {
   color: var(--color-text);
 }
 
-/* Theme Segmented Control */
-.theme-seg {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-hint);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-.theme-seg.active {
-  background: rgba(127,127,127,0.25);
-  color: var(--color-text);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-}
-
-.theme-seg:active {
-  transform: scale(0.97);
-}
-
-.theme-seg svg {
-  flex-shrink: 0;
-}
 
 /* Alert Channel Picker (reuses theme-seg pattern) */
 .alert-ch-seg {
@@ -4412,9 +4281,6 @@ body.logged-in .station-fav-sync.synced {
   font-weight: 500;
 }
 
-.card-toggle-row {
-  padding: 12px 16px;
-}
 
 /* === Location picker select === */
 .location-picker {
@@ -4569,76 +4435,6 @@ body.logged-in .station-fav-sync.synced {
   background: var(--color-separator);
 }
 
-.account-card {
-  display: grid;
-  gap: 14px;
-}
-
-.account-main-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.account-avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 18px;
-  overflow: hidden;
-  background: var(--color-bg-secondary);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--color-accent);
-  flex-shrink: 0;
-}
-
-.account-avatar.visible {
-  display: flex;
-}
-
-.account-avatar.has-image {
-  background: transparent;
-}
-
-.account-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.account-meta {
-  min-width: 0;
-  flex: 1;
-}
-
-.account-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.account-subline {
-  margin-top: 4px;
-  white-space: normal;
-}
-
-.account-auth-badge {
-  background: rgba(52,199,89,0.14);
-  color: #34c759;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 8px;
-  border-radius: 999px;
-}
-
-.account-actions {
-  display: flex;
-  justify-content: flex-end;
-}
 
 .toast {
   position: fixed;
@@ -4667,202 +4463,6 @@ body.logged-in .station-fav-sync.synced {
 
 .is-hidden {
   display: none !important;
-}
-
-.admin-page {
-  position: fixed;
-  inset: 0;
-  overflow-y: auto;
-  background:
-    radial-gradient(circle at top left, rgba(0,122,255,0.12), transparent 30%),
-    radial-gradient(circle at top right, rgba(52,199,89,0.12), transparent 28%),
-    linear-gradient(180deg, #f4f8ff 0%, #eef3f7 100%);
-  color: #142033;
-}
-
-.admin-shell {
-  width: min(980px, calc(100vw - 32px));
-  margin: 0 auto;
-  padding: 32px 0 48px;
-  display: grid;
-  gap: 18px;
-}
-
-.admin-hero {
-  padding: 8px 2px 0;
-}
-
-.admin-eyebrow {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #3d6cb9;
-}
-
-.admin-hero h1 {
-  font-size: clamp(30px, 4vw, 44px);
-  line-height: 1;
-  letter-spacing: -0.04em;
-  margin-top: 10px;
-}
-
-.admin-lead {
-  margin-top: 12px;
-  max-width: 680px;
-  font-size: 16px;
-  color: #49617d;
-}
-
-.admin-feedback {
-  display: none;
-  padding: 14px 16px;
-  border-radius: 14px;
-  font-weight: 600;
-  box-shadow: 0 16px 28px rgba(20, 32, 51, 0.08);
-}
-
-.admin-feedback.visible {
-  display: block;
-}
-
-.admin-feedback.info {
-  background: #e8f1ff;
-  color: #214d91;
-}
-
-.admin-feedback.success {
-  background: #e5f6eb;
-  color: #1b6b3b;
-}
-
-.admin-feedback.error {
-  background: #ffe8e8;
-  color: #982e2e;
-}
-
-.admin-card {
-  background: rgba(255,255,255,0.9);
-  border: 1px solid rgba(61,108,185,0.12);
-  border-radius: 24px;
-  padding: 24px;
-  box-shadow: 0 18px 44px rgba(20, 32, 51, 0.1);
-  backdrop-filter: blur(14px);
-}
-
-.admin-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.admin-card-head h2 {
-  font-size: 24px;
-  letter-spacing: -0.03em;
-}
-
-.admin-card-head p {
-  margin-top: 6px;
-  color: #5d738c;
-}
-
-.admin-form {
-  display: grid;
-  gap: 18px;
-}
-
-.admin-form.narrow {
-  max-width: 420px;
-}
-
-.admin-form-block {
-  display: grid;
-  gap: 14px;
-  padding-top: 4px;
-}
-
-.admin-form-block h3 {
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #587291;
-}
-
-.admin-grid {
-  display: grid;
-  gap: 14px;
-}
-
-.admin-grid.two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.admin-field {
-  display: grid;
-  gap: 8px;
-}
-
-.admin-field.full {
-  grid-column: 1 / -1;
-}
-
-.admin-field span {
-  font-size: 13px;
-  font-weight: 700;
-  color: #40556f;
-}
-
-.admin-field input,
-.admin-field select,
-.admin-field textarea {
-  width: 100%;
-  border: 1px solid rgba(61,108,185,0.18);
-  border-radius: 14px;
-  background: #fff;
-  padding: 12px 14px;
-  font: inherit;
-  color: #142033;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
-}
-
-.admin-field textarea {
-  resize: vertical;
-  min-height: 168px;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.admin-field input:focus,
-.admin-field select:focus,
-.admin-field textarea:focus {
-  outline: 2px solid rgba(0,122,255,0.2);
-  border-color: rgba(0,122,255,0.45);
-}
-
-.admin-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-@media (max-width: 720px) {
-  .admin-shell {
-    width: min(100vw - 20px, 980px);
-    padding-top: 20px;
-  }
-
-  .admin-card {
-    padding: 18px;
-    border-radius: 18px;
-  }
-
-  .admin-grid.two {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* === PWA Install Popup === */
@@ -5942,6 +5542,9 @@ html[data-theme="dark"] .pwa-popup-icon img,
 
   /* --- Toast positioning (account for sidebar) --- */
   .toast {
+    /* No bottom tab bar on desktop — mobile's 74px offset would float
+       the toast in the middle of nowhere. */
+    bottom: 24px;
     border-radius: 14px;
     box-shadow: var(--dt-shadow-lg);
     backdrop-filter: blur(var(--dt-blur));
@@ -6045,19 +5648,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
     scrollbar-color: var(--color-separator) transparent;
   }
 
-  /* --- Slider refinement --- */
-  .slider::-webkit-slider-thumb {
-    width: 22px;
-    height: 22px;
-    box-shadow: var(--dt-shadow-md);
-    transition: box-shadow 0.2s var(--dt-ease),
-                transform 0.15s var(--dt-ease);
-  }
-
-  .slider::-webkit-slider-thumb:hover {
-    box-shadow: var(--dt-shadow-lg);
-    transform: scale(1.12);
-  }
+  
 
   /* Toggle switch hover */
   .toggle-switch {
@@ -6196,13 +5787,13 @@ html[data-theme="dark"] .pwa-popup-icon img,
   height: 34px;
   border-radius: 50%;
   border: none;
-  background: rgba(0, 122, 255, 0.12);
-  color: #007aff;
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: background 0.15s, transform 0.15s;
 }
-.hl-pin-btn:hover { background: rgba(0, 122, 255, 0.22); transform: scale(1.06); }
+.hl-pin-btn:hover { background: color-mix(in srgb, var(--color-accent) 22%, transparent); transform: scale(1.06); }
 .hl-pin-btn:active { transform: scale(0.94); }
 
 /* "Standort anfragen" reads as the primary action of the locations section. */

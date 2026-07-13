@@ -18,6 +18,7 @@ const settingsSchema = z
     contributorsOpen: z.boolean().optional(),
     historyDefaultDays: historyDaysSchema.optional(),
     favouritesOnTop: z.boolean().optional(),
+    favouritesOnly: z.boolean().optional(),
     groupByPrice: z.boolean().optional()
   })
   .partial();
@@ -72,6 +73,10 @@ export async function POST(request: NextRequest) {
 
   if (typeof updates.favouritesOnTop === 'boolean') {
     nextSettings.favouritesOnTop = updates.favouritesOnTop;
+  }
+
+  if (typeof updates.favouritesOnly === 'boolean') {
+    nextSettings.favouritesOnly = updates.favouritesOnly;
   }
 
   if (typeof updates.groupByPrice === 'boolean') {

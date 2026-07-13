@@ -81,7 +81,7 @@ const i18n = {
     alertDaysAgoFmt: 'vor {n} Tagen',
     notificationChannel: 'Benachrichtigungskanal',
     ntfyTopicPlaceholder: 'ntfy Topic (z.B. mein-tankalarm)',
-    ntfyHint: 'Installiere die <a href="https://ntfy.sh" target="_blank" style="color:var(--color-accent)">ntfy App</a> und abonniere dein Topic.',
+    ntfyHint: 'Installiere die <a href="https://ntfy.sh" target="_blank" rel="noopener" style="color:var(--color-accent)">ntfy App</a> und abonniere dein Topic.',
     threshold: 'Schwellenwert',
     saveAlarm: 'Alarm speichern',
     sendTestNotification: 'Test-Benachrichtigung senden',
@@ -172,6 +172,19 @@ const i18n = {
     removeFavourite: 'Aus Favoriten entfernen',
     maxFavourites: 'Maximale Anzahl an Favoriten erreicht',
     loginRequiredFavourite: 'Bitte einloggen, um Favoriten zu speichern',
+    favouriteFailed: 'Favorit konnte nicht gespeichert werden',
+    syncFailed: 'Synchronisierung fehlgeschlagen – Einstellung nur lokal gespeichert',
+    sheetExpand: 'Vergrößern',
+    sheetCollapse: 'Verkleinern',
+    retry: 'Erneut versuchen',
+    appUpdated: 'App wurde auf die neueste Version aktualisiert',
+    share: 'Teilen',
+    copied: 'In die Zwischenablage kopiert',
+    shareFailed: 'Teilen nicht möglich',
+    favouritesOnlyTitle: 'Nur Favoriten anzeigen',
+    noFavouritesHere: 'Keine Favoriten in diesem Gebiet',
+    clearSearch: 'Suche löschen',
+    closeBanner: 'Banner schließen',
     lastUpdated: 'Zuletzt aktualisiert',
     minutesAgoFmt: 'vor {n} Min.',
     hoursAgoFmt: 'vor {n} Std.',
@@ -341,7 +354,7 @@ const i18n = {
     alertDaysAgoFmt: '{n} d ago',
     notificationChannel: 'Notification Channel',
     ntfyTopicPlaceholder: 'ntfy Topic (e.g. my-fuel-alert)',
-    ntfyHint: 'Install the <a href="https://ntfy.sh" target="_blank" style="color:var(--color-accent)">ntfy app</a> and subscribe to your topic.',
+    ntfyHint: 'Install the <a href="https://ntfy.sh" target="_blank" rel="noopener" style="color:var(--color-accent)">ntfy app</a> and subscribe to your topic.',
     threshold: 'Threshold',
     saveAlarm: 'Save Alert',
     sendTestNotification: 'Send Test Notification',
@@ -425,6 +438,20 @@ const i18n = {
     removeFavourite: 'Remove from favourites',
     maxFavourites: 'Maximum number of favourites reached',
     loginRequiredFavourite: 'Please log in to save favourites',
+    favouriteFailed: 'Could not save favourite',
+    syncFailed: 'Sync failed – setting saved on this device only',
+    sheetExpand: 'Expand',
+    sheetCollapse: 'Collapse',
+    retry: 'Retry',
+    appUpdated: 'App updated to the latest version',
+    share: 'Share',
+    copied: 'Copied to clipboard',
+    shareFailed: 'Sharing not available',
+    favouritesOnlyTitle: 'Show favourites only',
+    noFavouritesHere: 'No favourites in this area',
+    clearSearch: 'Clear search',
+    closeBanner: 'Dismiss banner',
+    pricesFallback: 'No scanned stations nearby – results from a distant measuring point',
     lastUpdated: 'Last updated',
     minutesAgoFmt: '{n} min ago',
     hoursAgoFmt: '{n} h ago',
@@ -627,6 +654,10 @@ function applyLanguage() {
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
   });
+  // data-i18n-aria-label → aria-label attribute
+  document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+    el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria-label')));
+  });
 
   // ntfy hint (has HTML with link)
   const ntfyHint = document.getElementById('alert-ntfy-hint');
@@ -698,6 +729,7 @@ const state = {
   })(),
   manualScans: [],
   favouritesOnTop: false,
+  favouritesOnly: false,
   groupByPrice: true,
   loaded: { map: false, history: false, stats: false, settings: false },
   toastTimer: null,
@@ -1009,6 +1041,7 @@ async function init() {
   setupShortcuts();
   setupMyLocationBtn();
   setupFavouritesToggle();
+  setupFavouritesOnlyToggle();
   setupGroupByPriceToggle();
   setupAccountUi();
   setupStationSort();
@@ -1017,20 +1050,18 @@ async function init() {
   initLocation();
   renderUserRequests();
   renderHistoryLocations();
-  fetchAppVersion();
+  showAppVersion();
 }
 
-async function fetchAppVersion() {
-  try {
-    const res = await fetch('https://api.github.com/repos/Felitendo/Tanken/releases/latest');
-    if (!res.ok) return;
-    const data = await res.json();
-    const version = data.tag_name || data.name;
-    if (version) {
-      const el = document.getElementById('app-version');
-      if (el) el.textContent = version;
-    }
-  } catch {}
+function showAppVersion() {
+  // The RUNNING build's version from /api/config — not GitHub's latest
+  // release, which said nothing about the code actually being served
+  // (and cost a third-party API request on every load).
+  const version = state.config?.version;
+  if (version) {
+    const el = document.getElementById('app-version');
+    if (el) el.textContent = `v${version}`;
+  }
 }
 
 
@@ -1047,6 +1078,17 @@ async function refreshMe() {
     state.favourites = [];
     document.body.classList.remove('logged-in');
   }
+}
+
+// Single source of truth for the favourites-only filter so the station
+// list and the map markers can never diverge.
+function isFavouritesOnlyActive() {
+  return !!(state.favouritesOnly && state.user);
+}
+
+function applyFavouritesOnlyFilter(stations) {
+  if (!isFavouritesOnlyActive()) return stations;
+  return stations.filter(s => s.id && state.favourites.includes(s.id));
 }
 
 async function toggleFavourite(stationId) {
@@ -1071,7 +1113,16 @@ async function toggleFavourite(stationId) {
       method: isFav ? 'DELETE' : 'POST',
       body: JSON.stringify({ stationId })
     });
-  } catch {}
+  } catch {
+    // Roll back the optimistic update so the star reflects the server state
+    if (isFav) {
+      state.favourites.push(stationId);
+    } else {
+      state.favourites = state.favourites.filter(id => id !== stationId);
+    }
+    updateFavouriteButton(stationId, isFav);
+    showToast(t('favouriteFailed'));
+  }
 }
 
 function updateFavouriteButton(stationId, isFav) {
@@ -1177,6 +1228,11 @@ function renderAccountUi() {
   }
 }
 
+function resolvedTheme(theme) {
+  if (theme === 'light' || theme === 'dark') return theme;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
 function applyTheme(theme) {
   state.theme = theme;
   if (theme === 'auto') {
@@ -1184,12 +1240,32 @@ function applyTheme(theme) {
   } else {
     document.documentElement.setAttribute('data-theme', theme);
   }
+  // applySettingsToState funnels every settings write through here — only
+  // pay for tile swaps and chart rebuilds when the visible theme actually
+  // changed, not on unrelated toggles like fuel type or language.
+  const resolved = resolvedTheme(theme);
+  if (state._appliedResolvedTheme === resolved) return;
+  state._appliedResolvedTheme = resolved;
   refreshMapTiles();
+  rerenderChartsForTheme();
+}
+
+// Chart.js canvases read their colors from CSS variables once at render
+// time, so a theme flip would otherwise leave stale axis/grid/gradient
+// colors until the next full re-render (same pattern the language
+// switcher already uses).
+function rerenderChartsForTheme() {
+  try {
+    if (state.loaded.history && state.history.length) renderChart(state.history);
+    if (state.loaded.stats && state.stats) renderStats(state.stats);
+  } catch {}
 }
 
 if (typeof window !== 'undefined' && window.matchMedia) {
   const mql = window.matchMedia('(prefers-color-scheme: dark)');
-  const handler = () => { if (state.theme === 'auto') refreshMapTiles(); };
+  // In auto mode an OS scheme flip changes the resolved theme — applyTheme
+  // notices via the resolved-theme guard and refreshes tiles + charts.
+  const handler = () => { if (state.theme === 'auto') applyTheme('auto'); };
   if (mql.addEventListener) mql.addEventListener('change', handler);
   else if (mql.addListener) mql.addListener(handler);
 }
@@ -2180,7 +2256,16 @@ function browserGeolocation() {
       state.userLng = pos.coords.longitude;
       state.activeLocation = 'gps';
       document.getElementById('map-location-banner')?.classList.add('hidden');
-      loadMapTab();
+      // If the map is already showing roughly this area (restored last
+      // viewport), refresh the data in place instead of yanking the view.
+      let near = false;
+      if (state.map) {
+        try {
+          const c = state.map.getCenter();
+          near = distanceKm(c.lat, c.lng, state.userLat, state.userLng) < 2;
+        } catch {}
+      }
+      loadMapTab({ skipFitBounds: near, silent: near });
     },
     () => {
       showLocationBanner();
@@ -2202,12 +2287,49 @@ function showLocationBanner() {
   setTimeout(() => banner.classList.add('hidden'), 8000);
 }
 
+// Last map viewport, persisted across sessions so a returning user's map
+// opens where they left it instead of flashing the Berlin fallback and
+// jumping once geolocation resolves.
+const lastViewKey = 'tank_last_view';
+
+let _storeViewTimer = null;
+function storeMapView() {
+  // Debounced — moveend fires for every gesture, but only the resting
+  // viewport matters, so don't do synchronous localStorage writes per pan.
+  clearTimeout(_storeViewTimer);
+  _storeViewTimer = setTimeout(() => {
+    if (!state.map) return;
+    try {
+      const c = state.map.getCenter();
+      localStorage.setItem(lastViewKey, JSON.stringify({
+        lat: Number(c.lat.toFixed(5)),
+        lng: Number(c.lng.toFixed(5)),
+        zoom: state.map.getZoom()
+      }));
+    } catch {}
+  }, 600);
+}
+
+function readStoredMapView() {
+  try {
+    const v = JSON.parse(localStorage.getItem(lastViewKey) || 'null');
+    if (v && Number.isFinite(v.lat) && Number.isFinite(v.lng)) return v;
+  } catch {}
+  return null;
+}
+
 function getActiveCoords() {
-  if (state.userLat && state.userLng) {
+  if (Number.isFinite(state.userLat) && Number.isFinite(state.userLng)) {
     return { lat: state.userLat, lng: state.userLng };
   }
-  // Fallback: Berlin (used purely for the initial map view when geolocation
-  // isn't available — distance calculations should NOT use this).
+  // Prefer the last viewport the user actually looked at. Deliberate side
+  // effect: without GPS and without an explicit country choice
+  // (state.manualCountry), getActiveCountry() now follows this too — the
+  // last-viewed area is a better default than always-Berlin.
+  const stored = readStoredMapView();
+  if (stored) return { lat: stored.lat, lng: stored.lng };
+  // Fall back to Berlin (purely for the initial map view — distance
+  // calculations should NOT use this).
   return { lat: 52.52, lng: 13.405 };
 }
 
@@ -2401,13 +2523,16 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
   applyCountryUi();
 
   if (!state.map) {
+    // Restore the last session's zoom when the view comes from storage.
+    const storedView = readStoredMapView();
+    const initialZoom = (!state.userLat && storedView && Number.isFinite(storedView.zoom)) ? storedView.zoom : 12;
     state.map = L.map('map', {
       zoomControl: false,
       attributionControl: false,
       doubleClickZoom: true,
       touchZoom: true,
       tapHold: false
-    }).setView([coords.lat, coords.lng], 12);
+    }).setView([coords.lat, coords.lng], initialZoom);
 
     refreshMapTiles();
     ensureCoverageMask();
@@ -2476,6 +2601,7 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
       showSearchHereIfMoved();
       applyViewCountryUi();
       scheduleViewportRefresh();
+      storeMapView();
     });
   }
 
@@ -2528,9 +2654,22 @@ async function loadMapTab({ skipFitBounds = false, silent = false } = {}) {
       loader.classList.add('hidden');
       showToast(t('pricesStaleConnection'));
     } else {
-      loader.innerHTML = `<span>${t('errorLoading')}</span>`;
+      renderMapLoadError(loader, () => loadMapTab({ skipFitBounds }));
     }
   }
+}
+
+// Error state on the map overlay with a real retry affordance — without it
+// the first-load failure is a dead end on desktop (pull-to-refresh is
+// touch-only and unavailable there).
+function renderMapLoadError(loader, retry) {
+  loader.classList.remove('hidden');
+  loader.innerHTML = `<span>${t('errorLoading')}</span><button type="button" class="map-retry-btn">${t('retry')}</button>`;
+  loader.querySelector('.map-retry-btn')?.addEventListener('click', () => {
+    haptic('light');
+    loader.innerHTML = `<div class="spinner" aria-hidden="true"></div><span>${t('loadingStations')}</span>`;
+    retry();
+  }, { once: true });
 }
 
 // ─── Centre-driven viewport loader ──────────────────────────────────
@@ -2710,7 +2849,7 @@ async function loadStationsAroundCenter({ silent = true } = {}) {
       }
       checkPriceAlert(stations);
     } catch {
-      if (loader && !silent) loader.innerHTML = `<span>${t('errorLoading')}</span>`;
+      if (loader && !silent) renderMapLoadError(loader, () => loadStationsAroundCenter({ silent: false }));
     }
   })();
   _viewportInflight = fetchPromise;
@@ -3256,6 +3395,9 @@ function renderStationsOnMap(stations, { skipFitBounds = false, skipRadiusFilter
   stations = withManualScans(stations);
   // Distance labels (sheet detail) follow GPS — strips dist if unknown.
   stations = withDistanceFromUser(stations);
+  // Keep the map in lockstep with the list when the favourites-only
+  // filter is active — markers for non-favourites would contradict it.
+  stations = applyFavouritesOnlyFilter(stations);
   // Remove previous cluster group or individual markers
   if (state.clusterGroup) {
     state.map.removeLayer(state.clusterGroup);
@@ -3547,6 +3689,11 @@ function renderStationList(stations) {
   const countLabel = document.getElementById('station-count');
   let open = stations.filter(s => s.isOpen && s.price);
 
+  // Favourites-only filter: trim the list to starred stations. Applied
+  // before the group-by-price dedupe so grouping happens within favourites.
+  const favFilterActive = isFavouritesOnlyActive();
+  open = applyFavouritesOnlyFilter(open);
+
   // Group-by-price toggle: dedupe so each distinct price appears once,
   // keeping the closest station. Walk price-then-distance order and pick
   // the first of each price bucket.
@@ -3574,7 +3721,8 @@ function renderStationList(stations) {
   }
 
   if (!open.length) {
-    list.innerHTML = `<div class="empty-state"><svg class="empty-state-icon" viewBox="0 0 24 24" width="48" height="48" fill="var(--color-hint)"><path d="M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33a2.5 2.5 0 002.5 2.5c.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14a2 2 0 00-2-2h-1V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16h10v-7.5h1.5v5a2.5 2.5 0 005 0V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5z"/></svg><div class="empty-state-text">${t('noOpenStations')}</div></div>`;
+    const emptyText = favFilterActive ? t('noFavouritesHere') : t('noOpenStations');
+    list.innerHTML = `<div class="empty-state"><svg class="empty-state-icon" viewBox="0 0 24 24" width="48" height="48" fill="var(--color-hint)"><path d="M19.77 7.23l.01-.01-3.72-3.72L15 4.56l2.11 2.11c-.94.36-1.61 1.26-1.61 2.33a2.5 2.5 0 002.5 2.5c.36 0 .69-.08 1-.21v7.21c0 .55-.45 1-1 1s-1-.45-1-1V14a2 2 0 00-2-2h-1V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16h10v-7.5h1.5v5a2.5 2.5 0 005 0V9c0-.69-.28-1.32-.73-1.77zM12 10H6V5h6v5z"/></svg><div class="empty-state-text">${emptyText}</div></div>`;
     return;
   }
 
@@ -3679,7 +3827,7 @@ function updateExpandBtnIcon(btn, expanded) {
   btn.innerHTML = expanded
     ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
     : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
-  btn.setAttribute('aria-label', expanded ? 'Collapse' : 'Expand');
+  btn.setAttribute('aria-label', expanded ? t('sheetCollapse') : t('sheetExpand'));
 }
 
 function setupSheetDrag(content, handleArea, backdrop, closeSheet) {
@@ -4002,6 +4150,32 @@ function setupPullToRefresh() {
   document.addEventListener('touchend', onTouchEnd, { passive: true });
 }
 
+// Share a station via the native share sheet (PWA context) with a
+// clipboard fallback on desktop. Share text carries name, price and a
+// universal Google-Maps web link that resolves on any device.
+async function shareStation(station) {
+  const addr = [
+    [fixEnc(station.street || ''), station.houseNumber || ''].filter(Boolean).join(' ').trim(),
+    [station.postCode || '', fixEnc(station.place || '')].filter(Boolean).join(' ').trim(),
+  ].filter(Boolean).join(', ');
+  const priceLabel = station.price ? `${formatPrice(station.price)}/L` : '';
+  const url = `https://www.google.com/maps/search/?api=1&query=${station.lat},${station.lng}`;
+  const text = [fixEnc(station.brand || station.name || ''), priceLabel, addr].filter(Boolean).join(' · ');
+  haptic('light');
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'Tanken', text, url });
+    } catch {} // user dismissed the share sheet — not an error
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    showToast(t('copied'));
+  } catch {
+    showToast(t('shareFailed'));
+  }
+}
+
 function showStationSheet(station) {
   const sheet = document.getElementById('bottom-sheet');
   const body = document.getElementById('bottom-sheet-body');
@@ -4062,14 +4236,18 @@ function showStationSheet(station) {
     </div>` : ''}
     <div class="sheet-hours-section" id="sheet-hours-section"></div>
     ${(station.lat != null && station.lng != null) ? `<div class="sheet-nav-buttons${isAndroid ? ' android-only' : ''}">
-      <a href="${gmapsUrl}" target="_blank" class="sheet-nav-btn gmaps">
+      <a href="${gmapsUrl}" target="_blank" rel="noopener" class="sheet-nav-btn gmaps">
         <img src="/icons/google-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
         <span>Google Maps</span>
       </a>
-      ${isAndroid ? '' : `<a href="${appleMapsUrl}" target="_blank" class="sheet-nav-btn amaps">
+      ${isAndroid ? '' : `<a href="${appleMapsUrl}" target="_blank" rel="noopener" class="sheet-nav-btn amaps">
         <img src="/icons/apple-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
         <span>Apple Maps</span>
       </a>`}
+      <button type="button" class="sheet-nav-btn sheet-share-btn" aria-label="${t('share')}">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+        <span>${t('share')}</span>
+      </button>
     </div>` : ''}
     <div class="sheet-chart-section">
       <div class="sheet-chart-header-row">
@@ -4089,6 +4267,8 @@ function showStationSheet(station) {
   if (sheetFavBtn) {
     sheetFavBtn.addEventListener('click', () => toggleFavourite(sheetFavBtn.dataset.stationId));
   }
+
+  body.querySelector('.sheet-share-btn')?.addEventListener('click', () => shareStation(station));
 
   // Rescan the 25 km circle around this station: same flow as "Hier suchen"
   // but anchored on the tapped pin instead of the user's pick. Close the
@@ -4140,6 +4320,10 @@ function showStationSheet(station) {
     sheet.classList.add('hidden');
     sheet.setAttribute('aria-hidden', 'true');
     backdrop.removeEventListener('click', closeSheet);
+    if (state._sheetEscapeListener) {
+      document.removeEventListener('keydown', state._sheetEscapeListener);
+      state._sheetEscapeListener = null;
+    }
     if (state._sheetDragCleanup) { state._sheetDragCleanup(); state._sheetDragCleanup = null; }
     if (state.defaultBounds) showResetViewBtn();
   };
@@ -4185,6 +4369,12 @@ function showStationSheet(station) {
     state._manualScanCountdownTimer = setInterval(tick, 1000);
   }
   backdrop.addEventListener('click', closeSheet);
+
+  // Escape closes the sheet — parity with the stats/history detail modal.
+  if (state._sheetEscapeListener) document.removeEventListener('keydown', state._sheetEscapeListener);
+  const onSheetEscape = (e) => { if (e.key === 'Escape') closeSheet(); };
+  document.addEventListener('keydown', onSheetEscape);
+  state._sheetEscapeListener = onSheetEscape;
 
   // --- Desktop: add close button for side panel. ---
   if (window.matchMedia('(min-width: 900px)').matches) {
@@ -4558,14 +4748,18 @@ function renderStationDetailHtml(station) {
       </div>
     </div>` : ''}
     ${gmapsUrl ? `<div class="sheet-nav-buttons${isAndroid ? ' android-only' : ''}">
-      <a href="${gmapsUrl}" target="_blank" class="sheet-nav-btn gmaps">
+      <a href="${gmapsUrl}" target="_blank" rel="noopener" class="sheet-nav-btn gmaps">
         <img src="/icons/google-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
         <span>Google Maps</span>
       </a>
-      ${isAndroid ? '' : `<a href="${appleMapsUrl}" target="_blank" class="sheet-nav-btn amaps">
+      ${isAndroid ? '' : `<a href="${appleMapsUrl}" target="_blank" rel="noopener" class="sheet-nav-btn amaps">
         <img src="/icons/apple-maps${isDark ? '-dark' : ''}.webp" alt="" width="24" height="24" class="sheet-nav-icon">
         <span>Apple Maps</span>
       </a>`}
+      <button type="button" class="sheet-nav-btn sheet-share-btn" aria-label="${t('share')}">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+        <span>${t('share')}</span>
+      </button>
     </div>` : ''}
     <div class="sheet-chart-section">
       <div class="sheet-chart-header-row">
@@ -4637,7 +4831,7 @@ async function openStationDetail(seed) {
   const closeBtn = document.createElement('button');
   closeBtn.className = 'detail-modal-close';
   closeBtn.type = 'button';
-  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.setAttribute('aria-label', t('closeHourView'));
   closeBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
   closeBtn.addEventListener('click', closeDetail);
   content.appendChild(closeBtn);
@@ -4663,6 +4857,7 @@ async function openStationDetail(seed) {
   if (favBtn) {
     favBtn.addEventListener('click', () => toggleFavourite(favBtn.dataset.stationId));
   }
+  body.querySelector('.sheet-share-btn')?.addEventListener('click', () => shareStation(station));
   // Opening-hours expand
   const hoursToggle = body.querySelector('#detail-hours-toggle');
   if (hoursToggle) {
@@ -4921,8 +5116,8 @@ async function loadSheetChart(stationName, days = 1, stationId) {
     const formatX = (ms) => {
       const dt = new Date(ms);
       if (days <= 1) return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
-      return `${dt.getDate()}.${dt.getMonth() + 1}`;
-    };
+      return formatShortDate(dt);
+};
 
     // Manually computed evenly spaced ticks aligned to clock boundaries.
     // 24h → 5 ticks every 6h ending at the most recent local-hour boundary.
@@ -5691,7 +5886,13 @@ function renderHistoryStats(data) {
 function renderHourChart(entries, dayKey) {
   const section = document.getElementById('hour-chart-section');
   const label = document.getElementById('hour-chart-label');
-  const dt = new Date(dayKey);
+  // Parse the YYYY-MM-DD key as LOCAL time — new Date('2026-07-13') is UTC
+  // midnight, which shifts to the previous day (wrong weekday/date in the
+  // header) for users west of UTC.
+  const [y, m, d] = String(dayKey).split('-').map(Number);
+  const dt = Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)
+    ? new Date(y, m - 1, d)
+    : new Date(dayKey);
   const dayNames = t('dayNames') || [];
   const dayName = dayNames[dt.getDay()] || '';
   // The section header carries the drilled-down day plus a close button
@@ -6010,7 +6211,10 @@ function showStatsSkeleton() {
 
 function renderStats(stats) {
   const el = document.getElementById('stats-content');
-  if (!stats) {
+  // A sparse location can come back without overall/dayAvgs/hourAvgs —
+  // treat that like "no stats" instead of throwing mid-render (which would
+  // strand the previous location's stats on screen).
+  if (!stats || !stats.overall || !Array.isArray(stats.dayAvgs) || !Array.isArray(stats.hourAvgs)) {
     el.innerHTML = `<div class="empty-state"><div class="empty-state-text">${t('noStats')}</div></div>`;
     return;
   }
@@ -6214,7 +6418,7 @@ function renderStats(stats) {
       // Tooltip with the lowest observed price + sample count so users
       // can see the ranking confidence without us cluttering the row.
       const minLabel = Number.isFinite(s.min) ? `↓ ${formatPrice(s.min)}` : '';
-      const countLabel = Number.isFinite(s.count) ? `${s.count} ${state.lang === 'en' ? 'samples' : 'Messungen'}` : '';
+      const countLabel = Number.isFinite(s.count) ? `${s.count} ${t('measurements')}` : '';
       const titleParts = [`Ø ${formatPrice(s.avg)}`, minLabel, countLabel].filter(Boolean).join(' · ');
       html += `<div class="ranking-item station-ranking-item${isMedal ? ' ranking-medal' : ''}" data-station-name="${fixEnc(s.station)}"${idAttr}${brandAttr}${avgAttr} title="${titleParts}" style="--rank-color:${color}"><div class="ranking-pos">${medal}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price" style="color:${color}"><span class="ranking-price-avg-mark">Ø</span>${formatPrice(s.avg)}</div></div>`;
     });
@@ -6664,6 +6868,46 @@ function setupMapSearch() {
       resultsEl.classList.remove('hidden');
     }
   });
+
+  // Keyboard operability (combobox pattern): arrows move a highlight over
+  // the results, Enter selects, Escape closes. Previously mouse/touch-only.
+  input.setAttribute('role', 'combobox');
+  input.setAttribute('aria-controls', 'map-search-results');
+  input.setAttribute('aria-autocomplete', 'list');
+
+  const setActiveResult = (items, idx) => {
+    items.forEach((el, i) => {
+      el.classList.toggle('kb-active', i === idx);
+      if (i === idx) {
+        if (!el.id) el.id = `map-search-opt-${i}`;
+        input.setAttribute('aria-activedescendant', el.id);
+        el.scrollIntoView({ block: 'nearest' });
+      }
+    });
+    if (idx < 0) input.removeAttribute('aria-activedescendant');
+  };
+
+  input.addEventListener('keydown', (e) => {
+    if (resultsEl.classList.contains('hidden')) return;
+    const items = Array.from(resultsEl.querySelectorAll('.map-search-result-item'));
+    if (e.key === 'Escape') {
+      resultsEl.classList.add('hidden');
+      input.removeAttribute('aria-activedescendant');
+      return;
+    }
+    if (!items.length) return;
+    const current = items.findIndex(el => el.classList.contains('kb-active'));
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveResult(items, (current + 1) % items.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveResult(items, current <= 0 ? items.length - 1 : current - 1);
+    } else if (e.key === 'Enter' && current >= 0) {
+      e.preventDefault();
+      items[current].click();
+    }
+  });
 }
 
 // Match the user's query against the currently loaded stations. Ranking
@@ -6714,7 +6958,7 @@ function renderStationSearchResultsHtml(matches) {
     ].filter(Boolean).join(', ');
     const meta = [distLabel, addrParts].filter(Boolean).join(' · ');
     return `
-      <div class="map-search-result-item map-search-station-item" data-station-idx="${i}">
+      <div class="map-search-result-item map-search-station-item" role="option" data-station-idx="${i}">
         <div class="map-search-station-rank" style="background:${color}">${m.rank ?? '–'}</div>
         <div class="map-search-station-info">
           <div class="map-search-station-name">${fixEnc(s.brand || s.name || '')}</div>
@@ -6728,9 +6972,9 @@ function renderStationSearchResultsHtml(matches) {
 function renderLocationSearchResultsHtml(items) {
   if (!items.length) return '';
   return items.map(item => `
-    <div class="map-search-result-item" data-lat="${item.lat}" data-lng="${item.lon}">
+    <div class="map-search-result-item" role="option" data-lat="${item.lat}" data-lng="${item.lon}">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--color-hint)" style="flex-shrink:0"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-      <span>${item.display_name}</span>
+      <span>${escapeHtml(item.display_name)}</span>
     </div>
   `).join('');
 }
@@ -7626,8 +7870,14 @@ async function refreshAlertUi() {
   // show how the user's threshold relates to the current market.
   let cheapestInRadius = null;
   try {
-    const coords = getActiveCoords();
-    const stations = await api(`/api/stations?lat=${coords.lat}&lng=${coords.lng}&rad=${state.radiusKm}&fuel=${state.fuelType}`);
+    // Reuse the stations the map already loaded instead of re-fetching on
+    // every settings-tab visit — the threshold bar only needs a rough
+    // "cheapest nearby" anchor, and the map data is at most minutes old.
+    let stations = Array.isArray(state.stations) && state.stations.length ? state.stations : null;
+    if (!stations) {
+      const coords = getActiveCoords();
+      stations = await api(`/api/stations?lat=${coords.lat}&lng=${coords.lng}&rad=${state.radiusKm}&fuel=${state.fuelType}`);
+    }
     const priced = stations.filter(s => typeof s.price === 'number');
     if (priced.length) {
       const prices = priced.map(s => s.price);
@@ -7964,6 +8214,34 @@ function applyFavouritesToggleUi() {
   btn.setAttribute('aria-pressed', active ? 'true' : 'false');
 }
 
+function setupFavouritesOnlyToggle() {
+  const btn = document.getElementById('station-fav-filter');
+  if (!btn || btn._setup) return;
+  btn._setup = true;
+  applyFavouritesOnlyToggleUi();
+  btn.addEventListener('click', () => {
+    if (!state.user) {
+      showToast(t('loginRequiredFavourite'));
+      return;
+    }
+    haptic('light');
+    persistStateSettings({ favouritesOnly: !state.favouritesOnly });
+    // The list re-renders via applySettingsToState; the markers need an
+    // explicit pass so the map doesn't contradict the filtered list.
+    if (state.map && state.stations?.length) {
+      renderStationsOnMap(state.stations, { skipFitBounds: true, skipRadiusFilter: true });
+    }
+  });
+}
+
+function applyFavouritesOnlyToggleUi() {
+  const btn = document.getElementById('station-fav-filter');
+  if (!btn) return;
+  const active = !!(state.favouritesOnly && state.user);
+  btn.classList.toggle('active', active);
+  btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+}
+
 function setupGroupByPriceToggle() {
   const btn = document.getElementById('station-group-toggle');
   if (!btn || btn._setup) return;
@@ -8115,6 +8393,9 @@ function applySettingsToState(settings = {}) {
   if (typeof settings.favouritesOnTop === 'boolean') {
     state.favouritesOnTop = settings.favouritesOnTop;
   }
+  if (typeof settings.favouritesOnly === 'boolean') {
+    state.favouritesOnly = settings.favouritesOnly;
+  }
   if (typeof settings.groupByPrice === 'boolean') {
     state.groupByPrice = settings.groupByPrice;
   }
@@ -8130,6 +8411,7 @@ function applySettingsToState(settings = {}) {
   if (langSelectInit) enhanceSelectForDesktop(langSelectInit);
   // Reflect the toggle's pressed state — the bar may already be in the DOM.
   if (typeof applyFavouritesToggleUi === 'function') applyFavouritesToggleUi();
+  if (typeof applyFavouritesOnlyToggleUi === 'function') applyFavouritesOnlyToggleUi();
   if (typeof applyGroupByPriceToggleUi === 'function') applyGroupByPriceToggleUi();
   // Re-render the station list so the new pinning takes effect immediately
   // (e.g. when the value arrives from the cloud-sync after an account login).
@@ -8154,6 +8436,7 @@ async function persistStateSettings(nextSettings = {}) {
     } catch {
       await minDelay;
       setSyncBadgeState('idle', changedKeys);
+      showToast(t('syncFailed'));
     }
   }
 }
@@ -8188,9 +8471,12 @@ async function saveSettingsRemote() {
     contributorsOpen: state.contributorsOpen,
     historyDefaultDays: state.historyDefaultDays,
     favouritesOnTop: !!state.favouritesOnTop,
+    favouritesOnly: !!state.favouritesOnly,
     groupByPrice: !!state.groupByPrice,
   };
-  try { await api('/api/settings', { method: 'POST', body: JSON.stringify(next) }); } catch {}
+  // Let failures propagate — persistStateSettings uses them to show an
+  // honest badge state instead of a false green check.
+  await api('/api/settings', { method: 'POST', body: JSON.stringify(next) });
 }
 
 function saveSettingsLocal() {
@@ -8203,26 +8489,37 @@ function saveSettingsLocal() {
       contributorsOpen: state.contributorsOpen,
       historyDefaultDays: state.historyDefaultDays,
       favouritesOnTop: !!state.favouritesOnTop,
+      favouritesOnly: !!state.favouritesOnly,
       groupByPrice: !!state.groupByPrice,
     }));
   } catch {}
 }
 
 function showPopup(title, message) {
-  showToast(`${title}: ${message}`);
+  // Popup messages are longer than plain toasts — give them time to be read.
+  showToast(`${title}: ${message}`, 4500);
 }
 
-function showToast(message) {
+function showToast(message, duration) {
   const el = document.getElementById('toast');
   if (!el) return;
   el.textContent = message;
   el.classList.add('visible');
   clearTimeout(state.toastTimer);
-  state.toastTimer = setTimeout(() => el.classList.remove('visible'), 2600);
+  // Scale display time with message length (~180 ms per word, clamped) so
+  // longer sentences don't vanish before they can be read.
+  const ms = duration || Math.min(5000, Math.max(2600, 1400 + message.split(/\s+/).length * 180));
+  state.toastTimer = setTimeout(() => el.classList.remove('visible'), ms);
 }
 
 function fixEnc(s) { return (s || '').replace(/\x81/g, 'ü').replace(/\x9A/g, 'Ü').replace(/\x84/g, 'ä').replace(/\x8E/g, 'Ä').replace(/\x94/g, 'ö').replace(/\x99/g, 'Ö').replace(/\xE1/g, 'ß'); }
 function formatPrice(price) { return Number(price).toFixed(2).replace('.', ',') + '€'; }
+// Short numeric date for chart axes/tooltips in the active language's
+// order: de 13.7 — en 7/13. Charts render once per language switch, so
+// labels stay in sync with applyLanguage's re-render.
+function formatShortDate(dt) {
+  return state.lang === 'en' ? `${dt.getMonth() + 1}/${dt.getDate()}` : `${dt.getDate()}.${dt.getMonth() + 1}`;
+}
 function formatPriceParts(price) { return { main: Number(price).toFixed(2).replace('.', ','), decimal: '' }; }
 function formatDelta(n) {
   if (n == null || !isFinite(n)) return '–';
@@ -8250,15 +8547,28 @@ if (document.getElementById('app')) {
 }
 
 if ('serviceWorker' in navigator) {
+  // On a first-ever visit there is no controller yet; clients.claim() in the
+  // fresh worker fires controllerchange, which used to trigger a spurious
+  // full reload right after load. Only reload when an OLD worker is being
+  // replaced — and leave a breadcrumb so the reloaded page can tell the
+  // user why it refreshed.
+  var hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('/sw.js').catch(() => {});
-  // Reload page when a new service worker takes over
   var refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', function() {
+    if (!hadController) { hadController = true; return; }
     if (!refreshing) {
       refreshing = true;
+      try { sessionStorage.setItem('tank_updated', '1'); } catch {}
       window.location.reload();
     }
   });
+  try {
+    if (sessionStorage.getItem('tank_updated')) {
+      sessionStorage.removeItem('tank_updated');
+      setTimeout(() => showToast(t('appUpdated')), 800);
+    }
+  } catch {}
 }
 
 /* === PWA Install Popup === */

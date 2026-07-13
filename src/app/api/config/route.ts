@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { runtimeConfig } from '@/lib/server-runtime';
+import packageJson from '../../../../package.json';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
   return NextResponse.json({
+    version: packageJson.version,
     smtpConfigured: Boolean(runtimeConfig.repoConfig.smtp?.host && runtimeConfig.repoConfig.smtp?.from),
     fuel_type: runtimeConfig.repoConfig.fuel_type,
     radius_km: runtimeConfig.repoConfig.radius_km,
