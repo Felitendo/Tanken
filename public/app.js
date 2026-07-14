@@ -7602,6 +7602,21 @@ function hideRouteExitButton() {
   if (btn) btn.classList.add('hidden');
 }
 
+// Channel picker visibility. With SMTP unconfigured, ntfy is normally the
+// only channel and the picker is a decorative single button — hide it and
+// its label. Exception: a persisted e-mail alert (saved while SMTP was
+// configured, or synced from another device) must keep the picker visible
+// so the user can still switch back to ntfy.
+function updateAlertChannelUi() {
+  const showEmail = state.smtpConfigured || state.alertChannel === 'email';
+  const emailBtn = document.getElementById('alert-ch-email');
+  const picker = document.getElementById('alert-channel-picker');
+  const pickerLabel = document.querySelector('.alert-channel-section .alert-config-label');
+  if (emailBtn) emailBtn.style.display = showEmail ? '' : 'none';
+  if (picker) picker.style.display = showEmail ? '' : 'none';
+  if (pickerLabel) pickerLabel.style.display = showEmail ? '' : 'none';
+}
+
 function initAlertUI() {
   document.getElementById('alert-toggle').addEventListener('change', async (e) => {
     haptic('light');
@@ -7722,18 +7737,7 @@ function initAlertUI() {
   document.getElementById('alert-save').addEventListener('click', saveAlert);
   document.getElementById('alert-test').addEventListener('click', testAlert);
 
-  // Show email channel button if SMTP configured. With only one channel
-  // available, a "picker" is just a decorative button — hide the whole
-  // row (and its label) until there is an actual choice to make.
-  if (state.smtpConfigured) {
-    const emailBtn = document.getElementById('alert-ch-email');
-    if (emailBtn) emailBtn.style.display = '';
-  } else {
-    const picker = document.getElementById('alert-channel-picker');
-    if (picker) picker.style.display = 'none';
-    const pickerLabel = document.querySelector('.alert-channel-section .alert-config-label');
-    if (pickerLabel) pickerLabel.style.display = 'none';
-  }
+  updateAlertChannelUi();
 
   // Channel picker
   const channelSegs = document.querySelectorAll('#alert-channel-picker .alert-ch-seg');
@@ -7831,7 +7835,9 @@ async function refreshAlertUi() {
     activeInfo.style.display = 'none'; // status panel replaces this
     activeInfo.textContent = '';
 
-    // Restore channel picker UI
+    // Restore channel picker UI (and re-evaluate whether the picker is
+    // needed — a synced e-mail alert must surface it even without SMTP)
+    updateAlertChannelUi();
     const channelSegs = document.querySelectorAll('#alert-channel-picker .alert-ch-seg');
     channelSegs.forEach(s => {
       const active = s.dataset.channel === state.alertChannel;
@@ -7896,6 +7902,21 @@ async function refreshAlertUi() {
     statusPanel?.classList.remove('is-armed', 'is-below');
     if (statusLabel) statusLabel.textContent = t('alertStatusInactive') || 'Noch nicht aktiv';
     if (lastRow) lastRow.hidden = true;
+    // No alert to preserve — if the server can't send e-mail, fall back
+    // to ntfy so a fresh alert starts on a channel that actually works.
+    if (!state.smtpConfigured && state.alertChannel === 'email') {
+      state.alertChannel = 'ntfy';
+      document.querySelectorAll('#alert-channel-picker .alert-ch-seg').forEach(s => {
+        const active = s.dataset.channel === 'ntfy';
+        s.classList.toggle('active', active);
+        s.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      const ntfyCfg = document.getElementById('alert-ntfy-config');
+      const emailCfg = document.getElementById('alert-email-config');
+      if (ntfyCfg) ntfyCfg.style.display = 'block';
+      if (emailCfg) emailCfg.style.display = 'none';
+    }
+    updateAlertChannelUi();
   }
 
   // Threshold-vs-current-cheapest bar. The threshold marker slides along

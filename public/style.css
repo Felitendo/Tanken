@@ -295,6 +295,8 @@ body.logged-in .sync-badge {
   100% { transform: scale(1); }
 }
 
+/* Sits directly on the page (not inside a card), so it needs the card
+   surface — the inset tone would vanish against the light-mode page. */
 .cloud-sync-hint {
   display: flex;
   align-items: center;
@@ -302,7 +304,8 @@ body.logged-in .sync-badge {
   margin: var(--sp-3) var(--sp-4) var(--sp-1);
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-sm);
-  background: var(--color-inset);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-separator);
   font-size: 12px;
   color: var(--color-hint);
   line-height: 1.4;
@@ -5019,9 +5022,6 @@ html[data-theme="dark"] .pwa-popup-icon img,
   .stats-tile-bar { height: 4px; }
 
   .stats-hour-chart-wrap { height: 210px; }
-  .stats-hour-chart-wrap canvas {
-    filter: drop-shadow(0 6px 22px rgba(255, 149, 0, 0.12));
-  }
 
   /* History tab: roomier hero card, bigger headline value, and lift
      the extreme cards on hover so they read as obviously clickable. */
@@ -5054,18 +5054,6 @@ html[data-theme="dark"] .pwa-popup-icon img,
     border-radius: 11px;
   }
   .history-extreme-value { font-size: 22px; }
-
-  #price-chart, #hour-chart {
-    filter: drop-shadow(0 6px 20px rgba(255, 149, 0, 0.10));
-  }
-
-  .stats-station-list .station-ranking-item {
-    padding-left: calc(var(--sp-4) + 10px);
-  }
-  .stats-station-list .station-ranking-item::before {
-    left: 8px;
-    width: 4px;
-  }
 
   .metric-value { font-size: 28px; }
   .stats-hero-value { font-size: 48px; }
