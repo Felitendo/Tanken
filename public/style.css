@@ -13,7 +13,7 @@
        --color-inset         nested fills inside a card: inputs, pressed states */
   --color-text: #000;
   --color-text-2: #3c3c43;
-  --color-page: #f2f2f7;
+  --color-page: #fafafa;
   --color-bg: #fff;
   --color-bg-secondary: #ffffff;
   --color-inset: #f2f2f7;
@@ -827,7 +827,7 @@ body.logged-in .cloud-sync-hint {
 .stats-tile-bar-fill {
   height: 100%;
   width: 0;
-  background: var(--tile-color, color-mix(in srgb, var(--color-text) 28%, transparent));
+  background: var(--tile-bar-color, var(--tile-color, color-mix(in srgb, var(--color-accent) 55%, transparent)));
   border-radius: 999px;
   transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -5739,4 +5739,35 @@ html[data-theme="dark"] .pwa-popup-icon img,
   letter-spacing: 0;
   text-transform: none;
   color: var(--color-text);
+}
+
+/* ── Light-mode card lift ──────────────────────────────────────────────
+   The page is near-white, so cards separate through their hairline
+   border plus this whisper of a shadow (invisible on dark's black page). */
+.card,
+.card-list,
+.metric-card,
+.extreme-card,
+.stat-card,
+.stats-hero,
+.stats-hero-card,
+.stats-fact-card,
+.stats-tile,
+.best-time-card,
+.history-hero-card,
+.history-extreme-card,
+.account-hero,
+.about-hero,
+.chart-container,
+.stats-hour-chart-wrap {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+/* Chips sit directly on the page — on near-white they need their own
+   edge to read as controls. */
+.chip {
+  border: 1px solid var(--color-separator);
+}
+.chip.active {
+  border-color: transparent;
 }

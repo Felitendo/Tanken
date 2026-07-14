@@ -5478,8 +5478,6 @@ function renderChart(data) {
   const hintColor = styles.getPropertyValue('--color-hint').trim() || '#999';
   const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
   const bgSecondary = styles.getPropertyValue('--color-bg-secondary').trim() || '#f2f2f7';
-  const accentColor = styles.getPropertyValue('--color-accent').trim() || '#007aff';
-  const goodColor = styles.getPropertyValue('--color-good').trim() || '#34c759';
   // Skip the entry animation when we're swapping data (e.g. location
   // switch) — animating the y-axis on each switch reads as a jitter.
   const isUpdate = !!state.chart;
@@ -5487,25 +5485,47 @@ function renderChart(data) {
   if (state.hourChart) { state.hourChart.destroy(); state.hourChart = null; }
   document.getElementById('hour-chart-section').style.display = 'none';
 
-  // One calm accent line. Only the cheapest day of the range gets a
-  // green point; the latest day gets an accent point + soft halo so the
-  // eye lands on "now". Everything else stays quiet until hovered.
+  // Per-day rank colour mapped to each day's min_price — cheap → green,
+  // expensive → red. Used for points, the latest-day glow, and the
+  // hover tooltip's price text.
   const minVals = daily.map(d => d.min_price);
   const minLo = Math.min(...minVals);
-  const lastIdx = daily.length - 1;
-  const cheapestIdx = minVals.indexOf(minLo);
-  const pointColors = daily.map((_, i) => (i === cheapestIdx ? goodColor : accentColor));
-  const pointRadii = daily.map((_, i) => (i === lastIdx ? 5 : i === cheapestIdx ? 5 : 0));
-  const pointHoverRadii = daily.map((_, i) => (i === lastIdx || i === cheapestIdx ? 8 : 6));
+  const minHi = Math.max(...minVals);
+  const minRange = Math.max(minHi - minLo, 0.0001);
+  const dayColor = (price) => rankColor((price - minLo) / minRange);
+  const pointColors = daily.map(d => dayColor(d.min_price));
 
-  // Soft vertical accent fill under the line, fading to transparent.
+  const lastIdx = daily.length - 1;
+  const minBaseRadius = daily.length < 25 ? 4 : 2.5;
+  const pointRadii = daily.map((_, i) => i === lastIdx ? 7 : minBaseRadius);
+  const pointHoverRadii = daily.map((_, i) => i === lastIdx ? 10 : minBaseRadius + 3);
+
+  // Horizontal gradient stroke — one CanvasGradient spanning the chart
+  // width with a colour stop at each day's x position, sampled from
+  // that day's rank colour. Matches the stats hour chart treatment so
+  // both tabs read in the same visual language.
+  const buildHistoryLineGradient = (chartCtx) => {
+    const chart = chartCtx.chart;
+    const { ctx: c, chartArea } = chart;
+    if (!chartArea) return '#ff9500';
+    const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+    const denom = Math.max(1, pointColors.length - 1);
+    pointColors.forEach((color, i) => {
+      g.addColorStop(Math.max(0, Math.min(1, i / denom)), color);
+    });
+    return g;
+  };
+  // Vertical area gradient — red top, orange middle, yellow bottom.
+  // Same warm palette the stats hour chart uses for its fill so the
+  // two charts feel like siblings.
   const buildHistoryFillGradient = (chartCtx) => {
     const chart = chartCtx.chart;
     const { ctx: c, chartArea } = chart;
-    if (!chartArea) return rgbWithAlpha(hexToRgbString(accentColor), 0.1);
+    if (!chartArea) return 'rgba(255,149,0,0.15)';
     const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-    g.addColorStop(0, rgbWithAlpha(hexToRgbString(accentColor), 0.16));
-    g.addColorStop(1, rgbWithAlpha(hexToRgbString(accentColor), 0));
+    g.addColorStop(0,   'rgba(255, 59, 48, 0.34)');
+    g.addColorStop(0.5, 'rgba(255, 149, 0, 0.18)');
+    g.addColorStop(1,   'rgba(255, 204, 0, 0.04)');
     return g;
   };
 
@@ -5517,21 +5537,20 @@ function renderChart(data) {
         {
           label: 'Min',
           data: minVals,
-          borderColor: accentColor,
+          borderColor: buildHistoryLineGradient,
           backgroundColor: buildHistoryFillGradient,
-          borderWidth: 2.5,
+          borderWidth: 3,
           borderCapStyle: 'round',
           borderJoinStyle: 'round',
           tension: 0.4,
           fill: true,
           pointBackgroundColor: pointColors,
           pointBorderColor: bgSecondary,
-          pointBorderWidth: 2,
+          pointBorderWidth: 2.5,
           pointRadius: pointRadii,
           pointHoverRadius: pointHoverRadii,
-          pointHoverBorderWidth: 2.5,
+          pointHoverBorderWidth: 3,
           pointHoverBorderColor: bgSecondary,
-          pointHoverBackgroundColor: pointColors,
         },
       ]
     },
@@ -5568,7 +5587,7 @@ function renderChart(data) {
             const dayNames = t('dayNames') || [];
             const name = dayNames[dt.getDay()] || '';
             const dateLabel = `${name} ${formatShortDate(dt)}`;
-            const color = pointColors[idx] || accentColor;
+            const color = pointColors[idx] || '#ff9500';
             const drillable = day.entries.length > 1;
             el.innerHTML = `
               <div class="history-tooltip-time">${dateLabel}</div>
@@ -5619,7 +5638,7 @@ function renderChart(data) {
         const elPt = active[0].element;
         if (!elPt) return;
         const idx = active[0].index;
-        const color = hexToRgbString(pointColors[idx] || accentColor);
+        const color = pointColors[idx] || '#ff9500';
         const { ctx: c, chartArea } = chart;
         const x = elPt.x, y = elPt.y;
         c.save();
@@ -5650,12 +5669,12 @@ function renderChart(data) {
         if (!meta || !meta.data || !meta.data.length) return;
         const last = meta.data[meta.data.length - 1];
         if (!last || last.skip) return;
-        const color = hexToRgbString(pointColors[pointColors.length - 1] || accentColor);
+        const color = pointColors[pointColors.length - 1] || '#ff9500';
         const { ctx: c } = chart;
         c.save();
         c.beginPath();
-        c.arc(last.x, last.y, 13, 0, Math.PI * 2);
-        c.fillStyle = rgbWithAlpha(color, 0.14);
+        c.arc(last.x, last.y, 14, 0, Math.PI * 2);
+        c.fillStyle = rgbWithAlpha(color, 0.15);
         c.fill();
         c.restore();
       }
@@ -5882,26 +5901,40 @@ function renderHourChart(entries, dayKey) {
   const hintColor = styles.getPropertyValue('--color-hint').trim() || '#999';
   const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
   const bgSecondary = styles.getPropertyValue('--color-bg-secondary').trim() || '#fff';
-  const accentColor = styles.getPropertyValue('--color-accent').trim() || '#007aff';
-  const goodColor = styles.getPropertyValue('--color-good').trim() || '#34c759';
 
-  // Same calm accent treatment as the day chart — only the cheapest
-  // intraday reading gets the green point.
+  // Rank-based colour per data point — same scheme the day chart uses,
+  // applied here to the intraday min values.
   const minVals = sorted.map(d => d.min_price);
   const minLo = Math.min(...minVals);
-  const cheapestIdx = minVals.indexOf(minLo);
-  const pointColors = minVals.map((_, i) => (i === cheapestIdx ? goodColor : accentColor));
+  const minHi = Math.max(...minVals);
+  const minRange = Math.max(minHi - minLo, 0.0001);
+  const pointColors = minVals.map(v => rankColor((v - minLo) / minRange));
 
   if (state.hourChart) state.hourChart.destroy();
   const ctx = document.getElementById('hour-chart');
 
+  // Same horizontal-stroke + warm vertical-fill recipe as the day
+  // chart (and the stats hour chart) — keeps the visual family
+  // consistent across the whole app.
+  const buildHourLineGradient = (chartCtx) => {
+    const chart = chartCtx.chart;
+    const { ctx: c, chartArea } = chart;
+    if (!chartArea) return '#ff9500';
+    const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+    const denom = Math.max(1, pointColors.length - 1);
+    pointColors.forEach((color, i) => {
+      g.addColorStop(Math.max(0, Math.min(1, i / denom)), color);
+    });
+    return g;
+  };
   const buildHourFillGradient = (chartCtx) => {
     const chart = chartCtx.chart;
     const { ctx: c, chartArea } = chart;
-    if (!chartArea) return rgbWithAlpha(hexToRgbString(accentColor), 0.1);
+    if (!chartArea) return 'rgba(255,149,0,0.15)';
     const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-    g.addColorStop(0, rgbWithAlpha(hexToRgbString(accentColor), 0.16));
-    g.addColorStop(1, rgbWithAlpha(hexToRgbString(accentColor), 0));
+    g.addColorStop(0,   'rgba(255, 59, 48, 0.32)');
+    g.addColorStop(0.5, 'rgba(255, 149, 0, 0.18)');
+    g.addColorStop(1,   'rgba(255, 204, 0, 0.04)');
     return g;
   };
 
@@ -5912,7 +5945,7 @@ function renderHourChart(entries, dayKey) {
       datasets: [{
         label: 'Min',
         data: minVals,
-        borderColor: accentColor,
+        borderColor: buildHourLineGradient,
         backgroundColor: buildHourFillGradient,
         borderWidth: 2.5,
         borderCapStyle: 'round',
@@ -5922,11 +5955,10 @@ function renderHourChart(entries, dayKey) {
         pointBackgroundColor: pointColors,
         pointBorderColor: bgSecondary,
         pointBorderWidth: 1.5,
-        pointRadius: minVals.map((_, i) => (i === cheapestIdx ? 5 : (sorted.length < 30 ? 2.5 : 0))),
-        pointHoverRadius: sorted.length < 30 ? 6 : 5,
+        pointRadius: sorted.length < 30 ? 3 : 1.5,
+        pointHoverRadius: sorted.length < 30 ? 5 : 4,
         pointHoverBorderWidth: 2,
         pointHoverBorderColor: bgSecondary,
-        pointHoverBackgroundColor: pointColors,
       }]
     },
     options: {
@@ -5953,7 +5985,7 @@ function renderHourChart(entries, dayKey) {
             const mm = String(t1.getMinutes()).padStart(2, '0');
             const suffix = t('oclock');
             const timeLabel = suffix ? `${hh}:${mm} ${suffix}` : `${hh}:${mm}`;
-            const color = pointColors[idx] || accentColor;
+            const color = pointColors[idx] || '#ff9500';
             el.innerHTML = `
               <div class="history-tooltip-time">${timeLabel}</div>
               <div class="history-tooltip-price" style="color:${color}">${formatPrice(entry.min_price)}</div>
@@ -5996,7 +6028,7 @@ function renderHourChart(entries, dayKey) {
         const elPt = active[0].element;
         if (!elPt) return;
         const idx = active[0].index;
-        const color = hexToRgbString(pointColors[idx] || accentColor);
+        const color = pointColors[idx] || '#ff9500';
         const { ctx: c, chartArea } = chart;
         const x = elPt.x, y = elPt.y;
         c.save();
@@ -6303,7 +6335,10 @@ function renderStats(stats) {
     const dayValuesArr = stats.dayAvgs.map(d => dayDispV(d.avg));
     const dayMaxV = Math.max(...dayValuesArr);
     const dayMinV = Math.min(...dayValuesArr);
-    const dayRangeV = Math.max(dayMaxV - dayMinV, 0.0001);
+    // Weekday averages often differ by less than a cent. Flooring the
+    // range keeps a 1-cent spread from exploding into "empty vs full"
+    // bars — tiny real differences should LOOK tiny.
+    const dayRangeV = Math.max(dayMaxV - dayMinV, 0.04);
     let dayTiles = '';
     for (const dayNum of dayDisplayOrder) {
       const abbr = dayAbbrev[dayNum] || '';
@@ -6313,18 +6348,21 @@ function renderStats(stats) {
         continue;
       }
       const rank = dayRankMap.get(dayNum);
-      // Position in the displayed-price range drives the bar width, so
-      // equal prices map to an identical length: empty for the cheapest,
-      // full for the priciest. Colour stays neutral — only the cheapest
-      // day gets the green highlight, so the winner reads at a glance.
-      const ratio = dayCount > 1 ? (dayDispV(data.avg) - dayMinV) / dayRangeV : 0;
-      const isBest = rank === 0;
-      const barWidth = Math.round(ratio * 100);
-      const crown = isBest ? '<span class="stats-tile-crown" aria-hidden="true">★</span>' : '';
+      const dispV = dayDispV(data.avg);
+      // Every day whose DISPLAYED price ties the minimum counts as
+      // cheapest — 1,89 € next to a highlighted 1,89 € must not look
+      // like a loser. The star stays on the overall rank-1 day only.
+      const isCheapest = dispV === dayMinV;
+      // Green→orange→red scaled by the FLOORED range: with a 1-cent
+      // spread the priciest day lands at a mild yellow-green instead of
+      // screaming red, while a genuine 5+ cent spread still shows red.
+      const ratio = dayCount > 1 ? (dispV - dayMinV) / dayRangeV : 0;
+      const color = isCheapest ? '#34c759' : rankColor(ratio);
+      // Minimum fill so every bar reads as "measured", growing with price.
+      const barWidth = Math.round(14 + ratio * 86);
+      const crown = rank === 0 ? '<span class="stats-tile-crown" aria-hidden="true">★</span>' : '';
       const fullDayName = (t('dayNames') || [])[dayNum] || data.name || abbr;
-      const tileStyle = isBest ? ' style="--tile-color:var(--color-good)"' : '';
-      const chipColor = isBest ? '#34c759' : '#98989e';
-      dayTiles += `<div class="stats-tile${isBest ? ' is-best' : ''}"${tileStyle} data-tile-label="${fullDayName} · ${formatPrice(data.avg)}" data-tile-color="${chipColor}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">${formatPrice(data.avg)}</div><div class="stats-tile-bar"><div class="stats-tile-bar-fill" style="width:${barWidth}%"></div></div></div>`;
+      dayTiles += `<div class="stats-tile${isCheapest ? ' is-best' : ''}" style="--tile-color:${color}" data-tile-label="${fullDayName} · ${formatPrice(data.avg)}" data-tile-color="${color}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">${formatPrice(data.avg)}</div><div class="stats-tile-bar"><div class="stats-tile-bar-fill" style="width:${barWidth}%"></div></div></div>`;
     }
     html += `<div class="section"><div class="section-header">${t('weekdays')}</div><div class="stats-tile-grid stats-tile-grid-7">${dayTiles}</div></div>`;
   }
@@ -6348,8 +6386,12 @@ function renderStats(stats) {
   if (stats.stationRanking.length) {
     html += `<div class="section"><div class="section-header">${t('stationRanking')}</div><div class="card-list stats-station-list">`;
     const stations = stats.stationRanking.slice(0, 10);
+    // Tie-aware: every station whose displayed Ø price matches the leader
+    // gets the green treatment — two rows both showing 1,62 € must not
+    // look like winner and loser.
+    const bestDisp = stations.length ? Number(stations[0].avg).toFixed(2) : '';
     stations.forEach((s, i) => {
-      const isBest = i === 0;
+      const isBest = Number(s.avg).toFixed(2) === bestDisp;
       const idAttr = s.id ? ` data-station-id="${s.id}"` : '';
       const brandAttr = s.brand ? ` data-station-brand="${fixEnc(s.brand)}"` : '';
       const avgAttr = ` data-station-avg="${s.avg}"`;
@@ -6482,42 +6524,28 @@ function rgbWithAlpha(rgbString, alpha) {
   return `rgba(${m[0]},${m[1]},${m[2]},${alpha})`;
 }
 
-// Helper: normalize a CSS color (hex #rgb/#rrggbb or rgb()) to an
-// "rgb(r, g, b)" string so rgbWithAlpha can add transparency to it.
-function hexToRgbString(color) {
-  const c = String(color).trim();
-  if (!c.startsWith('#')) return c;
-  const hex = c.length === 4
-    ? c.slice(1).split('').map(ch => ch + ch).join('')
-    : c.slice(1, 7);
-  const n = parseInt(hex, 16);
-  if (Number.isNaN(n)) return c;
-  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-}
 
-// Hour-of-day price chart — one calm accent line with a soft area fill.
-// Only the cheapest hour gets a highlighted (green) point; everything
-// else stays quiet until hovered.
+// Hour-of-day price chart — line with the green→orange→red gradient
+// stroke sampled from each measured hour's rank, a warm vertical area
+// fill, and a custom hover crosshair + glow halo. The x-axis spans only
+// the measured hours so sparse data still fills the card edge-to-edge.
 function renderStatsHourChart(stats) {
   const canvas = document.getElementById('stats-hour-chart');
   if (!canvas || !stats.hourAvgs.length) return;
 
   const hourMap = new Map();
   stats.hourAvgs.forEach((h, idx) => hourMap.set(h.hour, { ...h, rank: idx }));
-
-  const styles = getComputedStyle(document.body);
-  const hintColor = styles.getPropertyValue('--color-hint').trim() || '#999';
-  const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
-  const bgColor = styles.getPropertyValue('--color-bg-secondary').trim() || '#fff';
-  const accentColor = styles.getPropertyValue('--color-accent').trim() || '#007aff';
-  const goodColor = styles.getPropertyValue('--color-good').trim() || '#34c759';
+  const hourCount = stats.hourAvgs.length;
+  const measured = stats.hourAvgs.map(h => h.hour);
+  const firstHour = Math.min(...measured);
+  const lastHour = Math.max(...measured);
 
   const labels = [];
   const data = [];
-  const pointBg = [];       // colour per hour, null = no data (drives tooltip/crosshair tint)
+  const pointBg = [];       // colour per hour, null = no data
   const pointRadii = [];
   const pointHoverRadii = [];
-  for (let hour = 0; hour < 24; hour++) {
+  for (let hour = firstHour; hour <= lastHour; hour++) {
     labels.push(`${hour}:00`);
     const d = hourMap.get(hour);
     if (!d) {
@@ -6527,24 +6555,51 @@ function renderStatsHourChart(stats) {
       pointHoverRadii.push(0);
       continue;
     }
-    const isBest = d.rank === 0;
-    pointBg.push(isBest ? goodColor : accentColor);
+    const ratio = hourCount > 1 ? d.rank / (hourCount - 1) : 0;
+    pointBg.push(rankColor(ratio));
     data.push(d.avg);
-    pointRadii.push(isBest ? 5 : 0);
-    pointHoverRadii.push(isBest ? 8 : 6);
+    const r = d.rank === 0 ? 7 : 4;
+    pointRadii.push(r);
+    pointHoverRadii.push(r + 3);
   }
+  const slotCount = labels.length;
+
+  const styles = getComputedStyle(document.body);
+  const hintColor = styles.getPropertyValue('--color-hint').trim() || '#999';
+  const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
+  const bgColor = styles.getPropertyValue('--color-bg-secondary').trim() || '#fff';
 
   const isUpdate = !!state.statsHourChart;
   if (state.statsHourChart) state.statsHourChart.destroy();
 
-  // Soft vertical accent fill under the line, fading to transparent.
+  // Horizontal gradient stroke: one CanvasGradient spanning the chart
+  // width with a colour stop at each measured hour's x position. The
+  // line smoothly transitions between the hours' rank colours.
+  const buildLineGradient = (chartCtx) => {
+    const chart = chartCtx.chart;
+    const { ctx: canvasCtx, chartArea } = chart;
+    if (!chartArea) return '#ff9500';
+    const g = canvasCtx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+    const stops = [];
+    for (let i = 0; i < slotCount; i++) {
+      if (pointBg[i]) stops.push({ pos: slotCount > 1 ? i / (slotCount - 1) : 0, color: pointBg[i] });
+    }
+    if (!stops.length) return '#ff9500';
+    if (stops.length === 1) return stops[0].color;
+    stops.forEach(s => g.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
+    return g;
+  };
+
+  // Vertical area gradient — red-tinted at the top (high price = bad),
+  // fading through orange to a faint yellow at the bottom.
   const buildFillGradient = (chartCtx) => {
     const chart = chartCtx.chart;
     const { ctx: canvasCtx, chartArea } = chart;
-    if (!chartArea) return rgbWithAlpha(hexToRgbString(accentColor), 0.1);
+    if (!chartArea) return 'rgba(255,149,0,0.15)';
     const g = canvasCtx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-    g.addColorStop(0, rgbWithAlpha(hexToRgbString(accentColor), 0.16));
-    g.addColorStop(1, rgbWithAlpha(hexToRgbString(accentColor), 0));
+    g.addColorStop(0,   'rgba(255, 59, 48, 0.34)');
+    g.addColorStop(0.5, 'rgba(255, 149, 0, 0.18)');
+    g.addColorStop(1,   'rgba(255, 204, 0, 0.04)');
     return g;
   };
 
@@ -6555,9 +6610,9 @@ function renderStatsHourChart(stats) {
       datasets: [{
         label: t('avgPrice') || 'Avg',
         data,
-        borderColor: accentColor,
+        borderColor: buildLineGradient,
         backgroundColor: buildFillGradient,
-        borderWidth: 2.5,
+        borderWidth: 3,
         borderCapStyle: 'round',
         borderJoinStyle: 'round',
         tension: 0.4,
@@ -6565,12 +6620,11 @@ function renderStatsHourChart(stats) {
         fill: true,
         pointBackgroundColor: pointBg.map(c => c || 'rgba(0,0,0,0)'),
         pointBorderColor: bgColor,
-        pointBorderWidth: 2,
+        pointBorderWidth: 2.5,
         pointRadius: pointRadii,
         pointHoverRadius: pointHoverRadii,
-        pointHoverBorderWidth: 2.5,
+        pointHoverBorderWidth: 3,
         pointHoverBorderColor: bgColor,
-        pointHoverBackgroundColor: pointBg.map(c => c || 'rgba(0,0,0,0)'),
       }]
     },
     options: {
@@ -6602,9 +6656,10 @@ function renderStatsHourChart(stats) {
               return;
             }
             const idx = dp.dataIndex;
-            const color = pointBg[idx] || accentColor;
+            const color = pointBg[idx] || '#ff9500';
             const suffix = t('oclock');
-            const hourLabel = suffix ? `${idx}:00 ${suffix}` : `${idx}:00`;
+            const hour = firstHour + idx;
+            const hourLabel = suffix ? `${hour}:00 ${suffix}` : `${hour}:00`;
             el.innerHTML = `
               <div class="stats-hour-tooltip-time">${hourLabel}</div>
               <div class="stats-hour-tooltip-price" style="color:${color}">${formatPrice(dp.parsed.y)}</div>
@@ -6623,9 +6678,12 @@ function renderStatsHourChart(stats) {
             font: { size: 11, family: '-apple-system, BlinkMacSystemFont, Roboto, sans-serif' },
             autoSkip: false,
             maxRotation: 0,
-            callback: (_value, index) => (index % 6 === 0 ? `${index}:00` : ''),
+            callback: (_value, index) => {
+              const hour = firstHour + index;
+              return hour % 6 === 0 ? `${hour}:00` : '';
+            },
           },
-          grid: { display: false },
+          grid: { color: sepColor, drawTicks: false, lineWidth: 0.5 },
           border: { display: false },
         },
         y: {
@@ -6654,7 +6712,7 @@ function renderStatsHourChart(stats) {
         const { ctx, chartArea } = chart;
         const x = el.x;
         const y = el.y;
-        const rgb = hexToRgbString(color);
+        const rgb = color;
         ctx.save();
         // Dashed vertical crosshair
         ctx.strokeStyle = rgbWithAlpha(rgb, 0.45);
