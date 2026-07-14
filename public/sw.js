@@ -1,4 +1,4 @@
-const CACHE = 'tanken-v6';
+const CACHE = 'tanken-v7';
 const STATIC = ['/', '/style.css', '/app.js', '/coverage-outlines.js', '/web-haptics.js'];
 
 self.addEventListener('install', (e) => {

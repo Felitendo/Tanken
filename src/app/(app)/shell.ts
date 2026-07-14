@@ -315,9 +315,9 @@ export const APP_SHELL = `
     </div>
 
     <div class="section">
-      <div class="section-header" data-i18n="appearance">DARSTELLUNG</div>
-      <div class="card settings-card">
-        <div class="settings-row">
+      <div class="section-header"><span data-i18n="general">ALLGEMEIN</span><span class="sync-badge" data-sync-key="historyDefaultDays lang" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg class="sync-icon-idle" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg><svg class="sync-icon-spin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg><svg class="sync-icon-ok" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.09-5.09L16.5 10.5 10 17z"/></svg></span></div>
+      <div class="card settings-card settings-group">
+        <div class="settings-row settings-row-stacked">
           <div class="settings-row-left">
             <div class="settings-icon-chip settings-icon-accent" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93s3.05-7.44 7-7.93v15.86z"/></svg>
@@ -340,18 +340,13 @@ export const APP_SHELL = `
           </button>
           <span class="seg-thumb" aria-hidden="true"></span>
         </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-header"><span data-i18n="historyDefault">PREISVERLAUF</span><span class="sync-badge" data-sync-key="historyDefaultDays" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg class="sync-icon-idle" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg><svg class="sync-icon-spin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg><svg class="sync-icon-ok" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.09-5.09L16.5 10.5 10 17z"/></svg></span></div>
-      <div class="card settings-card">
-        <div class="settings-row">
+        <div class="settings-divider" aria-hidden="true"></div>
+        <div class="settings-row settings-row-stacked">
           <div class="settings-row-left">
             <div class="settings-icon-chip settings-icon-accent" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
             </div>
-            <span class="settings-row-label" data-i18n="historyDefaultLabel">Standard-Ansicht</span>
+            <span class="settings-row-label" data-i18n="historyDefaultLabel">Chart-Zeitraum</span>
           </div>
         </div>
         <div class="seg-control" id="history-default-seg" role="tablist" aria-label="History default range">
@@ -365,12 +360,7 @@ export const APP_SHELL = `
           </button>
           <span class="seg-thumb" aria-hidden="true"></span>
         </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-header"><span data-i18n="language">SPRACHE</span><span class="sync-badge" data-sync-key="lang" data-i18n-title="syncedSetting" title="Wird zwischen Geräten synchronisiert"><svg class="sync-icon-idle" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg><svg class="sync-icon-spin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg><svg class="sync-icon-ok" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.09-5.09L16.5 10.5 10 17z"/></svg></span></div>
-      <div class="card settings-card">
+        <div class="settings-divider" aria-hidden="true"></div>
         <div class="settings-row">
           <div class="settings-row-left">
             <div class="settings-icon-chip settings-icon-accent" aria-hidden="true">

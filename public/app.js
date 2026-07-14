@@ -42,8 +42,8 @@ const i18n = {
     // Stats
     noStats: 'Keine Statistiken verfügbar',
     avgPrice: 'Durchschnittspreis',
-    lowest: 'Niedrigster',
-    highest: 'Höchster',
+    lowest: 'Minimum',
+    highest: 'Maximum',
     measurements: 'Messungen',
     bestTimes: 'BESTE TANKZEITEN',
     cheapestDay: 'Günstigster Wochentag',
@@ -86,6 +86,7 @@ const i18n = {
     saveAlarm: 'Alarm speichern',
     sendTestNotification: 'Test-Benachrichtigung senden',
     appearance: 'DARSTELLUNG',
+    general: 'Allgemein',
     appearanceLabel: 'Darstellung',
     themeLight: 'Hell',
     themeDark: 'Dunkel',
@@ -107,7 +108,7 @@ const i18n = {
     loggedIn: 'Eingeloggt',
     connectedWith: 'Verbunden mit',
     loginWith: 'Login mit',
-    configureOidc: 'OIDC im Admin Panel unter /admin konfigurieren.',
+    configureOidc: 'Login ist auf diesem Server nicht eingerichtet.',
     loggedOut: 'Abgemeldet',
     // Alerts
     alertActive: 'Alarm aktiv: Benachrichtigung unter',
@@ -252,7 +253,7 @@ const i18n = {
     manualScanExpiresSuffix: 'ab',
     refreshNearby: 'Umgebung neu scannen',
     historyDefault: 'PREISVERLAUF',
-    historyDefaultLabel: 'Standard-Ansicht',
+    historyDefaultLabel: 'Chart-Zeitraum',
     historyDefault24h: '24 Stunden',
     historyDefault7d: '7 Tage',
     alreadyCovered: 'Bereits durch einen Scan-Standort abgedeckt – nicht nötig.',
@@ -313,9 +314,9 @@ const i18n = {
     vsLastMonth: 'vs. last month',
     noStats: 'No statistics available',
     avgPrice: 'Average Price',
-    lowest: 'Lowest',
-    highest: 'Highest',
-    measurements: 'Measurements',
+    lowest: 'Minimum',
+    highest: 'Maximum',
+    measurements: 'Samples',
     bestTimes: 'BEST REFUELING TIMES',
     cheapestDay: 'Cheapest Day',
     cheapestHour: 'Cheapest Hour',
@@ -356,6 +357,7 @@ const i18n = {
     saveAlarm: 'Save Alert',
     sendTestNotification: 'Send Test Notification',
     appearance: 'APPEARANCE',
+    general: 'General',
     appearanceLabel: 'Appearance',
     themeLight: 'Light',
     themeDark: 'Dark',
@@ -376,7 +378,7 @@ const i18n = {
     loggedIn: 'Logged in',
     connectedWith: 'Connected via',
     loginWith: 'Login with',
-    configureOidc: 'Configure OIDC in admin panel at /admin.',
+    configureOidc: 'Login is not set up on this server.',
     loggedOut: 'Logged out',
     alertActive: 'Alert active: Notification below',
     saved: 'Saved',
@@ -516,7 +518,7 @@ const i18n = {
     manualScanExpiresSuffix: '',
     refreshNearby: 'Rescan nearby',
     historyDefault: 'PRICE HISTORY',
-    historyDefaultLabel: 'Default range',
+    historyDefaultLabel: 'Chart range',
     historyDefault24h: '24 hours',
     historyDefault7d: '7 days',
     alreadyCovered: 'Already covered by a scan location – no scan needed.',
@@ -1206,6 +1208,7 @@ function renderAccountUi() {
     const connectedVia = state.config?.auth?.oidcName || 'OIDC';
     sub.textContent = state.user.email || `${t('connectedWith')} ${connectedVia}`;
     btn.textContent = 'Logout';
+    btn.style.display = '';
     if (avatar) {
       if (state.user.photoUrl) {
         avatar.innerHTML = `<img src="${state.user.photoUrl}" alt="" class="account-avatar-img">`;
@@ -1221,13 +1224,16 @@ function renderAccountUi() {
     if (card) card.classList.remove('is-signed-in');
     name.textContent = t('notLoggedIn');
     const oidcName = state.config?.auth?.oidcName;
-    sub.textContent = state.config?.auth?.notes?.oidc || (oidcName ? `${t('loginWith')} ${oidcName}` : t('configureOidc'));
+    const oidcConfigured = state.config?.auth?.oidcConfigured !== false;
+    sub.textContent = oidcConfigured ? t('loginSubline') : t('configureOidc');
     btn.textContent = oidcName ? `${t('loginWith')} ${oidcName}` : 'Login';
+    // No point in advertising login/cloud sync when the server has no IdP.
+    btn.style.display = oidcConfigured ? '' : 'none';
+    if (syncHint) syncHint.style.display = oidcConfigured ? '' : 'none';
     if (avatar) {
       avatar.innerHTML = placeholderSvg;
       avatar.classList.remove('visible');
     }
-    if (syncHint) syncHint.style.display = '';
   }
 }
 
@@ -2059,18 +2065,18 @@ function openLocationRequestSheet(opts = {}) {
       <div style="font-size:18px;font-weight:600;margin-bottom:16px;color:var(--color-text)">${t('requestSheetTitle')}</div>
 
       <label style="display:block;font-size:12px;font-weight:500;color:var(--color-hint);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px">${t('requestName')}</label>
-      <input id="req-name" type="text" maxlength="80" placeholder="${t('requestNamePlaceholder')}" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--color-separator);background:var(--color-bg-secondary);color:var(--color-text);font-size:15px;margin-bottom:14px;box-sizing:border-box">
+      <input id="req-name" type="text" maxlength="80" placeholder="${t('requestNamePlaceholder')}" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--color-separator);background:var(--color-inset);color:var(--color-text);font-size:15px;margin-bottom:14px;box-sizing:border-box">
 
       <label style="display:block;font-size:12px;font-weight:500;color:var(--color-hint);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px">${t('requestAddress')}</label>
       <div style="position:relative;margin-bottom:12px">
-        <input id="req-search" type="text" placeholder="${t('requestAddressPlaceholder')}" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--color-separator);background:var(--color-bg-secondary);color:var(--color-text);font-size:15px;box-sizing:border-box">
+        <input id="req-search" type="text" placeholder="${t('requestAddressPlaceholder')}" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--color-separator);background:var(--color-inset);color:var(--color-text);font-size:15px;box-sizing:border-box">
         <div id="req-search-results" style="position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--color-bg);border:1px solid var(--color-separator);border-radius:10px;max-height:200px;overflow-y:auto;z-index:2000;display:none;box-shadow:0 4px 16px rgba(0,0,0,0.1)"></div>
       </div>
 
       <div id="req-map" style="width:100%;height:240px;border-radius:10px;overflow:hidden;border:1px solid var(--color-separator);margin-bottom:14px"></div>
 
       <label style="display:block;font-size:12px;font-weight:500;color:var(--color-hint);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px">${t('requestWhy')}</label>
-      <textarea id="req-note" rows="3" maxlength="500" placeholder="${t('requestWhyPlaceholder')}" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--color-separator);background:var(--color-bg-secondary);color:var(--color-text);font-size:15px;margin-bottom:16px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea>
+      <textarea id="req-note" rows="3" maxlength="500" placeholder="${t('requestWhyPlaceholder')}" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--color-separator);background:var(--color-inset);color:var(--color-text);font-size:15px;margin-bottom:16px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea>
 
       <div style="display:flex;gap:10px">
         <button id="req-cancel" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--color-separator);background:transparent;color:var(--color-text);font-size:15px;font-weight:500;cursor:pointer">${t('requestCancel')}</button>
@@ -5352,10 +5358,9 @@ function showHistorySkeleton() {
         <div class="history-hero-top">
           <div style="flex:1;min-width:0">
             ${bone('width:34%;height:11px')}
-            ${bone('width:50%;height:30px;margin-top:11px')}
-            ${bone('width:128px;height:13px;margin-top:12px;border-radius:999px')}
+            ${bone('width:42%;height:34px;margin-top:10px')}
+            ${bone('width:170px;height:24px;margin-top:14px;border-radius:999px')}
           </div>
-          ${bone('width:26px;height:26px;border-radius:8px;flex-shrink:0')}
         </div>
       </div>`;
   }
@@ -5473,6 +5478,8 @@ function renderChart(data) {
   const hintColor = styles.getPropertyValue('--color-hint').trim() || '#999';
   const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
   const bgSecondary = styles.getPropertyValue('--color-bg-secondary').trim() || '#f2f2f7';
+  const accentColor = styles.getPropertyValue('--color-accent').trim() || '#007aff';
+  const goodColor = styles.getPropertyValue('--color-good').trim() || '#34c759';
   // Skip the entry animation when we're swapping data (e.g. location
   // switch) — animating the y-axis on each switch reads as a jitter.
   const isUpdate = !!state.chart;
@@ -5480,47 +5487,25 @@ function renderChart(data) {
   if (state.hourChart) { state.hourChart.destroy(); state.hourChart = null; }
   document.getElementById('hour-chart-section').style.display = 'none';
 
-  // Per-day rank colour mapped to each day's min_price — cheap → green,
-  // expensive → red. Used for points, the latest-day glow, and the
-  // hover tooltip's price text.
+  // One calm accent line. Only the cheapest day of the range gets a
+  // green point; the latest day gets an accent point + soft halo so the
+  // eye lands on "now". Everything else stays quiet until hovered.
   const minVals = daily.map(d => d.min_price);
   const minLo = Math.min(...minVals);
-  const minHi = Math.max(...minVals);
-  const minRange = Math.max(minHi - minLo, 0.0001);
-  const dayColor = (price) => rankColor((price - minLo) / minRange);
-  const pointColors = daily.map(d => dayColor(d.min_price));
-
   const lastIdx = daily.length - 1;
-  const minBaseRadius = daily.length < 25 ? 4 : 2.5;
-  const pointRadii = daily.map((_, i) => i === lastIdx ? 7 : minBaseRadius);
-  const pointHoverRadii = daily.map((_, i) => i === lastIdx ? 10 : minBaseRadius + 3);
+  const cheapestIdx = minVals.indexOf(minLo);
+  const pointColors = daily.map((_, i) => (i === cheapestIdx ? goodColor : accentColor));
+  const pointRadii = daily.map((_, i) => (i === lastIdx ? 5 : i === cheapestIdx ? 5 : 0));
+  const pointHoverRadii = daily.map((_, i) => (i === lastIdx || i === cheapestIdx ? 8 : 6));
 
-  // Horizontal gradient stroke — one CanvasGradient spanning the chart
-  // width with a colour stop at each day's x position, sampled from
-  // that day's rank colour. Matches the stats hour chart treatment so
-  // both tabs read in the same visual language.
-  const buildHistoryLineGradient = (chartCtx) => {
-    const chart = chartCtx.chart;
-    const { ctx: c, chartArea } = chart;
-    if (!chartArea) return '#ff9500';
-    const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-    const denom = Math.max(1, pointColors.length - 1);
-    pointColors.forEach((color, i) => {
-      g.addColorStop(Math.max(0, Math.min(1, i / denom)), color);
-    });
-    return g;
-  };
-  // Vertical area gradient — red top, orange middle, yellow bottom.
-  // Same warm palette the stats hour chart uses for its fill so the
-  // two charts feel like siblings.
+  // Soft vertical accent fill under the line, fading to transparent.
   const buildHistoryFillGradient = (chartCtx) => {
     const chart = chartCtx.chart;
     const { ctx: c, chartArea } = chart;
-    if (!chartArea) return 'rgba(255,149,0,0.15)';
+    if (!chartArea) return rgbWithAlpha(hexToRgbString(accentColor), 0.1);
     const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-    g.addColorStop(0,   'rgba(255, 59, 48, 0.34)');
-    g.addColorStop(0.5, 'rgba(255, 149, 0, 0.18)');
-    g.addColorStop(1,   'rgba(255, 204, 0, 0.04)');
+    g.addColorStop(0, rgbWithAlpha(hexToRgbString(accentColor), 0.16));
+    g.addColorStop(1, rgbWithAlpha(hexToRgbString(accentColor), 0));
     return g;
   };
 
@@ -5532,20 +5517,21 @@ function renderChart(data) {
         {
           label: 'Min',
           data: minVals,
-          borderColor: buildHistoryLineGradient,
+          borderColor: accentColor,
           backgroundColor: buildHistoryFillGradient,
-          borderWidth: 3,
+          borderWidth: 2.5,
           borderCapStyle: 'round',
           borderJoinStyle: 'round',
           tension: 0.4,
           fill: true,
           pointBackgroundColor: pointColors,
           pointBorderColor: bgSecondary,
-          pointBorderWidth: 2.5,
+          pointBorderWidth: 2,
           pointRadius: pointRadii,
           pointHoverRadius: pointHoverRadii,
-          pointHoverBorderWidth: 3,
+          pointHoverBorderWidth: 2.5,
           pointHoverBorderColor: bgSecondary,
+          pointHoverBackgroundColor: pointColors,
         },
       ]
     },
@@ -5582,7 +5568,7 @@ function renderChart(data) {
             const dayNames = t('dayNames') || [];
             const name = dayNames[dt.getDay()] || '';
             const dateLabel = `${name} ${formatShortDate(dt)}`;
-            const color = pointColors[idx] || '#ff9500';
+            const color = pointColors[idx] || accentColor;
             const drillable = day.entries.length > 1;
             el.innerHTML = `
               <div class="history-tooltip-time">${dateLabel}</div>
@@ -5633,7 +5619,7 @@ function renderChart(data) {
         const elPt = active[0].element;
         if (!elPt) return;
         const idx = active[0].index;
-        const color = pointColors[idx] || '#ff9500';
+        const color = hexToRgbString(pointColors[idx] || accentColor);
         const { ctx: c, chartArea } = chart;
         const x = elPt.x, y = elPt.y;
         c.save();
@@ -5664,12 +5650,12 @@ function renderChart(data) {
         if (!meta || !meta.data || !meta.data.length) return;
         const last = meta.data[meta.data.length - 1];
         if (!last || last.skip) return;
-        const color = pointColors[pointColors.length - 1] || '#ff9500';
+        const color = hexToRgbString(pointColors[pointColors.length - 1] || accentColor);
         const { ctx: c } = chart;
         c.save();
         c.beginPath();
-        c.arc(last.x, last.y, 14, 0, Math.PI * 2);
-        c.fillStyle = rgbWithAlpha(color, 0.15);
+        c.arc(last.x, last.y, 13, 0, Math.PI * 2);
+        c.fillStyle = rgbWithAlpha(color, 0.14);
         c.fill();
         c.restore();
       }
@@ -5802,10 +5788,6 @@ function renderHistoryStats(data) {
     }
   }
 
-  const trendIconPath = (delta) => {
-    if (delta == null || Math.abs(delta) < 0.005) return ICON_PATHS.chart;
-    return delta < 0 ? ICON_PATHS.trendDown : ICON_PATHS.trendUp;
-  };
   const trendVar = (delta) => {
     if (delta == null || Math.abs(delta) < 0.005) return 'var(--color-hint)';
     return delta < 0 ? 'var(--color-good)' : 'var(--color-bad)';
@@ -5817,9 +5799,13 @@ function renderHistoryStats(data) {
 
   const renderPill = (delta, label) => {
     if (delta == null) return '';
+    // The coloured arrow already carries the direction — the number
+    // itself stays unsigned so it doesn't read as "minus minus".
+    const flat = Math.abs(delta) < 0.005;
+    const valueLabel = flat ? formatDelta(delta) : formatDelta(Math.abs(delta)).replace(/^\+/, '');
     return `<span class="history-hero-pill" style="--pill-color:${trendVar(delta)}">
       <span class="history-hero-pill-arrow">${trendArrow(delta)}</span>
-      <span class="history-hero-pill-value">${formatDelta(delta)}</span>
+      <span class="history-hero-pill-value">${valueLabel}</span>
       <span class="history-hero-pill-label">${label}</span>
     </span>`;
   };
@@ -5829,15 +5815,8 @@ function renderHistoryStats(data) {
     <div class="history-hero-card">
       <div class="history-hero-top">
         <div class="history-hero-headline">
-          <div class="history-hero-label">${t('currentAvg')}</div>
+          <div class="history-hero-label"${periodLabel ? ` title="${periodLabel}"` : ''}>${t('currentAvg')}</div>
           <div class="history-hero-value metric-value">${currentAvg != null ? formatPrice(currentAvg) : '–'}</div>
-          ${periodLabel ? `<div class="history-hero-period">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h5v5H7z"/></svg>
-            <span>${periodLabel}</span>
-          </div>` : ''}
-        </div>
-        <div class="history-hero-glyph" style="--glyph-color:${trendVar(deltaWeek)}" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor">${trendIconPath(deltaWeek)}</svg>
         </div>
       </div>
       ${(deltaWeek != null || deltaMonth != null) ? `<div class="history-hero-pills">
@@ -5903,40 +5882,26 @@ function renderHourChart(entries, dayKey) {
   const hintColor = styles.getPropertyValue('--color-hint').trim() || '#999';
   const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
   const bgSecondary = styles.getPropertyValue('--color-bg-secondary').trim() || '#fff';
+  const accentColor = styles.getPropertyValue('--color-accent').trim() || '#007aff';
+  const goodColor = styles.getPropertyValue('--color-good').trim() || '#34c759';
 
-  // Rank-based colour per data point — same scheme the day chart uses,
-  // applied here to the intraday min values.
+  // Same calm accent treatment as the day chart — only the cheapest
+  // intraday reading gets the green point.
   const minVals = sorted.map(d => d.min_price);
   const minLo = Math.min(...minVals);
-  const minHi = Math.max(...minVals);
-  const minRange = Math.max(minHi - minLo, 0.0001);
-  const pointColors = minVals.map(v => rankColor((v - minLo) / minRange));
+  const cheapestIdx = minVals.indexOf(minLo);
+  const pointColors = minVals.map((_, i) => (i === cheapestIdx ? goodColor : accentColor));
 
   if (state.hourChart) state.hourChart.destroy();
   const ctx = document.getElementById('hour-chart');
 
-  // Same horizontal-stroke + warm vertical-fill recipe as the day
-  // chart (and the stats hour chart) — keeps the visual family
-  // consistent across the whole app.
-  const buildHourLineGradient = (chartCtx) => {
-    const chart = chartCtx.chart;
-    const { ctx: c, chartArea } = chart;
-    if (!chartArea) return '#ff9500';
-    const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-    const denom = Math.max(1, pointColors.length - 1);
-    pointColors.forEach((color, i) => {
-      g.addColorStop(Math.max(0, Math.min(1, i / denom)), color);
-    });
-    return g;
-  };
   const buildHourFillGradient = (chartCtx) => {
     const chart = chartCtx.chart;
     const { ctx: c, chartArea } = chart;
-    if (!chartArea) return 'rgba(255,149,0,0.15)';
+    if (!chartArea) return rgbWithAlpha(hexToRgbString(accentColor), 0.1);
     const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-    g.addColorStop(0,   'rgba(255, 59, 48, 0.32)');
-    g.addColorStop(0.5, 'rgba(255, 149, 0, 0.18)');
-    g.addColorStop(1,   'rgba(255, 204, 0, 0.04)');
+    g.addColorStop(0, rgbWithAlpha(hexToRgbString(accentColor), 0.16));
+    g.addColorStop(1, rgbWithAlpha(hexToRgbString(accentColor), 0));
     return g;
   };
 
@@ -5947,7 +5912,7 @@ function renderHourChart(entries, dayKey) {
       datasets: [{
         label: 'Min',
         data: minVals,
-        borderColor: buildHourLineGradient,
+        borderColor: accentColor,
         backgroundColor: buildHourFillGradient,
         borderWidth: 2.5,
         borderCapStyle: 'round',
@@ -5957,10 +5922,11 @@ function renderHourChart(entries, dayKey) {
         pointBackgroundColor: pointColors,
         pointBorderColor: bgSecondary,
         pointBorderWidth: 1.5,
-        pointRadius: sorted.length < 30 ? 3 : 1.5,
-        pointHoverRadius: sorted.length < 30 ? 5 : 4,
+        pointRadius: minVals.map((_, i) => (i === cheapestIdx ? 5 : (sorted.length < 30 ? 2.5 : 0))),
+        pointHoverRadius: sorted.length < 30 ? 6 : 5,
         pointHoverBorderWidth: 2,
         pointHoverBorderColor: bgSecondary,
+        pointHoverBackgroundColor: pointColors,
       }]
     },
     options: {
@@ -5987,7 +5953,7 @@ function renderHourChart(entries, dayKey) {
             const mm = String(t1.getMinutes()).padStart(2, '0');
             const suffix = t('oclock');
             const timeLabel = suffix ? `${hh}:${mm} ${suffix}` : `${hh}:${mm}`;
-            const color = pointColors[idx] || '#ff9500';
+            const color = pointColors[idx] || accentColor;
             el.innerHTML = `
               <div class="history-tooltip-time">${timeLabel}</div>
               <div class="history-tooltip-price" style="color:${color}">${formatPrice(entry.min_price)}</div>
@@ -6030,7 +5996,7 @@ function renderHourChart(entries, dayKey) {
         const elPt = active[0].element;
         if (!elPt) return;
         const idx = active[0].index;
-        const color = pointColors[idx] || '#ff9500';
+        const color = hexToRgbString(pointColors[idx] || accentColor);
         const { ctx: c, chartArea } = chart;
         const x = elPt.x, y = elPt.y;
         c.save();
@@ -6135,7 +6101,7 @@ function showStatsSkeleton() {
   const bone = (style) => `<div class="skeleton-bone" style="${style}"></div>`;
   const factCard = () => `
     <div class="stats-fact-card">
-      ${bone('width:30px;height:30px;border-radius:9px;flex-shrink:0')}
+      ${bone('width:28px;height:28px;border-radius:9px;flex-shrink:0')}
       <div style="flex:1;min-width:0">
         ${bone('width:60%;height:9px;margin-bottom:7px')}
         ${bone('width:85%;height:15px')}
@@ -6164,13 +6130,12 @@ function showStatsSkeleton() {
       <div class="stats-hero-card">
         <div class="stats-hero-top">
           <div style="flex:1;min-width:0">
-            ${bone('width:38%;height:11px')}
-            ${bone('width:55%;height:30px;margin-top:11px')}
+            ${bone('width:52%;height:11px')}
+            ${bone('width:38%;height:34px;margin-top:10px')}
           </div>
-          ${bone('width:24px;height:24px;border-radius:7px;flex-shrink:0')}
         </div>
-        ${bone('width:128px;height:13px;margin-top:14px;border-radius:999px')}
-        ${bone('width:100%;height:6px;margin-top:18px;border-radius:999px')}
+        ${bone('width:100%;height:5px;margin-top:20px;border-radius:999px')}
+        <div style="display:flex;justify-content:space-between;margin-top:9px">${bone('width:44px;height:10px')}${bone('width:44px;height:10px')}</div>
       </div>
       <div class="stats-facts-row">${factCard()}${factCard()}${factCard()}</div>
     </div>
@@ -6217,7 +6182,8 @@ function renderStats(stats) {
   const spreadRange = Math.max(hi - lo, 0.0001);
   const avgPct = Math.max(0, Math.min(100, ((avg - lo) / spreadRange) * 100));
 
-  const fmtDeltaShort = (n) => '−' + Number(n).toFixed(2).replace('.', ',') + '€';
+  // Absolute amount — the badge's down-arrow already signals "cheaper".
+  const fmtDeltaShort = (n) => Math.abs(Number(n)).toFixed(2).replace('.', ',') + '€';
 
   // Build a period label for the hero — short days form when the range
   // is recent, absolute date when it stretches back further.
@@ -6242,18 +6208,10 @@ function renderStats(stats) {
       <div class="stats-hero-card">
         <div class="stats-hero-top">
           <div class="stats-hero-headline">
-            <div class="stats-hero-label">${t('avgPrice')}</div>
+            <div class="stats-hero-label" title="${stats.overall.since ? new Date(stats.overall.since).toLocaleString(state.lang === 'en' ? 'en-US' : 'de-DE') : ''}">${t('avgPrice')}${periodLabel ? ` · ${periodLabel}` : ''}</div>
             <div class="stats-hero-value metric-value">${formatPrice(avg)}</div>
           </div>
-          <div class="stats-hero-glyph" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
-          </div>
         </div>
-        ${periodLabel ? `
-        <div class="stats-hero-period" title="${stats.overall.since ? new Date(stats.overall.since).toLocaleString(state.lang === 'en' ? 'en-US' : 'de-DE') : ''}">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19a2 2 0 002 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
-          <span>${periodLabel}</span>
-        </div>` : ''}
         ${hi > lo ? `
         <div class="stats-spread">
           <div class="stats-spread-track">
@@ -6355,17 +6313,18 @@ function renderStats(stats) {
         continue;
       }
       const rank = dayRankMap.get(dayNum);
-      // Position in the displayed-price range drives both colour and bar
-      // width, so equal prices map to an identical tint and length: empty +
-      // green for the cheapest, full + red for the priciest. Reads
-      // naturally — less is better, since you want to spend less.
+      // Position in the displayed-price range drives the bar width, so
+      // equal prices map to an identical length: empty for the cheapest,
+      // full for the priciest. Colour stays neutral — only the cheapest
+      // day gets the green highlight, so the winner reads at a glance.
       const ratio = dayCount > 1 ? (dayDispV(data.avg) - dayMinV) / dayRangeV : 0;
-      const color = rankColor(ratio);
       const isBest = rank === 0;
       const barWidth = Math.round(ratio * 100);
       const crown = isBest ? '<span class="stats-tile-crown" aria-hidden="true">★</span>' : '';
       const fullDayName = (t('dayNames') || [])[dayNum] || data.name || abbr;
-      dayTiles += `<div class="stats-tile${isBest ? ' is-best' : ''}" style="--tile-color:${color}" data-tile-label="${fullDayName} · ${formatPrice(data.avg)}" data-tile-color="${color}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value" style="color:${color}">${formatPrice(data.avg)}</div><div class="stats-tile-bar"><div class="stats-tile-bar-fill" style="width:${barWidth}%"></div></div></div>`;
+      const tileStyle = isBest ? ' style="--tile-color:var(--color-good)"' : '';
+      const chipColor = isBest ? '#34c759' : '#98989e';
+      dayTiles += `<div class="stats-tile${isBest ? ' is-best' : ''}"${tileStyle} data-tile-label="${fullDayName} · ${formatPrice(data.avg)}" data-tile-color="${chipColor}">${crown}<div class="stats-tile-name">${abbr}</div><div class="stats-tile-value">${formatPrice(data.avg)}</div><div class="stats-tile-bar"><div class="stats-tile-bar-fill" style="width:${barWidth}%"></div></div></div>`;
     }
     html += `<div class="section"><div class="section-header">${t('weekdays')}</div><div class="stats-tile-grid stats-tile-grid-7">${dayTiles}</div></div>`;
   }
@@ -6383,18 +6342,14 @@ function renderStats(stats) {
       </div>`;
   }
 
-  // Stations: compact ranked list with a colour-tinted left accent stripe
-  // per row. Drop the sparkbar background — the medals + coloured price
-  // already carry the rank signal.
+  // Stations: compact ranked list. Neutral rank badges — only the
+  // cheapest station gets the green treatment, everything else stays
+  // quiet so the winner is obvious instead of a full rainbow.
   if (stats.stationRanking.length) {
     html += `<div class="section"><div class="section-header">${t('stationRanking')}</div><div class="card-list stats-station-list">`;
     const stations = stats.stationRanking.slice(0, 10);
-    const stLen = stations.length;
     stations.forEach((s, i) => {
-      const ratio = stLen > 1 ? i / (stLen - 1) : 0;
-      const color = rankColor(ratio);
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
-      const isMedal = i < 3;
+      const isBest = i === 0;
       const idAttr = s.id ? ` data-station-id="${s.id}"` : '';
       const brandAttr = s.brand ? ` data-station-brand="${fixEnc(s.brand)}"` : '';
       const avgAttr = ` data-station-avg="${s.avg}"`;
@@ -6403,7 +6358,7 @@ function renderStats(stats) {
       const minLabel = Number.isFinite(s.min) ? `↓ ${formatPrice(s.min)}` : '';
       const countLabel = Number.isFinite(s.count) ? `${s.count} ${t('measurements')}` : '';
       const titleParts = [`Ø ${formatPrice(s.avg)}`, minLabel, countLabel].filter(Boolean).join(' · ');
-      html += `<div class="ranking-item station-ranking-item${isMedal ? ' ranking-medal' : ''}" data-station-name="${fixEnc(s.station)}"${idAttr}${brandAttr}${avgAttr} title="${titleParts}" style="--rank-color:${color}"><div class="ranking-pos">${medal}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price" style="color:${color}"><span class="ranking-price-avg-mark">Ø</span>${formatPrice(s.avg)}</div></div>`;
+      html += `<div class="ranking-item station-ranking-item${isBest ? ' is-best' : ''}" data-station-name="${fixEnc(s.station)}"${idAttr}${brandAttr}${avgAttr} title="${titleParts}"><div class="ranking-pos">${i + 1}</div><div class="ranking-name">${fixEnc(s.station)}</div><div class="ranking-price"><span class="ranking-price-avg-mark">Ø</span>${formatPrice(s.avg)}</div></div>`;
     });
     html += '</div></div>';
   }
@@ -6459,15 +6414,6 @@ function renderStats(stats) {
       const avg = parseFloat(item.dataset.stationAvg) || null;
       openStationDetail({ id, name, brand, fallbackPrice: avg });
     });
-  });
-
-  // Only the hero price-tag glyph is a fun easter-egg trigger here.
-  // The category icons inside the fact and best-time cards (trend
-  // arrows, chart, calendar, clock) stay as plain labels — making them
-  // tappable just turns them into pseudo-buttons that aren't actions.
-  attachConfetti(el.querySelector('.stats-hero-glyph'), ICON_PATHS.priceTag, {
-    colors: ['#34c759', '#007aff', '#ff9500', '#ffcc00', '#af52de'],
-    count: 30, size: 18,
   });
 
   // Every weekday tile is now interactive. The cheapest one keeps its
@@ -6536,20 +6482,39 @@ function rgbWithAlpha(rgbString, alpha) {
   return `rgba(${m[0]},${m[1]},${m[2]},${alpha})`;
 }
 
-// Hour-of-day price chart — line with a warm gradient stroke (yellow →
-// orange → red) sampled from each measured hour's rank, a vertical
-// gradient area fill, and a custom hover crosshair + glow halo.
+// Helper: normalize a CSS color (hex #rgb/#rrggbb or rgb()) to an
+// "rgb(r, g, b)" string so rgbWithAlpha can add transparency to it.
+function hexToRgbString(color) {
+  const c = String(color).trim();
+  if (!c.startsWith('#')) return c;
+  const hex = c.length === 4
+    ? c.slice(1).split('').map(ch => ch + ch).join('')
+    : c.slice(1, 7);
+  const n = parseInt(hex, 16);
+  if (Number.isNaN(n)) return c;
+  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+}
+
+// Hour-of-day price chart — one calm accent line with a soft area fill.
+// Only the cheapest hour gets a highlighted (green) point; everything
+// else stays quiet until hovered.
 function renderStatsHourChart(stats) {
   const canvas = document.getElementById('stats-hour-chart');
   if (!canvas || !stats.hourAvgs.length) return;
 
   const hourMap = new Map();
   stats.hourAvgs.forEach((h, idx) => hourMap.set(h.hour, { ...h, rank: idx }));
-  const hourCount = stats.hourAvgs.length;
+
+  const styles = getComputedStyle(document.body);
+  const hintColor = styles.getPropertyValue('--color-hint').trim() || '#999';
+  const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
+  const bgColor = styles.getPropertyValue('--color-bg-secondary').trim() || '#fff';
+  const accentColor = styles.getPropertyValue('--color-accent').trim() || '#007aff';
+  const goodColor = styles.getPropertyValue('--color-good').trim() || '#34c759';
 
   const labels = [];
   const data = [];
-  const pointBg = [];       // colour per hour, null = no data
+  const pointBg = [];       // colour per hour, null = no data (drives tooltip/crosshair tint)
   const pointRadii = [];
   const pointHoverRadii = [];
   for (let hour = 0; hour < 24; hour++) {
@@ -6562,50 +6527,24 @@ function renderStatsHourChart(stats) {
       pointHoverRadii.push(0);
       continue;
     }
-    const ratio = hourCount > 1 ? d.rank / (hourCount - 1) : 0;
-    pointBg.push(rankColor(ratio));
+    const isBest = d.rank === 0;
+    pointBg.push(isBest ? goodColor : accentColor);
     data.push(d.avg);
-    const r = d.rank === 0 ? 7 : 4;
-    pointRadii.push(r);
-    pointHoverRadii.push(r + 3);
+    pointRadii.push(isBest ? 5 : 0);
+    pointHoverRadii.push(isBest ? 8 : 6);
   }
-
-  const styles = getComputedStyle(document.body);
-  const hintColor = styles.getPropertyValue('--color-hint').trim() || '#999';
-  const sepColor = styles.getPropertyValue('--color-separator').trim() || '#e0e0e0';
-  const bgColor = styles.getPropertyValue('--color-bg-secondary').trim() || '#fff';
 
   const isUpdate = !!state.statsHourChart;
   if (state.statsHourChart) state.statsHourChart.destroy();
 
-  // Horizontal gradient stroke: one CanvasGradient spanning the chart
-  // width with a colour stop at each measured hour's x position. The
-  // line itself smoothly transitions through yellow / orange / red.
-  const buildLineGradient = (chartCtx) => {
-    const chart = chartCtx.chart;
-    const { ctx: canvasCtx, chartArea } = chart;
-    if (!chartArea) return '#ff9500';
-    const g = canvasCtx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-    const stops = [];
-    for (let i = 0; i < 24; i++) {
-      if (pointBg[i]) stops.push({ pos: i / 23, color: pointBg[i] });
-    }
-    if (!stops.length) return '#ff9500';
-    if (stops.length === 1) return stops[0].color;
-    stops.forEach(s => g.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
-    return g;
-  };
-
-  // Vertical area gradient — red-tinted at the top (high price = bad),
-  // fading through orange to a faint yellow at the bottom.
+  // Soft vertical accent fill under the line, fading to transparent.
   const buildFillGradient = (chartCtx) => {
     const chart = chartCtx.chart;
     const { ctx: canvasCtx, chartArea } = chart;
-    if (!chartArea) return 'rgba(255,149,0,0.15)';
+    if (!chartArea) return rgbWithAlpha(hexToRgbString(accentColor), 0.1);
     const g = canvasCtx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-    g.addColorStop(0,   'rgba(255, 59, 48, 0.34)');
-    g.addColorStop(0.5, 'rgba(255, 149, 0, 0.18)');
-    g.addColorStop(1,   'rgba(255, 204, 0, 0.04)');
+    g.addColorStop(0, rgbWithAlpha(hexToRgbString(accentColor), 0.16));
+    g.addColorStop(1, rgbWithAlpha(hexToRgbString(accentColor), 0));
     return g;
   };
 
@@ -6616,9 +6555,9 @@ function renderStatsHourChart(stats) {
       datasets: [{
         label: t('avgPrice') || 'Avg',
         data,
-        borderColor: buildLineGradient,
+        borderColor: accentColor,
         backgroundColor: buildFillGradient,
-        borderWidth: 3,
+        borderWidth: 2.5,
         borderCapStyle: 'round',
         borderJoinStyle: 'round',
         tension: 0.4,
@@ -6626,11 +6565,12 @@ function renderStatsHourChart(stats) {
         fill: true,
         pointBackgroundColor: pointBg.map(c => c || 'rgba(0,0,0,0)'),
         pointBorderColor: bgColor,
-        pointBorderWidth: 2.5,
+        pointBorderWidth: 2,
         pointRadius: pointRadii,
         pointHoverRadius: pointHoverRadii,
-        pointHoverBorderWidth: 3,
+        pointHoverBorderWidth: 2.5,
         pointHoverBorderColor: bgColor,
+        pointHoverBackgroundColor: pointBg.map(c => c || 'rgba(0,0,0,0)'),
       }]
     },
     options: {
@@ -6662,7 +6602,7 @@ function renderStatsHourChart(stats) {
               return;
             }
             const idx = dp.dataIndex;
-            const color = pointBg[idx] || '#ff9500';
+            const color = pointBg[idx] || accentColor;
             const suffix = t('oclock');
             const hourLabel = suffix ? `${idx}:00 ${suffix}` : `${idx}:00`;
             el.innerHTML = `
@@ -6685,7 +6625,7 @@ function renderStatsHourChart(stats) {
             maxRotation: 0,
             callback: (_value, index) => (index % 6 === 0 ? `${index}:00` : ''),
           },
-          grid: { color: sepColor, drawTicks: false, lineWidth: 0.5 },
+          grid: { display: false },
           border: { display: false },
         },
         y: {
@@ -6714,9 +6654,10 @@ function renderStatsHourChart(stats) {
         const { ctx, chartArea } = chart;
         const x = el.x;
         const y = el.y;
+        const rgb = hexToRgbString(color);
         ctx.save();
         // Dashed vertical crosshair
-        ctx.strokeStyle = rgbWithAlpha(color, 0.45);
+        ctx.strokeStyle = rgbWithAlpha(rgb, 0.45);
         ctx.lineWidth = 1.25;
         ctx.setLineDash([4, 5]);
         ctx.beginPath();
@@ -6727,11 +6668,11 @@ function renderStatsHourChart(stats) {
         // Two-ring halo around the point
         ctx.beginPath();
         ctx.arc(x, y, 16, 0, Math.PI * 2);
-        ctx.fillStyle = rgbWithAlpha(color, 0.12);
+        ctx.fillStyle = rgbWithAlpha(rgb, 0.12);
         ctx.fill();
         ctx.beginPath();
         ctx.arc(x, y, 10, 0, Math.PI * 2);
-        ctx.fillStyle = rgbWithAlpha(color, 0.22);
+        ctx.fillStyle = rgbWithAlpha(rgb, 0.22);
         ctx.fill();
         ctx.restore();
       }
@@ -7781,10 +7722,17 @@ function initAlertUI() {
   document.getElementById('alert-save').addEventListener('click', saveAlert);
   document.getElementById('alert-test').addEventListener('click', testAlert);
 
-  // Show email channel button if SMTP configured
+  // Show email channel button if SMTP configured. With only one channel
+  // available, a "picker" is just a decorative button — hide the whole
+  // row (and its label) until there is an actual choice to make.
   if (state.smtpConfigured) {
     const emailBtn = document.getElementById('alert-ch-email');
     if (emailBtn) emailBtn.style.display = '';
+  } else {
+    const picker = document.getElementById('alert-channel-picker');
+    if (picker) picker.style.display = 'none';
+    const pickerLabel = document.querySelector('.alert-channel-section .alert-config-label');
+    if (pickerLabel) pickerLabel.style.display = 'none';
   }
 
   // Channel picker

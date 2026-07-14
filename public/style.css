@@ -5,11 +5,18 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --tab-height: 56px;
 
-  /* Light mode (default) */
+  /* Light mode (default).
+     Surface model (iOS grouped-list style):
+       --color-page          app/page background (light gray)
+       --color-bg            elevated floating surfaces: sheets, popups, map panels
+       --color-bg-secondary  card surface sitting on the page (white)
+       --color-inset         nested fills inside a card: inputs, pressed states */
   --color-text: #000;
   --color-text-2: #3c3c43;
+  --color-page: #f2f2f7;
   --color-bg: #fff;
-  --color-bg-secondary: #f2f2f7;
+  --color-bg-secondary: #ffffff;
+  --color-inset: #f2f2f7;
   --color-bg-elevated: #ffffff;
   /* 4.6:1 on white — the old #8e8e93 was a 3.3:1 WCAG AA failure for the
      app's pervasive muted text (hints, sublines, section headers). */
@@ -56,8 +63,10 @@
   :root:not([data-theme="light"]) {
     --color-text: #ffffff;
     --color-text-2: #ebebf5;
+    --color-page: #000000;
     --color-bg: #000000;
     --color-bg-secondary: #1c1c1e;
+    --color-inset: #2c2c2e;
     --color-bg-elevated: #2c2c2e;
     --color-hint: #98989e;
     --color-separator: rgba(255,255,255,0.1);
@@ -76,8 +85,10 @@
 html[data-theme="dark"] {
   --color-text: #ffffff;
   --color-text-2: #ebebf5;
+  --color-page: #000000;
   --color-bg: #000000;
   --color-bg-secondary: #1c1c1e;
+  --color-inset: #2c2c2e;
   --color-bg-elevated: #2c2c2e;
   --color-hint: #98989e;
   --color-separator: rgba(255,255,255,0.1);
@@ -104,7 +115,7 @@ html, body {
   font-size: 15px;
   line-height: 1.4;
   color: var(--color-text);
-  background: var(--color-bg);
+  background: var(--color-page);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   -webkit-overflow-scrolling: touch;
@@ -291,7 +302,7 @@ body.logged-in .sync-badge {
   margin: var(--sp-3) var(--sp-4) var(--sp-1);
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-sm);
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
   font-size: 12px;
   color: var(--color-hint);
   line-height: 1.4;
@@ -360,9 +371,8 @@ body.logged-in .cloud-sync-hint {
 .page-header {
   /* Top inset keeps the H1 out from under the notch/status bar on iOS
      (viewport-fit=cover pulls content behind it). */
-  padding: calc(env(safe-area-inset-top, 0px) + var(--sp-5)) var(--sp-4) var(--sp-4);
-  border-bottom: 1px solid var(--color-separator);
-  margin-bottom: var(--sp-4);
+  padding: calc(env(safe-area-inset-top, 0px) + var(--sp-5)) var(--sp-4) var(--sp-3);
+  margin-bottom: var(--sp-2);
 }
 .page-title {
   font-size: 28px;
@@ -519,12 +529,12 @@ body.logged-in .cloud-sync-hint {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-separator);
   border-radius: var(--r-md);
-  padding: var(--sp-4) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: var(--sp-1);
-  min-height: 112px;
+  min-height: 96px;
   min-width: 0;
 }
 .best-time-label {
@@ -549,7 +559,7 @@ body.logged-in .cloud-sync-hint {
 .best-time-price.good { color: var(--color-good); }
 .best-time-price.bad  { color: var(--color-bad); }
 
-@media (max-width: 480px) {
+@media (max-width: 360px) {
   .best-time-grid {
     grid-template-columns: 1fr;
   }
@@ -570,19 +580,12 @@ body.logged-in .cloud-sync-hint {
 }
 .stats-hero-card {
   position: relative;
-  background: linear-gradient(135deg, var(--color-bg-secondary) 0%, color-mix(in srgb, var(--color-accent) 7%, var(--color-bg-secondary)) 100%);
+  background: var(--color-bg-secondary);
   border: 1px solid var(--color-separator);
-  border-radius: var(--r-md);
-  padding: var(--sp-5);
-  margin-bottom: var(--sp-3);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5) var(--sp-4) var(--sp-4);
+  margin-bottom: var(--sp-2);
   overflow: hidden;
-}
-.stats-hero-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 92% -10%, color-mix(in srgb, var(--color-accent) 18%, transparent) 0%, transparent 55%);
-  pointer-events: none;
 }
 .stats-hero-top {
   position: relative;
@@ -614,34 +617,6 @@ body.logged-in .cloud-sync-hint {
   font-variant-numeric: tabular-nums;
   line-height: 1.05;
 }
-.stats-hero-glyph {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
-  color: var(--color-accent);
-  display: grid;
-  place-items: center;
-}
-
-.stats-hero-period {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 10px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
-  color: var(--color-accent);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1px;
-  width: fit-content;
-  cursor: default;
-}
 
 .stats-spread {
   position: relative;
@@ -650,7 +625,7 @@ body.logged-in .cloud-sync-hint {
 }
 .stats-spread-track {
   position: relative;
-  height: 6px;
+  height: 5px;
   border-radius: 3px;
   background: var(--color-separator);
   overflow: visible;
@@ -659,19 +634,19 @@ body.logged-in .cloud-sync-hint {
   position: absolute;
   inset: 0;
   border-radius: 3px;
-  background: linear-gradient(90deg, var(--color-good) 0%, #ff9500 50%, var(--color-bad) 100%);
-  opacity: 0.85;
+  background: linear-gradient(90deg, var(--color-good) 0%, var(--color-okay) 55%, var(--color-bad) 100%);
+  opacity: 0.32;
 }
 .stats-spread-marker {
   position: absolute;
   top: 50%;
-  width: 14px;
-  height: 14px;
-  margin-left: -7px;
+  width: 13px;
+  height: 13px;
+  margin-left: -6.5px;
   border-radius: 50%;
-  background: var(--color-text);
-  border: 2px solid var(--color-bg-secondary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  background: var(--color-accent);
+  border: 2.5px solid var(--color-bg-secondary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   transform: translateY(-50%);
   transition: left 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -708,13 +683,13 @@ body.logged-in .cloud-sync-hint {
   padding: 10px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 .stats-fact-icon {
   flex-shrink: 0;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 9px;
   display: grid;
   place-items: center;
@@ -734,9 +709,7 @@ body.logged-in .cloud-sync-hint {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
 }
 .stats-fact-value {
   font-size: 16px;
@@ -782,10 +755,6 @@ body.logged-in .cloud-sync-hint {
   width: fit-content;
 }
 
-.ranking-medal .ranking-pos {
-  font-size: 17px;
-  line-height: 1;
-}
 
 /* === Weekday tile row — 7 chronological cards with a coloured
        cheapness bar at the bottom. Background stays neutral so the
@@ -855,7 +824,7 @@ body.logged-in .cloud-sync-hint {
 .stats-tile-bar-fill {
   height: 100%;
   width: 0;
-  background: var(--tile-color, var(--color-separator));
+  background: var(--tile-color, color-mix(in srgb, var(--color-text) 28%, transparent));
   border-radius: 999px;
   transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -873,18 +842,11 @@ body.logged-in .cloud-sync-hint {
 /* === Settings: account hero card === */
 .account-hero {
   position: relative;
-  background: linear-gradient(135deg, var(--color-bg-secondary) 0%, color-mix(in srgb, var(--color-accent) 8%, var(--color-bg-secondary)) 100%);
+  background: var(--color-bg-secondary);
   border: 1px solid var(--color-separator);
-  border-radius: var(--r-md);
-  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  padding: var(--sp-4) var(--sp-4) var(--sp-4);
   overflow: hidden;
-}
-.account-hero::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 92% -10%, color-mix(in srgb, var(--color-accent) 20%, transparent) 0%, transparent 55%);
-  pointer-events: none;
 }
 .account-hero-top {
   position: relative;
@@ -896,15 +858,15 @@ body.logged-in .cloud-sync-hint {
 }
 .account-hero-avatar {
   flex-shrink: 0;
-  width: 60px;
-  height: 60px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-bg-secondary));
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg-secondary));
   color: color-mix(in srgb, var(--color-accent) 80%, var(--color-text));
   display: grid;
   place-items: center;
   overflow: hidden;
-  border: 1.5px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 22%, transparent);
   transition: border-color 0.25s ease, background 0.25s ease;
 }
 .account-hero.is-signed-in .account-hero-avatar {
@@ -942,11 +904,11 @@ body.logged-in .cloud-sync-hint {
   font-weight: 700;
 }
 .account-hero-name {
-  font-size: 22px;
-  font-weight: 800;
+  font-size: 19px;
+  font-weight: 700;
   color: var(--color-text);
   letter-spacing: -0.02em;
-  line-height: 1.15;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1042,22 +1004,21 @@ body.logged-in .cloud-sync-hint {
 .seg-control {
   position: relative;
   display: flex;
-  gap: 4px;
+  gap: 2px;
   margin: 0 var(--sp-4) var(--sp-3);
-  padding: 4px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--color-text) 6%, transparent);
-  border: 1px solid var(--color-separator);
+  padding: 2px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
 }
 .seg-thumb {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
+  top: 2px;
+  bottom: 2px;
   left: 0;
   width: 0;
   background: var(--color-bg);
-  border-radius: 9px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.04);
+  border-radius: 7px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.06);
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
               width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
@@ -1080,7 +1041,7 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 9px 10px;
+  padding: 7px 10px;
   border: none;
   background: none;
   color: var(--color-hint);
@@ -1088,7 +1049,7 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  border-radius: 9px;
+  border-radius: 7px;
   -webkit-tap-highlight-color: transparent;
   transition: color 0.2s ease;
   white-space: nowrap;
@@ -1160,18 +1121,11 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
 /* === History tab — hero card with current avg + trend pills === */
 .history-hero-card {
   position: relative;
-  background: linear-gradient(135deg, var(--color-bg-secondary) 0%, color-mix(in srgb, var(--color-accent) 7%, var(--color-bg-secondary)) 100%);
+  background: var(--color-bg-secondary);
   border: 1px solid var(--color-separator);
-  border-radius: var(--r-md);
-  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5) var(--sp-4) var(--sp-4);
   overflow: hidden;
-}
-.history-hero-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 92% -10%, color-mix(in srgb, var(--color-accent) 18%, transparent) 0%, transparent 55%);
-  pointer-events: none;
 }
 .history-hero-top {
   position: relative;
@@ -1203,31 +1157,6 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   font-variant-numeric: tabular-nums;
   line-height: 1.05;
 }
-.history-hero-period {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
-  color: var(--color-accent);
-  font-size: 11px;
-  font-weight: 600;
-  width: fit-content;
-}
-.history-hero-glyph {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--glyph-color, var(--color-accent)) 14%, transparent);
-  color: var(--glyph-color, var(--color-accent));
-  display: grid;
-  place-items: center;
-}
 .history-hero-pills {
   position: relative;
   z-index: 1;
@@ -1239,20 +1168,22 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
 .history-hero-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   padding: 5px 11px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--pill-color) 16%, transparent);
-  color: var(--pill-color);
+  background: var(--color-inset);
+  color: var(--color-text);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.1px;
 }
-.history-hero-pill-arrow { font-weight: 700; }
+.history-hero-pill-arrow {
+  font-weight: 700;
+  color: var(--pill-color);
+}
 .history-hero-pill-label {
-  color: color-mix(in srgb, var(--pill-color) 75%, var(--color-text));
-  opacity: 0.7;
+  color: var(--color-hint);
   font-weight: 500;
   margin-left: 2px;
   letter-spacing: 0.2px;
@@ -1269,7 +1200,7 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-separator);
   border-radius: 14px;
-  padding: 12px 14px 12px 18px;
+  padding: 12px 14px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1282,16 +1213,6 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1),
               box-shadow 0.2s ease,
               border-color 0.2s ease;
-}
-.history-extreme-card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 14%;
-  bottom: 14%;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--accent);
 }
 .history-extreme-card:hover {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--color-separator));
@@ -1444,11 +1365,6 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
 }
 .hour-chart-close:active { transform: scale(0.92); }
 
-/* Soft warm drop-shadow on both history canvases so they sit on the
-   page like the stats hour chart does. */
-#price-chart, #hour-chart {
-  filter: drop-shadow(0 4px 14px rgba(255, 149, 0, 0.07));
-}
 
 /* === Hour line chart — custom HTML tooltip so the price text can pick
        up the hovered hour's rank colour. === */
@@ -1489,12 +1405,12 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
 /* === Hour line chart — Chart.js canvas wrapper === */
 .stats-hour-chart-wrap {
   position: relative;
-  height: 160px;
-  margin-bottom: 4px;
+  height: 170px;
+  padding: var(--sp-3) var(--sp-2) var(--sp-2);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--r-lg);
   animation: stats-chart-enter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.stats-hour-chart-wrap canvas {
-  filter: drop-shadow(0 4px 14px rgba(255, 149, 0, 0.10));
 }
 @keyframes stats-chart-enter {
   from { opacity: 0; transform: translateY(6px); }
@@ -1503,25 +1419,35 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
 @media (prefers-reduced-motion: reduce) {
   .stats-hour-chart-wrap { animation: none; }
 }
-/* === Station ranking — coloured left accent stripe === */
+/* === Station ranking — quiet numbered badges, green winner === */
 .stats-station-list .station-ranking-item {
   position: relative;
-  padding-left: calc(var(--sp-4) + 6px);
+  cursor: pointer;
 }
-.stats-station-list .station-ranking-item::before {
-  content: '';
-  position: absolute;
-  left: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 60%;
-  border-radius: 2px;
-  background: var(--rank-color, var(--color-separator));
+.stats-station-list .ranking-pos {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--color-inset);
+  color: var(--color-hint);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
-.stats-station-list .station-ranking-item.ranking-medal::before {
-  height: 70%;
-  width: 4px;
+.stats-station-list .station-ranking-item.is-best .ranking-pos {
+  background: color-mix(in srgb, var(--color-good) 16%, transparent);
+  color: var(--color-good);
+}
+.stats-station-list .ranking-price {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stats-station-list .station-ranking-item.is-best .ranking-price {
+  color: var(--color-good);
+  font-weight: 700;
 }
 /* Small "Ø" mark in the ranking price so users understand the number is
    the 30-day average rather than the current price. Hover-title row
@@ -1860,7 +1786,7 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
 }
 .map-search-clear:hover,
 .map-search-clear:focus-visible {
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
 }
 
 .map-search-clear.hidden {
@@ -1902,7 +1828,7 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
 }
 
 .map-search-result-item:active {
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
 }
 
 .map-search-station-item {
@@ -1977,7 +1903,7 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   box-shadow: 0 2px 6px rgba(0,0,0,0.12);
   transition: transform 0.12s ease, background 0.15s;
 }
-.map-route-chip:hover { background: var(--color-bg-secondary); }
+.map-route-chip:hover { background: var(--color-inset); }
 .map-route-chip:active { transform: scale(0.96); }
 .map-route-chip[aria-expanded="true"] {
   background: var(--color-accent);
@@ -2062,7 +1988,7 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   gap: 8px;
 }
 .map-route-suggest-item:last-child { border-bottom: none; }
-.map-route-suggest-item:active { background: var(--color-bg-secondary); }
+.map-route-suggest-item:active { background: var(--color-inset); }
 .map-route-suggest-item.is-current-location {
   color: var(--color-accent);
   font-weight: 500;
@@ -2083,7 +2009,7 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   padding: 6px 10px;
   border-radius: 6px;
 }
-.map-route-close:hover { background: var(--color-bg-secondary); }
+.map-route-close:hover { background: var(--color-inset); }
 
 .map-route-go {
   background: var(--color-accent);
@@ -2282,14 +2208,12 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
-.confetti-trigger.stats-hero-glyph,
 .confetti-trigger.stats-fact-icon,
 .confetti-trigger.best-time-icon-wrap,
 .confetti-trigger.about-heart,
 .confetti-trigger.about-app-icon {
   transition: transform 0.15s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
-.confetti-trigger.stats-hero-glyph:hover,
 .confetti-trigger.stats-fact-icon:hover,
 .confetti-trigger.best-time-icon-wrap:hover,
 .confetti-trigger.about-heart:hover,
@@ -2371,7 +2295,7 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
 }
 
 .skeleton-bone {
-  background: linear-gradient(90deg, var(--color-bg-secondary) 25%, var(--color-separator) 50%, var(--color-bg-secondary) 75%);
+  background: linear-gradient(90deg, var(--color-inset) 25%, var(--color-separator) 50%, var(--color-inset) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: 6px;
@@ -2733,7 +2657,7 @@ body.logged-in .station-fav-sync.synced {
 .chart-container {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-separator);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   padding: var(--sp-4) var(--sp-2) var(--sp-2);
   height: 280px;
   position: relative;
@@ -3030,7 +2954,7 @@ body.logged-in .station-fav-sync.synced {
 }
 
 .sheet-hours-toggle:active {
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
 }
 
 .sheet-hours-chevron {
@@ -3098,7 +3022,7 @@ body.logged-in .station-fav-sync.synced {
 .sheet-chart-toggle {
   display: flex;
   gap: 4px;
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
   border-radius: 8px;
   padding: 2px;
 }
@@ -3126,7 +3050,7 @@ body.logged-in .station-fav-sync.synced {
 }
 
 .sheet-chart-container {
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
   border-radius: 12px;
   padding: 12px 8px 8px;
   height: 120px;
@@ -3220,7 +3144,7 @@ body.logged-in .station-fav-sync.synced {
   padding: 5px 11px 6px;
   border-radius: 999px;
   border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
   color: var(--color-text);
   font-size: 11.5px;
   font-weight: 500;
@@ -3318,7 +3242,7 @@ body.logged-in .station-fav-sync.synced {
   width: 32px;
   height: 32px;
   border: none;
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
   border-radius: 8px;
   cursor: pointer;
   align-items: center;
@@ -3375,7 +3299,7 @@ body.logged-in .station-fav-sync.synced {
 
 .sheet-nav-btn.gmaps,
 .sheet-nav-btn.amaps {
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
   color: var(--color-text);
   border: 1px solid var(--color-separator);
 }
@@ -3468,7 +3392,9 @@ body.logged-in .station-fav-sync.synced {
   right: 0;
   height: calc(var(--tab-height) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
-  background: var(--color-bg-secondary);
+  background: color-mix(in srgb, var(--color-bg-secondary) 88%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
   border-top: 0.5px solid var(--color-separator);
   display: flex;
   align-items: center;
@@ -3841,7 +3767,7 @@ body.logged-in .station-fav-sync.synced {
 .settings-select {
   -webkit-appearance: none;
   appearance: none;
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
   color: var(--color-text);
   border: 1px solid var(--color-separator);
   border-radius: 8px;
@@ -3903,16 +3829,16 @@ body.logged-in .station-fav-sync.synced {
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .toggle-track {
   position: absolute; cursor: pointer; inset: 0;
-  background: var(--color-hint);
+  background: color-mix(in srgb, var(--color-text) 16%, transparent);
   border-radius: 31px; transition: 0.2s;
 }
 .toggle-track:before {
   content: ""; position: absolute;
   width: 27px; height: 27px; left: 2px; bottom: 2px;
   background: white; border-radius: 50%;
-  transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  transition: 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.1);
 }
-.toggle-switch input:checked + .toggle-track { background: #34c759; }
+.toggle-switch input:checked + .toggle-track { background: var(--color-good); }
 .toggle-switch input:checked + .toggle-track:before { transform: translateX(20px); }
 
 /* === Price Alert card — redesigned for the settings tab === */
@@ -3922,8 +3848,7 @@ body.logged-in .station-fav-sync.synced {
   transition: border-color 0.25s ease, background 0.25s ease;
 }
 .alert-card.is-armed {
-  border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-separator));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 5%, var(--color-bg-secondary)) 0%, var(--color-bg-secondary) 60%);
+  border-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-separator));
 }
 
 .alert-toggle-row {
@@ -4118,6 +4043,7 @@ body.logged-in .station-fav-sync.synced {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: var(--sp-2);
 }
 
 .alert-channel-picker {
@@ -4133,7 +4059,7 @@ body.logged-in .station-fav-sync.synced {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--color-separator);
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
   color: var(--color-text);
   font-size: 14px;
   font-family: inherit;
@@ -4264,7 +4190,7 @@ body.logged-in .station-fav-sync.synced {
   margin-top: 10px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
   font-size: 13px;
   color: var(--color-hint);
   text-align: center;
@@ -4534,7 +4460,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
 
 .pwa-popup-tabs {
   display: flex;
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
   border-radius: 10px;
   padding: 3px;
   margin-bottom: 16px;
@@ -4585,7 +4511,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
   gap: 14px;
   padding: 12px 14px;
   border-radius: 12px;
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
   margin-bottom: 8px;
   font-size: 14px;
   color: var(--color-text);
@@ -4718,7 +4644,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
   transition: background 0.15s;
 }
 .about-row:active {
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
 }
 .about-row-icon {
   color: var(--color-hint);
@@ -4761,7 +4687,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
   transition: background 0.15s;
 }
 .about-contributor:active {
-  background: var(--color-bg-secondary);
+  background: var(--color-inset);
 }
 .about-contributor-avatar {
   border-radius: 50%;
@@ -5047,9 +4973,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
   .stats-fact-card .stats-fact-icon svg { width: 18px; height: 18px; }
   .stats-fact-value { font-size: 18px; }
   .stats-hero-value { font-size: 44px; }
-  .stats-hero-glyph { width: 52px; height: 52px; border-radius: 14px; }
-  .stats-hero-glyph svg { width: 28px; height: 28px; }
-  .stats-facts-row { gap: var(--sp-3); }
+    .stats-facts-row { gap: var(--sp-3); }
   #stats-content > .metric-row {
     margin-left: 0;
     margin-right: 0;
@@ -5110,13 +5034,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
     box-shadow: var(--dt-shadow-md);
   }
   .history-hero-value { font-size: 44px; }
-  .history-hero-glyph {
-    width: 52px;
-    height: 52px;
-    border-radius: 14px;
-  }
-  .history-hero-glyph svg { width: 28px; height: 28px; }
-  .history-hero-pills { gap: 10px; margin-top: 18px; }
+    .history-hero-pills { gap: 10px; margin-top: 18px; }
 
   .history-extreme-row { gap: var(--sp-3); }
   .history-extreme-card {
@@ -5223,7 +5141,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
   }
 
   .ranking-item:hover {
-    background: var(--color-bg-secondary);
+    background: var(--color-inset);
   }
 
   .ranking-item:active {
@@ -5306,7 +5224,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
   }
 
   .map-search-result-item:hover {
-    background: var(--color-bg-secondary);
+    background: var(--color-inset);
   }
 
   /* Map FAB refinement */
@@ -5368,7 +5286,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
   }
 
   .station-item:hover {
-    background: var(--color-bg-secondary);
+    background: var(--color-inset);
   }
 
   .station-item:active {
@@ -5480,7 +5398,7 @@ html[data-theme="dark"] .pwa-popup-icon img,
     height: 28px;
     border-radius: 50%;
     border: none;
-    background: var(--color-bg-secondary);
+    background: var(--color-inset);
     color: var(--color-hint);
     font-size: 15px;
     font-weight: 600;
@@ -5793,3 +5711,44 @@ html[data-theme="dark"] .pwa-popup-icon img,
 /* "Standort anfragen" reads as the primary action of the locations section. */
 .request-location-btn { color: var(--color-accent); font-weight: 600; }
 .request-location-btn svg { color: var(--color-accent); }
+
+/* ── Settings: grouped card (Allgemein) ────────────────────────────── */
+.card.settings-group {
+  padding: var(--sp-1) 0 var(--sp-2);
+}
+.settings-group .settings-row {
+  padding: var(--sp-3) var(--sp-4) var(--sp-3);
+}
+.settings-group .settings-row-stacked {
+  padding-bottom: var(--sp-1);
+}
+.settings-group .seg-control {
+  margin: var(--sp-2) var(--sp-4) var(--sp-2);
+}
+.settings-divider {
+  height: 1px;
+  background: var(--color-separator);
+  margin: var(--sp-2) 0 var(--sp-1) var(--sp-4);
+}
+
+/* Settings list cards render their own rows — let rows own the padding */
+#history-locations-card,
+#user-requests-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Compact "n Standorte" summary row */
+.hl-summary-top { gap: 12px; padding: 12px 16px; }
+.hl-total-num {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.hl-total-label {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text);
+}
