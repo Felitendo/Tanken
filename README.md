@@ -48,6 +48,8 @@ services:
     ports:
       - "3847:3847"
     restart: unless-stopped
+    volumes:
+      - tanken_config:/app/config
     environment:
       - NODE_ENV=production
       - PORT=3847
@@ -55,6 +57,9 @@ services:
 
 volumes:
   postgres_data:
+    name: tanken_postgres_data
+  tanken_config:
+    name: tanken_config
 ```
 
 ### 2. Start the stack
@@ -80,6 +85,12 @@ That's it - the app is now running at `http://localhost:3847`.
 docker compose pull
 docker compose up -d
 ```
+
+All data survives updates: price history and accounts live in the
+`tanken_postgres_data` volume, the app configuration in `tanken_config`
+(and is additionally mirrored inside the database, so the app self-heals
+even if the config volume is missing). Do **not** use `docker compose
+down -v` — the `-v` flag deletes the volumes and with them all history.
 
 ## Configuration
 

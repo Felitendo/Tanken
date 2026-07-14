@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminRequestContext } from '@/lib/admin';
 import { adminConfigSchema, firstIssueLabel, fromAdminConfig, toAdminConfig } from '@/lib/admin-config';
-import { loadRepoConfig, saveRepoConfig } from '@/config';
+import { loadRepoConfig } from '@/config';
+import { saveRepoConfigDurable } from '@/lib/config-store';
 import { getScheduler } from '@/lib/scheduler';
 
 export const runtime = 'nodejs';
@@ -33,7 +34,7 @@ export async function PUT(request: NextRequest) {
   }
 
   const nextConfig = fromAdminConfig(parsed.data);
-  saveRepoConfig(nextConfig);
+  await saveRepoConfigDurable(nextConfig);
 
   // Always restart scheduler (Austria works without API key)
   const scheduler = getScheduler();

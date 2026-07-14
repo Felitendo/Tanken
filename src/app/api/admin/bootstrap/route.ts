@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { firstIssueLabel, fromAdminConfig, adminConfigSchema, toAdminConfig } from '@/lib/admin-config';
 import { hashPassword, normalizeUsername } from '@/lib/local-auth';
-import { saveRepoConfig } from '@/config';
+import { saveRepoConfigDurable } from '@/lib/config-store';
 import { stores } from '@/lib/server-runtime';
 
 export const runtime = 'nodejs';
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   }
 
   const nextConfig = fromAdminConfig(parsed.data.config);
-  saveRepoConfig(nextConfig);
+  await saveRepoConfigDurable(nextConfig);
 
   const user = await stores.userStore.upsertUser(`local:${usernameLower}`, {
     authProvider: 'local',

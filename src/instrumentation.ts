@@ -3,7 +3,16 @@ export async function register() {
     const { getScheduler } = await import('./lib/scheduler');
     const { restoreCacheFromDb, initStationCacheDb } = await import('./lib/station-cache');
     const { persistAtAggregateIfStale } = await import('./lib/measure');
-    const { database } = await import('./lib/server-runtime');
+    const { database, runtimeConfig } = await import('./lib/server-runtime');
+    const { restoreRepoConfigFromDb } = await import('./lib/config-store');
+
+    // Self-heal config/config.json from its database mirror BEFORE the
+    // scheduler starts. Containers redeployed without a /app/config
+    // volume would otherwise boot unconfigured (no API key → no scans →
+    // history stops accumulating) until someone re-runs the wizard.
+    await restoreRepoConfigFromDb(runtimeConfig.paths.configFile).catch(err => {
+      console.error('[Boot] config restore failed:', err instanceof Error ? err.message : err);
+    });
 
     // Pass DB handle directly — require('@/lib/server-runtime') may fail at runtime
     initStationCacheDb(database);

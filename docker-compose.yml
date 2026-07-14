@@ -39,6 +39,12 @@ services:
       retries: 3
       start_period: 15s
 
+# Explicit volume names: without them Docker prefixes the compose project
+# name (usually the directory or stack name), so redeploying from a renamed
+# directory / new stack silently creates FRESH EMPTY volumes and the app
+# loses its database and config. Pinned names survive any project rename.
 volumes:
   postgres_data:
+    name: tanken_postgres_data
   tanken_config:
+    name: tanken_config
