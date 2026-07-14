@@ -58,6 +58,7 @@ const i18n = {
     periodToday: 'Heute',
     locationAutoPicked: 'Automatisch · nächster Standort',
     historyTooltipHint: 'Antippen für Stundenansicht',
+    historyMinLabel: 'Min',
     historyAvgLabel: 'Ø',
     historyHighLabel: 'Max',
     historyHourTitle: 'Stundenansicht',
@@ -330,6 +331,7 @@ const i18n = {
     periodToday: 'Today',
     locationAutoPicked: 'Auto · nearest location',
     historyTooltipHint: 'Tap for hourly view',
+    historyMinLabel: 'min',
     historyAvgLabel: 'avg',
     historyHighLabel: 'high',
     historyHourTitle: 'Hourly view',
@@ -5515,17 +5517,18 @@ function renderChart(data) {
     });
     return g;
   };
-  // Vertical area gradient — red top, orange middle, yellow bottom.
-  // Same warm palette the stats hour chart uses for its fill so the
-  // two charts feel like siblings.
+  // Area fill mirrors the line: the same horizontal per-day gradient at
+  // low alpha. A flat all-green week gets a soft green wash — a fixed
+  // warm palette under a green line used to render as a brown block.
   const buildHistoryFillGradient = (chartCtx) => {
     const chart = chartCtx.chart;
     const { ctx: c, chartArea } = chart;
-    if (!chartArea) return 'rgba(255,149,0,0.15)';
-    const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-    g.addColorStop(0,   'rgba(255, 59, 48, 0.34)');
-    g.addColorStop(0.5, 'rgba(255, 149, 0, 0.18)');
-    g.addColorStop(1,   'rgba(255, 204, 0, 0.04)');
+    if (!chartArea) return 'rgba(255,149,0,0.12)';
+    const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+    const denom = Math.max(1, pointColors.length - 1);
+    pointColors.forEach((color, i) => {
+      g.addColorStop(Math.max(0, Math.min(1, i / denom)), rgbWithAlpha(color, 0.14));
+    });
     return g;
   };
 
@@ -5551,6 +5554,20 @@ function renderChart(data) {
           pointHoverRadius: pointHoverRadii,
           pointHoverBorderWidth: 3,
           pointHoverBorderColor: bgSecondary,
+        },
+        {
+          // Ø companion line — the hero headline talks about the average,
+          // so the chart carries it too: thin, dashed, muted, no points.
+          label: t('historyAvgLabel') || 'Ø',
+          data: daily.map(d => d.avg_price),
+          borderColor: hintColor,
+          borderWidth: 1.25,
+          borderDash: [4, 5],
+          tension: 0.4,
+          fill: false,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          pointHitRadius: 0,
         },
       ]
     },
@@ -5591,7 +5608,7 @@ function renderChart(data) {
             const drillable = day.entries.length > 1;
             el.innerHTML = `
               <div class="history-tooltip-time">${dateLabel}</div>
-              <div class="history-tooltip-price" style="color:${color}">${formatPrice(day.min_price)}</div>
+              <div class="history-tooltip-price" style="color:${color}"><span class="history-tooltip-price-mark">${t('historyMinLabel')}</span>${formatPrice(day.min_price)}</div>
               <div class="history-tooltip-meta">
                 <span>${t('historyAvgLabel')} ${formatPrice(day.avg_price)}</span>
                 <span>${t('historyHighLabel')} ${formatPrice(day.max_price)}</span>
@@ -5627,13 +5644,18 @@ function renderChart(data) {
           // Padding around the data range so the line + halo never
           // clip against the chart's top/bottom edges.
           grace: '12%',
+          // Near-flat weeks: without explicit bounds Chart.js falls back
+          // to a huge "nice" range (e.g. 1,60–1,90 for a constant 1,78)
+          // and the line floats over a giant fill block. Pin a ±3 ct
+          // window instead so flat stays visibly flat but centered.
+          ...(minHi - minLo < 0.02 ? { suggestedMin: minLo - 0.03, suggestedMax: minHi + 0.03 } : {}),
         }
       }
     },
     plugins: [{
       id: 'historyCrosshair',
       afterDatasetsDraw(chart) {
-        const active = chart.getActiveElements();
+        const active = chart.getActiveElements().filter(a => a.datasetIndex === 0);
         if (!active.length) return;
         const elPt = active[0].element;
         if (!elPt) return;
@@ -5930,11 +5952,12 @@ function renderHourChart(entries, dayKey) {
   const buildHourFillGradient = (chartCtx) => {
     const chart = chartCtx.chart;
     const { ctx: c, chartArea } = chart;
-    if (!chartArea) return 'rgba(255,149,0,0.15)';
-    const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-    g.addColorStop(0,   'rgba(255, 59, 48, 0.32)');
-    g.addColorStop(0.5, 'rgba(255, 149, 0, 0.18)');
-    g.addColorStop(1,   'rgba(255, 204, 0, 0.04)');
+    if (!chartArea) return 'rgba(255,149,0,0.12)';
+    const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+    const denom = Math.max(1, pointColors.length - 1);
+    pointColors.forEach((color, i) => {
+      g.addColorStop(Math.max(0, Math.min(1, i / denom)), rgbWithAlpha(color, 0.14));
+    });
     return g;
   };
 
@@ -5959,6 +5982,17 @@ function renderHourChart(entries, dayKey) {
         pointHoverRadius: sorted.length < 30 ? 5 : 4,
         pointHoverBorderWidth: 2,
         pointHoverBorderColor: bgSecondary,
+      }, {
+        label: t('historyAvgLabel') || 'Ø',
+        data: sorted.map(d => d.avg_price),
+        borderColor: hintColor,
+        borderWidth: 1.25,
+        borderDash: [4, 5],
+        tension: 0.4,
+        fill: false,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        pointHitRadius: 0,
       }]
     },
     options: {
@@ -5988,7 +6022,7 @@ function renderHourChart(entries, dayKey) {
             const color = pointColors[idx] || '#ff9500';
             el.innerHTML = `
               <div class="history-tooltip-time">${timeLabel}</div>
-              <div class="history-tooltip-price" style="color:${color}">${formatPrice(entry.min_price)}</div>
+              <div class="history-tooltip-price" style="color:${color}"><span class="history-tooltip-price-mark">${t('historyMinLabel')}</span>${formatPrice(entry.min_price)}</div>
               <div class="history-tooltip-meta">
                 <span>${t('historyAvgLabel')} ${formatPrice(entry.avg_price)}</span>
                 <span>${t('historyHighLabel')} ${formatPrice(entry.max_price)}</span>
@@ -6017,13 +6051,15 @@ function renderHourChart(entries, dayKey) {
           grid: { color: sepColor, lineWidth: 0.5 },
           border: { display: false },
           grace: '12%',
+          // Same near-flat clamp as the day chart — see renderChart.
+          ...(minHi - minLo < 0.02 ? { suggestedMin: minLo - 0.03, suggestedMax: minHi + 0.03 } : {}),
         }
       }
     },
     plugins: [{
       id: 'historyHourCrosshair',
       afterDatasetsDraw(chart) {
-        const active = chart.getActiveElements();
+        const active = chart.getActiveElements().filter(a => a.datasetIndex === 0);
         if (!active.length) return;
         const elPt = active[0].element;
         if (!elPt) return;
@@ -6539,6 +6575,9 @@ function renderStatsHourChart(stats) {
   const measured = stats.hourAvgs.map(h => h.hour);
   const firstHour = Math.min(...measured);
   const lastHour = Math.max(...measured);
+  const hourVals = stats.hourAvgs.map(h => h.avg);
+  const hourLo = Math.min(...hourVals);
+  const hourHi = Math.max(...hourVals);
 
   const labels = [];
   const data = [];
@@ -6590,16 +6629,19 @@ function renderStatsHourChart(stats) {
     return g;
   };
 
-  // Vertical area gradient — red-tinted at the top (high price = bad),
-  // fading through orange to a faint yellow at the bottom.
+  // Area fill mirrors the line: same horizontal per-hour gradient at low
+  // alpha, so a flat all-green day washes green instead of muddy brown.
   const buildFillGradient = (chartCtx) => {
     const chart = chartCtx.chart;
     const { ctx: canvasCtx, chartArea } = chart;
-    if (!chartArea) return 'rgba(255,149,0,0.15)';
-    const g = canvasCtx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-    g.addColorStop(0,   'rgba(255, 59, 48, 0.34)');
-    g.addColorStop(0.5, 'rgba(255, 149, 0, 0.18)');
-    g.addColorStop(1,   'rgba(255, 204, 0, 0.04)');
+    if (!chartArea) return 'rgba(255,149,0,0.12)';
+    const g = canvasCtx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+    const stops = [];
+    for (let i = 0; i < slotCount; i++) {
+      if (pointBg[i]) stops.push({ pos: slotCount > 1 ? i / (slotCount - 1) : 0, color: pointBg[i] });
+    }
+    if (!stops.length) return 'rgba(255,149,0,0.12)';
+    stops.forEach(s => g.addColorStop(Math.max(0, Math.min(1, s.pos)), rgbWithAlpha(s.color, 0.14)));
     return g;
   };
 
@@ -6693,6 +6735,9 @@ function renderStatsHourChart(stats) {
           // line never touches the chart edges (the lowest/highest
           // hour was getting clipped against the bottom).
           grace: '18%',
+          // Near-flat days: pin a small window so the line sits centered
+          // instead of Chart.js exploding the scale around a constant.
+          ...(hourHi - hourLo < 0.02 ? { suggestedMin: hourLo - 0.03, suggestedMax: hourHi + 0.03 } : {}),
         }
       }
     },

@@ -1174,19 +1174,19 @@ html:not([data-theme]) .seg-thumb { /* dark via prefers-color-scheme */
   gap: 5px;
   padding: 5px 11px;
   border-radius: 999px;
-  background: var(--color-inset);
-  color: var(--color-text);
+  background: color-mix(in srgb, var(--pill-color) 13%, transparent);
+  color: var(--pill-color);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.1px;
 }
 .history-hero-pill-arrow {
   font-weight: 700;
-  color: var(--pill-color);
 }
 .history-hero-pill-label {
-  color: var(--color-hint);
+  color: color-mix(in srgb, var(--pill-color) 55%, var(--color-text));
+  opacity: 0.75;
   font-weight: 500;
   margin-left: 2px;
   letter-spacing: 0.2px;
@@ -5770,4 +5770,15 @@ html[data-theme="dark"] .pwa-popup-icon img,
 }
 .chip.active {
   border-color: transparent;
+}
+
+/* Small "Min" prefix on the tooltip's big price — the plotted line is
+   the daily cheapest, while Ø/Max ride along in the meta row. */
+.history-tooltip-price-mark {
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 5px;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.4px;
+  vertical-align: 2px;
 }
